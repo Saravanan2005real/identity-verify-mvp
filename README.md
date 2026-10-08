@@ -19,43 +19,39 @@ The system follows a modular architecture separating the core verification produ
 
 ```mermaid
 graph TD
-    %% Define styles
     classDef frontend fill:#3498db,stroke:#2980b9,stroke-width:2px,color:#fff
     classDef backend fill:#2ecc71,stroke:#27ae60,stroke-width:2px,color:#fff
     classDef product fill:#e67e22,stroke:#d35400,stroke-width:2px,color:#fff
     classDef user fill:#9b59b6,stroke:#8e44ad,stroke-width:2px,color:#fff
 
-    %% Actors
-    User((End User)):::user
-    Admin((Tenant Admin)):::user
-    SuperAdmin((Super Admin)):::user
+    User(("End User")):::user
+    Admin(("Tenant Admin")):::user
+    SuperAdmin(("Super Admin")):::user
 
-    %% Components
-    subgraph Products [Core Verification Products]
-        OCR[OCR & Face Rec<br/>MediaPipe]:::product
-        EyeTrack[Eye Tracking<br/>WebGazer]:::product
-        AudioLive[Audio Liveness]:::product
+    subgraph Products ["Core Verification Products"]
+        OCR["OCR & Face Rec<br/>MediaPipe"]:::product
+        EyeTrack["Eye Tracking<br/>WebGazer"]:::product
+        AudioLive["Audio Liveness"]:::product
     end
 
-    subgraph Admin_Portal [Admin Portal]
-        AdminFE[Admin Frontend<br/>React/JS]:::frontend
+    subgraph Admin_Portal ["Admin Portal"]
+        AdminFE["Admin Frontend<br/>React/JS"]:::frontend
     end
 
-    subgraph SuperAdmin_Portal [Superadmin Portal]
-        SuperAdminFE[Superadmin Frontend<br/>React/JS]:::frontend
-        SuperAdminBE[Superadmin Backend<br/>Python]:::backend
-        DB[(System Database)]
+    subgraph SuperAdmin_Portal ["Superadmin Portal"]
+        SuperAdminFE["Superadmin Frontend<br/>React/JS"]:::frontend
+        SuperAdminBE["Superadmin Backend<br/>Python"]:::backend
+        DB[("System Database")]
     end
 
-    %% Connections
-    User -->|Interacts with| Products
-    Products -->|Sends Verification Data| SuperAdminBE
+    User -->|"Interacts with"| Products
+    Products -->|"Sends Verification Data"| SuperAdminBE
     
-    Admin -->|Manages Users/Settings| AdminFE
-    AdminFE -->|API Calls| SuperAdminBE
+    Admin -->|"Manages Users/Settings"| AdminFE
+    AdminFE -->|"API Calls"| SuperAdminBE
     
-    SuperAdmin -->|System Overview| SuperAdminFE
-    SuperAdminFE -->|API Calls| SuperAdminBE
+    SuperAdmin -->|"System Overview"| SuperAdminFE
+    SuperAdminFE -->|"API Calls"| SuperAdminBE
     
     SuperAdminBE --> DB
 ```

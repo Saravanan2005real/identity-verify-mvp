@@ -1,4 +1,4 @@
-﻿# Identity Verify MVP
+# Identity Verify MVP
 
 An Electronic Know Your Customer (eKYC) Minimum Viable Product (MVP) focusing on advanced identity verification. The platform leverages cutting-edge computer vision, OCR, face verification, and liveness detection to seamlessly verify user identities.
 
@@ -15,7 +15,7 @@ An Electronic Know Your Customer (eKYC) Minimum Viable Product (MVP) focusing on
 
 The system follows a microservice architecture, utilizing a centralized Nginx reverse proxy to route traffic between the React Native frontend, static HTML module demos, and FastAPI backend services.
 
-``mermaid
+```mermaid
 graph TD
     classDef frontend fill:#3498db,stroke:#2980b9,stroke-width:2px,color:#fff
     classDef backend fill:#2ecc71,stroke:#27ae60,stroke-width:2px,color:#fff
@@ -47,7 +47,7 @@ graph TD
     Nginx -->|"Routes /api/v1/eye/*"| EyeTrack
     
     SuperAdminFE -->|"Manages Analytics"| SuperAdminBE
-``
+```
 
 ## Technologies Used
 

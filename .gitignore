@@ -4,3 +4,10 @@ __pycache__/
 *.pyc
 .env
 .claude/
+
+model_cache/
+*.h5
+*.pth
+
+.venv/
+products/ocr_engine/.venv/

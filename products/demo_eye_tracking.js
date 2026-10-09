@@ -89,15 +89,16 @@ function startCalibration() {
         // Calculate px positions
         const padX = 20;
         const padY = 20;
-        const x = padX + dot.x * (window.innerWidth - 2 * padX);
-        const y = padY + dot.y * (window.innerHeight - 2 * padY);
         
-        btn.style.left = `${x}px`;
-        btn.style.top = `${y}px`;
+        
+        
+        btn.style.left = `${dot.x * 100}%`;
+        btn.style.top = `${dot.y * 100}%`;
+        btn.style.transform = 'translate(-50%, -50%)';
         
         let hoverInterval;
         let hoverTime = 0;
-        const REQUIRED_HOVER_TIME = 2500; // 2.5s per dot for richer calibration data
+        const REQUIRED_HOVER_TIME = 1000; // 2.5s per dot for richer calibration data
         const SAMPLE_INTERVAL = 50; // Sample every 50ms = 50 samples per dot
         
         btn.addEventListener('mouseenter', () => {
@@ -106,8 +107,9 @@ function startCalibration() {
             hoverInterval = setInterval(() => {
                 hoverTime += SAMPLE_INTERVAL;
                 // Record both click and move events for richer training data
-                webgazer.recordScreenPosition(x, y, 'click');
-                webgazer.recordScreenPosition(x, y, 'move');
+                const rect = btn.getBoundingClientRect();
+                webgazer.recordScreenPosition(rect.left + rect.width/2, rect.top + rect.height/2, 'click');
+                webgazer.recordScreenPosition(rect.left + rect.width/2, rect.top + rect.height/2, 'move');
                 
                 // Visual feedback
                 btn.style.opacity = Math.max(0.2, 1 - (hoverTime / REQUIRED_HOVER_TIME));
@@ -360,3 +362,4 @@ function showVerdict(accuracy, dotsPassed, totalDots) {
         text.textContent = `Tracking accuracy insufficient (${dotsPassed} of ${totalDots} targets inside radius - ${Math.round(accuracy * 100)}%). Please keep your face steady and try again.`;
     }
 }
+

@@ -27,6 +27,7 @@ export default function App() {
   const [companies, setCompanies] = React.useState([]);
   const [products, setProducts] = React.useState([]);
   const [activeTab, setActiveTab] = React.useState('dashboard');
+  const [activeModuleUrl, setActiveModuleUrl] = React.useState(null);
 
   React.useEffect(() => {
     // Fetch Dashboard Stats
@@ -131,7 +132,7 @@ export default function App() {
 
   const openProduct = (file) => {
     // In local dev, just open the path or a dev server if hosted
-    alert('This would open the demo: ' + file);
+    Linking.openURL('http://localhost:5174/' + file);
   };
 
   const renderOurProducts = () => (
@@ -429,3 +430,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   }
 });
+

@@ -1,4 +1,4 @@
-const API_BASE = window.location.origin;
+const API_BASE = "http://localhost:5001";
 const videoEl = document.getElementById('live-id-webcam');
 const canvasEl = document.getElementById('live-id-canvas');
 const btnCapture = document.getElementById('btn-capture-live-id');

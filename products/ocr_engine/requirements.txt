@@ -13,4 +13,5 @@ protobuf==3.20.3
 numpy<2
 retina-face
 deepface
+python-dotenv
 

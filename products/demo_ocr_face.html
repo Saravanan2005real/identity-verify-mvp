@@ -93,21 +93,21 @@
     </nav>
 
     <div class="demo-container">
-        <h2 style="margin-bottom: 16px; font-weight: 800;">Demo: Multi-Step eKYC Verification</h2>
-        <p style="color: var(--text-muted); margin-bottom: 24px;">Step 1: Upload your Aadhaar or PAN. Step 2: Perform a live capture to cross-verify the document and your face.</p>
+        <h2 style="margin-bottom: 16px; font-weight: 800;">Demo: Universal eKYC (Aadhaar & PAN + Face Verification)</h2>
+        <p style="color: var(--text-muted); margin-bottom: 24px;">Step 1: Upload your PAN or Aadhaar card. Step 2: Perform a live webcam capture to cross-verify document face & live selfie in real time.</p>
         
         <!-- Step 1: Upload -->
         <div id="step1-upload-section" style="border: 1px solid var(--border-color); padding: 16px; border-radius: 12px; margin-bottom: 24px;">
-            <h3 style="margin-top: 0;">Step 1: Upload Identity Document</h3>
+            <h3 style="margin-top: 0;">Step 1: Upload Identity Document (PAN / Aadhaar)</h3>
             <input type="file" id="doc-upload" accept="image/*" style="margin-bottom: 12px; display: block; width: 100%;">
             <button class="btn" id="btn-process-upload" type="button" style="width:100%;">Process Uploaded Document</button>
-            <div id="upload-spinner" class="hidden" style="margin-top: 12px; color: var(--accent-color); font-weight: bold;">Extracting details...</div>
+            <div id="upload-spinner" class="hidden" style="margin-top: 12px; color: var(--accent-color); font-weight: bold;">Extracting document & face details...</div>
             <div id="upload-results" class="result-panel hidden"></div>
         </div>
 
         <!-- Step 2: Live Capture -->
         <div id="step2-live-section" style="border: 1px solid var(--border-color); padding: 16px; border-radius: 12px; opacity: 0.4; pointer-events: none;">
-            <h3 style="margin-top: 0;">Step 2: Live Verification</h3>
+            <h3 style="margin-top: 0;">Step 2: Live Face Verification</h3>
             <p style="font-size: 0.9rem; color: var(--text-muted);">Look straight into the camera to capture your face.</p>
             <div class="live-id-video-wrap" id="live-id-video-card">
                 <video id="live-id-webcam" autoplay playsinline></video>
@@ -124,8 +124,20 @@
             <button class="btn btn-outline hidden" id="btn-retry" type="button" style="margin-top: 24px; width: 100%; max-width: 560px;">Retry Step 2</button>
         </div>
 
+        <!-- Step 3: Supabase GET Record Lookup -->
+        <div id="step3-supabase-section" style="border: 1px solid var(--border-color); padding: 16px; border-radius: 12px; margin-top: 24px; text-align: left;">
+            <h3 style="margin-top: 0;">Step 3: Fetch Verification Record from Supabase (GET)</h3>
+            <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 12px;">Enter a Session ID or Extracted ID Number to retrieve saved verification details directly from Supabase DB.</p>
+            <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                <input type="text" id="supabase-lookup-id" placeholder="Enter Session ID or Document ID#" style="flex: 1; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-dark); color: #fff;">
+                <button class="btn" id="btn-fetch-supabase" type="button">Fetch Record</button>
+            </div>
+            <div id="supabase-fetch-spinner" class="hidden" style="color: var(--accent-color); font-weight: bold; margin-bottom: 8px;">Querying Supabase database...</div>
+            <div id="supabase-fetch-results" class="result-panel hidden"></div>
+        </div>
+
     </div>
 
-    <script src="demo_ocr_face.js?v=3"></script>
+    <script src="demo_ocr_face.js?v=4"></script>
 </body>
 </html>

@@ -1,13 +1,18 @@
 node_modules/
 venv/
+.venv/
+products/ocr_engine/.venv/
 __pycache__/
 *.pyc
 .env
 .claude/
+.expo/
+*.log
 
 model_cache/
 *.h5
 *.pth
 
-.venv/
-products/ocr_engine/.venv/
+# OCR test uploads (personal identification cards & selfies)
+products/ocr_uploads/*
+!products/ocr_uploads/.gitkeep

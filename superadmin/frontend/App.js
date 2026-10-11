@@ -143,8 +143,8 @@ export default function App() {
       <View style={{flexDirection: isWeb ? 'row' : 'column', gap: 24}}>
         <View style={styles.productCard}>
           <Text style={{fontSize: 40, marginBottom: 16}}>📷</Text>
-          <Text style={styles.productCardTitle}>OCR & Face Match</Text>
-          <Text style={styles.productCardDesc}>Cross verify identity documents with a live face capture.</Text>
+          <Text style={styles.productCardTitle}>Aadhaar / PAN OCR & Face Match</Text>
+          <Text style={styles.productCardDesc}>Cross-verify Aadhaar or PAN card identity documents with a live face capture & ArcFace liveness check.</Text>
           <TouchableOpacity style={styles.btn} onPress={() => openProduct('demo_ocr_face.html')}>
             <Text style={styles.btnText}>View Module</Text>
           </TouchableOpacity>

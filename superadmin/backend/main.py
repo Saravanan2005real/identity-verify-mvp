@@ -48,8 +48,10 @@ def get_b2b_services():
     return {
         "status": "success",
         "data": [
-            {"id": "aadhar", "name": "Aadhaar Verification", "desc": "Verify Aadhaar via OTP"},
-            {"id": "pan", "name": "PAN Verification", "desc": "Verify PAN card details"},
-            {"id": "liveness", "name": "Liveness Detection", "desc": "Detect user liveness via camera"}
+            {"id": "aadhaar_face", "name": "Aadhaar & Face Verification", "desc": "Combined Aadhaar Document OCR & Live Face Verification with Liveness Check"},
+            {"id": "pan_face", "name": "PAN & Face Verification", "desc": "Combined PAN Card Document OCR & Live Face Verification with Liveness Check"},
+            {"id": "pan", "name": "PAN Verification (OCR Only)", "desc": "PAN Card Verification & Field Extraction"},
+            {"id": "aadhaar", "name": "Aadhaar Verification (OCR Only)", "desc": "Aadhaar Card Verification & Field Extraction"},
+            {"id": "eye_tracking", "name": "Eye Tracking & Attention Analysis", "desc": "WebGazer eye tracking and gaze calibration"}
         ]
     }

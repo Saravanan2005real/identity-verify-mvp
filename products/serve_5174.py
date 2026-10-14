@@ -6,13 +6,14 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 PRODUCTS_DIR = os.path.dirname(os.path.abspath(__file__))
 OCR_BACKEND = "http://127.0.0.1:5001"
+EYE_BACKEND = "http://127.0.0.1:5002"
 
 class ProductsGatewayHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=PRODUCTS_DIR, **kwargs)
 
     def do_GET(self):
-        # Proxy OCR API or uploads to Flask backend if requested on 5174
+        # Proxy OCR API, Eye Tracking API, or uploads to backend services
         if self.path.startswith("/api/v1/") or self.path.startswith("/ocr_uploads/"):
             self._proxy("GET")
         else:
@@ -32,7 +33,11 @@ class ProductsGatewayHandler(SimpleHTTPRequestHandler):
         self.end_headers()
 
     def _proxy(self, method):
-        target_url = f"{OCR_BACKEND}{self.path}"
+        if self.path.startswith("/api/v1/eye/"):
+            subpath = self.path[len("/api/v1/eye/"):]
+            target_url = f"{EYE_BACKEND}/{subpath}"
+        else:
+            target_url = f"{OCR_BACKEND}{self.path}"
         try:
             headers = {k: v for k, v in self.headers.items() if k.lower() != 'host'}
             data = None

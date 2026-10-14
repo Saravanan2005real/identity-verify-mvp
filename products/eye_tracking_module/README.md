@@ -9,9 +9,14 @@ Custom eye-tracking module:
 
 ## Run
 
-```powershell
-cd "c:\Users\DINESH\Desktop\eKYC\eye tracking"
-.\.venv\Scripts\activate
+```bash
+cd products/eye_tracking_module
+python -m venv .venv
+# On Windows:
+.venv\Scripts\activate
+# On Linux/macOS:
+# source .venv/bin/activate
+
 pip install -r requirements.txt
 python demo.py
 ```

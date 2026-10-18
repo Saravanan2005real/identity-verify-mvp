@@ -1,6 +1,10 @@
 import { StatusBar } from 'expo-status-bar';
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Dimensions, Modal, Image } from 'react-native';
+import SignInScreen from './SignInScreen';
+import * as Linking from 'expo-linking';
+import { supabase } from './lib/supabase';
+import { signOut } from './src/services/auth';
 
 const { width } = Dimensions.get('window');
 
@@ -18,6 +22,8 @@ const COLORS = {
 
 export default function App() {
   const isWeb = width > 768;
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
 
   // --- Dashboard State ---
@@ -41,7 +47,49 @@ export default function App() {
   const [reviewModalVisible, setReviewModalVisible] = useState(false);
 
   useEffect(() => {
-    // 1. Load local storage persistence first
+    // 1. Supabase Session Detection
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setCurrentUser(session.user);
+        setIsAuthenticated(true);
+      }
+    });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setCurrentUser(session.user);
+        setIsAuthenticated(true);
+      } else {
+        setCurrentUser(null);
+        setIsAuthenticated(false);
+      }
+    });
+
+    // Handle deep link authentication (e.g., verifyyy://auth/callback)
+    const handleAuthUrl = async (url) => {
+      if (!url) return;
+      try {
+        const { queryParams } = Linking.parse(url);
+        if (queryParams?.code) {
+          await supabase.auth.exchangeCodeForSession(queryParams.code);
+        } else if (url.includes('#')) {
+          const hash = url.split('#')[1];
+          const params = new URLSearchParams(hash);
+          const access_token = params.get('access_token');
+          const refresh_token = params.get('refresh_token');
+          if (access_token && refresh_token) {
+            await supabase.auth.setSession({ access_token, refresh_token });
+          }
+        }
+      } catch (err) {
+        console.warn('Deep link authentication error:', err);
+      }
+    };
+
+    Linking.getInitialURL().then(handleAuthUrl);
+    const linkSub = Linking.addEventListener('url', ({ url }) => handleAuthUrl(url));
+
+    // 2. Load local storage persistence
     let localStats = { pipelines_built: 0, links_generated: 0, verifications_completed: 0 };
     let localVers = [];
     let localPipes = [];
@@ -77,6 +125,11 @@ export default function App() {
       {"id": "EYE_TRACKING", "name": "Eye Tracking & Attention", "desc": "WebGazer eye tracking calibration"},
       {"id": "HUMAN_REVIEW", "name": "Human Review Queue", "desc": "Manual Human Review Audit Queue"}
     ]);
+
+    return () => {
+      authListener?.subscription?.unsubscribe();
+      linkSub?.remove?.();
+    };
   }, []);
 
   const fetchSupabaseData = async () => {
@@ -400,6 +453,20 @@ export default function App() {
     </View>
   );
 
+  if (!isAuthenticated) {
+    return (
+      <SignInScreen
+        portalName="Verifyyy Client Admin"
+        portalRole="admin"
+        defaultEmail="admin@verifyyy.ai"
+        onLoginSuccess={(user) => {
+          setCurrentUser(user);
+          setIsAuthenticated(true);
+        }}
+      />
+    );
+  }
+
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
@@ -421,6 +488,20 @@ export default function App() {
                <Text style={{color: activeTab === 'review' ? '#fff' : '#cbd5e1', fontWeight: '600'}}>
                  Manual Review {reviewQueue.length > 0 ? `(${reviewQueue.length})` : ''}
                </Text>
+           </TouchableOpacity>
+           <TouchableOpacity 
+             onPress={async () => {
+               try {
+                 await signOut();
+               } catch (e) {
+                 console.warn("Sign out error:", e);
+               }
+               setIsAuthenticated(false);
+               setCurrentUser(null);
+             }} 
+             style={styles.signOutBtn}
+           >
+               <Text style={styles.signOutBtnText}>Sign Out ⎋</Text>
            </TouchableOpacity>
         </View>
       </View>
@@ -803,5 +884,19 @@ const styles = StyleSheet.create({
       width: '100%',
       marginBottom: 24,
       alignItems: 'center',
+  },
+  signOutBtn: {
+      backgroundColor: 'rgba(239, 68, 68, 0.2)',
+      borderWidth: 1,
+      borderColor: 'rgba(239, 68, 68, 0.4)',
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 16,
+      marginLeft: 10,
+  },
+  signOutBtnText: {
+      color: '#fca5a5',
+      fontSize: 12,
+      fontWeight: '700',
   },
 });

@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In | Verifyyy - Enterprise eKYC Platform</title>
+    <meta name="description" content="Secure enterprise email sign-in for Verifyyy eKYC and identity verification platform. Sign in with your work email or passwordless email OTP.">
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="signin.css">
+</head>
+<body>
+    <!-- Ambient Background Lighting -->
+    <div class="ambient-glow glow-1"></div>
+    <div class="ambient-glow glow-2"></div>
+    <div class="ambient-glow glow-3"></div>
+    <div class="grid-overlay"></div>
+
+    <!-- Header Navigation -->
+    <header class="top-nav">
+        <div class="nav-container">
+            <a href="verify.html" class="brand-logo" id="brand-logo-link">
+                <div class="logo-icon-wrap">
+                    <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        <path d="m9 12 2 2 4-4"/>
+                    </svg>
+                    <span class="pulse-ring"></span>
+                </div>
+                <div class="brand-text">
+                    <span class="brand-name">Verifyyy<span class="brand-badge">ENTERPRISE</span></span>
+                    <span class="brand-sub">Identity & Trust OS</span>
+                </div>
+            </a>
+
+            <div class="nav-actions">
+                <!-- Theme Switcher -->
+                <button type="button" class="icon-btn theme-toggle" id="theme-toggle-btn" title="Toggle Theme" aria-label="Toggle Theme">
+                    <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="5"/>
+                        <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+                    </svg>
+                    <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                    </svg>
+                </button>
+
+                <!-- Quick Demo Credentials Helper -->
+                <button type="button" class="btn-demo-helper" id="demo-credentials-btn">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M13.8 12H3"/>
+                    </svg>
+                    <span>Demo Accounts</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="signin-main">
+        <div class="auth-card-wrapper">
+            <!-- Left Showcase Panel (Hero / Features) -->
+            <aside class="auth-showcase">
+                <div class="showcase-content">
+                    <div class="status-pill">
+                        <span class="status-dot"></span>
+                        <span>Multi-Tenant Auth Gateway v2.4</span>
+                    </div>
+
+                    <h1 class="showcase-title">Next-Gen Electronic KYC & Biometric Verification</h1>
+                    <p class="showcase-desc">Secure email authentication for tenant compliance officers, automated OCR pipelines, and system administrators.</p>
+
+                    <!-- Feature Highlights -->
+                    <div class="feature-list">
+                        <div class="feature-item">
+                            <div class="feature-icon-box">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
+                                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                                </svg>
+                            </div>
+                            <div class="feature-info">
+                                <h4>Strict Email-Based Security</h4>
+                                <p>Encrypted credentials & one-time passwords without third-party OAuth trackers.</p>
+                            </div>
+                        </div>
+
+                        <div class="feature-item">
+                            <div class="feature-icon-box">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <path d="M12 16v-4M12 8h.01"/>
+                                </svg>
+                            </div>
+                            <div class="feature-info">
+                                <h4>Zero-Knowledge Session Sync</h4>
+                                <p>Direct connection to Supabase PostgreSQL with multi-tenant row-level isolation.</p>
+                            </div>
+                        </div>
+
+                        <div class="feature-item">
+                            <div class="feature-icon-box">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                </svg>
+                            </div>
+                            <div class="feature-info">
+                                <h4>UIDAI & ISO 27001 Compliant</h4>
+                                <p>Bank-grade AES-256 in-transit encryption and anti-brute force defenses.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Live Metric Stats Strip -->
+                    <div class="showcase-stats">
+                        <div class="stat-col">
+                            <span class="stat-num">&lt; 15ms</span>
+                            <span class="stat-lbl">SFace Inference</span>
+                        </div>
+                        <div class="stat-divider"></div>
+                        <div class="stat-col">
+                            <span class="stat-num">99.9%</span>
+                            <span class="stat-lbl">Liveness Accuracy</span>
+                        </div>
+                        <div class="stat-divider"></div>
+                        <div class="stat-col">
+                            <span class="stat-num">256-Bit</span>
+                            <span class="stat-lbl">End-to-End SSL</span>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Right Form Panel -->
+            <section class="auth-form-card" aria-label="Sign In Card">
+                <div class="card-inner">
+                    <!-- Heading -->
+                    <div class="form-header">
+                        <h2 class="form-title" id="form-heading">Welcome Back</h2>
+                        <p class="form-subtitle" id="form-subheading">Sign in using your registered enterprise email address.</p>
+                    </div>
+
+                    <!-- Portal Selection Segment -->
+                    <div class="portal-selector-group">
+                        <label class="input-label" for="portal-role-select">Access Destination</label>
+                        <div class="portal-pills" id="portal-pills-container" role="radiogroup" aria-label="Select Target Portal">
+                            <button type="button" class="portal-pill active" data-portal="admin" id="portal-pill-admin" role="radio" aria-checked="true">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M3 21h18M3 7v1a3 3 0 0 0 6 0V7m0 1a3 3 0 0 0 6 0V7m0 1a3 3 0 0 0 6 0V7H3l2-4h14l2 4"/>
+                                    <path d="M5 21V10.85M19 21V10.85M9 21v-4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v4"/>
+                                </svg>
+                                <span>Client Admin (:8082)</span>
+                            </button>
+                            <button type="button" class="portal-pill" data-portal="superadmin" id="portal-pill-superadmin" role="radio" aria-checked="false">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5zM9 7a3 3 0 0 1 6 0v3H9V7z"/>
+                                </svg>
+                                <span>Superadmin (:8081)</span>
+                            </button>
+                            <button type="button" class="portal-pill" data-portal="runner" id="portal-pill-runner" role="radio" aria-checked="false">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>
+                                </svg>
+                                <span>Flow Runner (:5174)</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Auth Method Switcher Tabs -->
+                    <div class="auth-tabs" role="tablist" aria-label="Sign In Methods">
+                        <button type="button" class="tab-btn active" id="tab-password" role="tab" aria-selected="true" aria-controls="view-password-mode">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                            </svg>
+                            <span>Password Sign In</span>
+                        </button>
+                        <button type="button" class="tab-btn" id="tab-otp" role="tab" aria-selected="false" aria-controls="view-otp-mode">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect width="20" height="16" x="2" y="4" rx="2"/>
+                                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+                            </svg>
+                            <span>Email OTP / Magic Code</span>
+                        </button>
+                    </div>
+
+                    <!-- Error Alert Banner -->
+                    <div class="alert-banner hidden" id="global-alert-banner" role="alert">
+                        <div class="alert-icon">
+                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/>
+                                <line x1="12" y1="8" x2="12" y2="12"/>
+                                <line x1="12" y1="16" x2="12.01" y2="16"/>
+                            </svg>
+                        </div>
+                        <div class="alert-msg" id="alert-message-text">Invalid email or credentials.</div>
+                        <button type="button" class="alert-dismiss" id="alert-dismiss-btn" aria-label="Dismiss Alert">&times;</button>
+                    </div>
+
+                    <!-- Caps Lock Active Banner -->
+                    <div class="caps-lock-notice hidden" id="caps-lock-banner">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2v20M17 5H7M15 10l-3-3-3 3M15 17H9"/>
+                        </svg>
+                        <span>Caps Lock is ON</span>
+                    </div>
+
+                    <!-- MODE 1: Email + Password Form -->
+                    <form id="form-password-signin" class="auth-form-panel active" novalidate>
+                        <!-- Email Input Group -->
+                        <div class="input-field-group">
+                            <div class="label-row">
+                                <label for="input-email-password" class="input-label">Work Email Address</label>
+                                <span class="label-hint" id="email-domain-hint">Enterprise Domain</span>
+                            </div>
+                            <div class="input-wrapper">
+                                <span class="input-prefix-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect width="20" height="16" x="2" y="4" rx="2"/>
+                                        <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+                                    </svg>
+                                </span>
+                                <input 
+                                    type="email" 
+                                    id="input-email-password" 
+                                    name="email" 
+                                    class="form-input" 
+                                    placeholder="officer@company.com" 
+                                    autocomplete="email" 
+                                    required
+                                    aria-describedby="email-error-msg"
+                                >
+                                <span class="input-validation-indicator" id="email-valid-icon" aria-hidden="true"></span>
+                            </div>
+                            <!-- Inline Error Message -->
+                            <div class="field-error-msg hidden" id="email-error-msg">Please enter a valid email address.</div>
+                            
+                            <!-- Smart Auto-complete Domain Pills -->
+                            <div class="domain-suggestions" id="domain-suggestions-bar">
+                                <span class="domain-suggestion-label">Quick fill:</span>
+                                <button type="button" class="domain-tag" data-domain="@verifyyy.ai">@verifyyy.ai</button>
+                                <button type="button" class="domain-tag" data-domain="@company.com">@company.com</button>
+                                <button type="button" class="domain-tag" data-domain="@bankcorp.in">@bankcorp.in</button>
+                            </div>
+                        </div>
+
+                        <!-- Password Input Group -->
+                        <div class="input-field-group">
+                            <div class="label-row">
+                                <label for="input-password" class="input-label">Password</label>
+                                <button type="button" class="text-link-btn" id="forgot-password-link">Forgot Password?</button>
+                            </div>
+                            <div class="input-wrapper">
+                                <span class="input-prefix-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
+                                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                                    </svg>
+                                </span>
+                                <input 
+                                    type="password" 
+                                    id="input-password" 
+                                    name="password" 
+                                    class="form-input" 
+                                    placeholder="Enter your security password" 
+                                    autocomplete="current-password" 
+                                    required
+                                    aria-describedby="password-error-msg"
+                                >
+                                <button type="button" class="toggle-password-visibility" id="toggle-password-btn" aria-label="Show password" title="Toggle password visibility">
+                                    <svg class="eye-show" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
+                                        <circle cx="12" cy="12" r="3"/>
+                                    </svg>
+                                    <svg class="eye-hide hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61M2 2l20 20"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            <!-- Inline Error Message -->
+                            <div class="field-error-msg hidden" id="password-error-msg">Password must be at least 8 characters.</div>
+
+                            <!-- Live Password Strength Meter (Expands on focus/typing) -->
+                            <div class="password-strength-container hidden" id="password-strength-box">
+                                <div class="strength-meter-bar">
+                                    <div class="strength-meter-fill" id="strength-meter-fill"></div>
+                                </div>
+                                <div class="strength-meta">
+                                    <span class="strength-label">Password Strength:</span>
+                                    <span class="strength-rating" id="strength-rating-text">Weak</span>
+                                </div>
+                                <div class="strength-rules">
+                                    <span class="rule-item" id="rule-length"><span class="rule-bullet">•</span> 8+ Chars</span>
+                                    <span class="rule-item" id="rule-upper"><span class="rule-bullet">•</span> Uppercase</span>
+                                    <span class="rule-item" id="rule-num"><span class="rule-bullet">•</span> Number</span>
+                                    <span class="rule-item" id="rule-spec"><span class="rule-bullet">•</span> Symbol</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Remember Me & Session Duration -->
+                        <div class="form-utilities-row">
+                            <label class="checkbox-container" for="remember-me-checkbox">
+                                <input type="checkbox" id="remember-me-checkbox" name="remember" checked>
+                                <span class="custom-checkmark"></span>
+                                <span class="checkbox-label">Keep me signed in on this device</span>
+                            </label>
+                            <span class="security-tag" title="TLS 1.3 End-to-End Encryption">
+                                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                </svg>
+                                256-bit SSL
+                            </span>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <button type="submit" class="btn-primary-auth" id="btn-submit-password">
+                            <span class="btn-spinner hidden" id="spinner-password"></span>
+                            <span class="btn-text">Sign In with Email</span>
+                            <svg class="btn-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M5 12h14M12 5l7 7-7 7"/>
+                            </svg>
+                        </button>
+                    </form>
+
+                    <!-- MODE 2: Passwordless Email OTP / Magic Code Form -->
+                    <form id="form-otp-signin" class="auth-form-panel hidden" novalidate>
+                        <!-- Step A: Enter Email to Request OTP -->
+                        <div id="otp-step-request" class="otp-step-view active">
+                            <div class="input-field-group">
+                                <div class="label-row">
+                                    <label for="input-email-otp" class="input-label">Work Email Address</label>
+                                    <span class="label-hint">One-time Login Code</span>
+                                </div>
+                                <div class="input-wrapper">
+                                    <span class="input-prefix-icon">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <rect width="20" height="16" x="2" y="4" rx="2"/>
+                                            <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+                                        </svg>
+                                    </span>
+                                    <input 
+                                        type="email" 
+                                        id="input-email-otp" 
+                                        name="otp_email" 
+                                        class="form-input" 
+                                        placeholder="officer@company.com" 
+                                        autocomplete="email" 
+                                        required
+                                    >
+                                </div>
+                                <div class="field-error-msg hidden" id="otp-email-error-msg">Please enter a valid registered email.</div>
+                            </div>
+
+                            <p class="helper-text-muted">
+                                We will send a secure 6-digit one-time authorization code directly to your email inbox. No password required.
+                            </p>
+
+                            <button type="button" class="btn-primary-auth" id="btn-request-otp">
+                                <span class="btn-spinner hidden" id="spinner-otp-request"></span>
+                                <span class="btn-text">Send Verification Code</span>
+                                <svg class="btn-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                                </svg>
+                            </button>
+                        </div>
+
+                        <!-- Step B: Enter Received 6-Digit OTP -->
+                        <div id="otp-step-verify" class="otp-step-view hidden">
+                            <div class="otp-sent-banner">
+                                <div class="otp-sent-icon">
+                                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                                        <polyline points="22 4 12 14.01 9 11.01"/>
+                                    </svg>
+                                </div>
+                                <div class="otp-sent-details">
+                                    <span>Code sent to <strong id="otp-target-email-display">officer@company.com</strong></span>
+                                    <button type="button" class="btn-link-sm" id="btn-edit-otp-email">Change email</button>
+                                </div>
+                            </div>
+
+                            <label class="input-label" style="text-align: center; display: block; margin-top: 14px;">Enter 6-Digit Verification Code</label>
+                            
+                            <!-- 6-Digit Segmented Box Inputs -->
+                            <div class="otp-boxes-group" id="otp-inputs-container">
+                                <input type="text" maxlength="1" class="otp-box" inputmode="numeric" pattern="[0-9]*" id="otp-1" autocomplete="one-time-code" autofocus>
+                                <input type="text" maxlength="1" class="otp-box" inputmode="numeric" pattern="[0-9]*" id="otp-2">
+                                <input type="text" maxlength="1" class="otp-box" inputmode="numeric" pattern="[0-9]*" id="otp-3">
+                                <span class="otp-dash">-</span>
+                                <input type="text" maxlength="1" class="otp-box" inputmode="numeric" pattern="[0-9]*" id="otp-4">
+                                <input type="text" maxlength="1" class="otp-box" inputmode="numeric" pattern="[0-9]*" id="otp-5">
+                                <input type="text" maxlength="1" class="otp-box" inputmode="numeric" pattern="[0-9]*" id="otp-6">
+                            </div>
+
+                            <div class="field-error-msg hidden text-center" id="otp-error-msg">Incorrect code. Please check your inbox and try again.</div>
+
+                            <!-- Resend Timer -->
+                            <div class="otp-resend-row">
+                                <span id="resend-timer-text">Resend code in <strong id="resend-countdown">00:45</strong></span>
+                                <button type="button" class="btn-resend-link hidden" id="btn-resend-otp">Resend Code</button>
+                            </div>
+
+                            <button type="button" class="btn-primary-auth" id="btn-verify-otp">
+                                <span class="btn-spinner hidden" id="spinner-otp-verify"></span>
+                                <span class="btn-text">Verify &amp; Sign In</span>
+                                <svg class="btn-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </form>
+
+                    <!-- Rate Limiting Countdown Bar (When Triggered) -->
+                    <div class="rate-limit-overlay hidden" id="rate-limit-box">
+                        <div class="rate-limit-card">
+                            <div class="rate-icon">🛡️</div>
+                            <h3>Too Many Failed Attempts</h3>
+                            <p>For your security, sign-in attempts have been paused. Please wait before retrying.</p>
+                            <div class="rate-countdown-badge" id="rate-limit-timer">00:30</div>
+                        </div>
+                    </div>
+
+                    <!-- Footer Compliance Notice -->
+                    <div class="form-footer">
+                        <div class="compliance-badges">
+                            <span class="compliance-badge"><span class="badge-dot"></span> No OAuth / Direct Auth</span>
+                            <span class="compliance-badge"><span class="badge-dot"></span> Zero-Log Biometrics</span>
+                        </div>
+                        <p class="footer-legal">
+                            By continuing, you agree to the Verifyyy <a href="#" class="legal-link" id="link-terms">Terms of Service</a> and <a href="#" class="legal-link" id="link-privacy">Privacy Policy</a>.
+                        </p>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- FORGOT PASSWORD MODAL -->
+    <div class="modal-backdrop hidden" id="modal-forgot-password" role="dialog" aria-modal="true" aria-labelledby="modal-fp-title">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div class="modal-icon-wrap">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+                    </svg>
+                </div>
+                <h3 class="modal-title" id="modal-fp-title">Reset Your Password</h3>
+                <p class="modal-desc">Enter your enterprise email address and we will dispatch a secure password reset link.</p>
+                <button type="button" class="modal-close-btn" id="btn-close-fp-modal" aria-label="Close dialog">&times;</button>
+            </div>
+
+            <div class="modal-body">
+                <div id="fp-form-view">
+                    <div class="input-field-group">
+                        <label for="fp-input-email" class="input-label">Registered Work Email</label>
+                        <div class="input-wrapper">
+                            <span class="input-prefix-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect width="20" height="16" x="2" y="4" rx="2"/>
+                                    <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+                                </svg>
+                            </span>
+                            <input type="email" id="fp-input-email" class="form-input" placeholder="officer@company.com" required>
+                        </div>
+                        <div class="field-error-msg hidden" id="fp-error-msg">Please enter a valid registered email address.</div>
+                    </div>
+
+                    <button type="button" class="btn-primary-auth" id="btn-send-reset-link">
+                        <span class="btn-spinner hidden" id="spinner-fp"></span>
+                        <span class="btn-text">Send Password Reset Link</span>
+                    </button>
+                </div>
+
+                <div id="fp-success-view" class="hidden">
+                    <div class="success-state-box">
+                        <div class="success-check-icon">✓</div>
+                        <h4>Reset Link Dispatched</h4>
+                        <p>We've sent recovery instructions to <strong id="fp-success-email">officer@company.com</strong>. Please check your inbox and follow the steps.</p>
+                        <button type="button" class="btn-secondary-outline" id="btn-fp-done">Return to Sign In</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- DEMO CREDENTIALS QUICK-DRAWER -->
+    <div class="drawer-backdrop hidden" id="drawer-demo-accounts">
+        <div class="drawer-card">
+            <div class="drawer-header">
+                <div class="drawer-title-row">
+                    <span class="drawer-badge">TEST RUNTIME</span>
+                    <h3>Quick Demo Credentials</h3>
+                </div>
+                <p>Click any test profile to auto-populate credentials for instant local sign-in testing.</p>
+                <button type="button" class="drawer-close-btn" id="btn-close-drawer">&times;</button>
+            </div>
+
+            <div class="drawer-profiles">
+                <!-- Profile 1: Client Admin -->
+                <div class="demo-profile-card" data-email="admin@verifyyy.ai" data-pass="VerifyMaster@2026" data-portal="admin" data-otp="928371">
+                    <div class="profile-header">
+                        <span class="profile-role-tag role-admin">🏢 Client Admin</span>
+                        <span class="profile-port">Port 8082</span>
+                    </div>
+                    <div class="profile-cred">
+                        <span class="cred-label">Email:</span>
+                        <code>admin@verifyyy.ai</code>
+                    </div>
+                    <div class="profile-cred">
+                        <span class="cred-label">Password:</span>
+                        <code>VerifyMaster@2026</code>
+                    </div>
+                    <div class="profile-cred">
+                        <span class="cred-label">Test OTP:</span>
+                        <code>928371</code>
+                    </div>
+                    <button type="button" class="btn-use-cred">Use Admin Credentials</button>
+                </div>
+
+                <!-- Profile 2: Super Administrator -->
+                <div class="demo-profile-card" data-email="superadmin@verifyyy.internal" data-pass="SuperSecure#992" data-portal="superadmin" data-otp="654321">
+                    <div class="profile-header">
+                        <span class="profile-role-tag role-super">🛡️ Superadmin</span>
+                        <span class="profile-port">Port 8081</span>
+                    </div>
+                    <div class="profile-cred">
+                        <span class="cred-label">Email:</span>
+                        <code>superadmin@verifyyy.internal</code>
+                    </div>
+                    <div class="profile-cred">
+                        <span class="cred-label">Password:</span>
+                        <code>SuperSecure#992</code>
+                    </div>
+                    <div class="profile-cred">
+                        <span class="cred-label">Test OTP:</span>
+                        <code>654321</code>
+                    </div>
+                    <button type="button" class="btn-use-cred">Use Superadmin Credentials</button>
+                </div>
+
+                <!-- Profile 3: Verification Officer / Applicant -->
+                <div class="demo-profile-card" data-email="officer@fintech-bank.com" data-pass="BankKYC2026!" data-portal="runner" data-otp="123456">
+                    <div class="profile-header">
+                        <span class="profile-role-tag role-officer">🪪 Compliance Officer</span>
+                        <span class="profile-port">Port 5174</span>
+                    </div>
+                    <div class="profile-cred">
+                        <span class="cred-label">Email:</span>
+                        <code>officer@fintech-bank.com</code>
+                    </div>
+                    <div class="profile-cred">
+                        <span class="cred-label">Password:</span>
+                        <code>BankKYC2026!</code>
+                    </div>
+                    <div class="profile-cred">
+                        <span class="cred-label">Test OTP:</span>
+                        <code>123456</code>
+                    </div>
+                    <button type="button" class="btn-use-cred">Use Officer Credentials</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATION CONTAINER -->
+    <div class="toast-container" id="toast-container" aria-live="polite"></div>
+
+    <!-- Sign In Logic -->
+    <script src="signin.js"></script>
+</body>
+</html>

@@ -1,6 +1,10 @@
 import { StatusBar } from 'expo-status-bar';
 import React from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Dimensions, Linking } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Dimensions } from 'react-native';
+import * as Linking from 'expo-linking';
+import SignInScreen from './SignInScreen';
+import { supabase } from './lib/supabase';
+import { signOut } from './src/services/auth';
 
 const { width } = Dimensions.get('window');
 
@@ -17,6 +21,8 @@ const COLORS = {
 
 export default function App() {
   const isWeb = width > 768; // Simple breakpoint for web layout
+  const [isAuthenticated, setIsAuthenticated] = React.useState(false);
+  const [currentUser, setCurrentUser] = React.useState(null);
 
   const [stats, setStats] = React.useState([
     { id: '1', title: 'Total Companies', value: '0', icon: '🏢' },
@@ -30,6 +36,48 @@ export default function App() {
   const [activeModuleUrl, setActiveModuleUrl] = React.useState(null);
 
   React.useEffect(() => {
+    // Supabase Session Detection
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setCurrentUser(session.user);
+        setIsAuthenticated(true);
+      }
+    });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setCurrentUser(session.user);
+        setIsAuthenticated(true);
+      } else {
+        setCurrentUser(null);
+        setIsAuthenticated(false);
+      }
+    });
+
+    // Handle deep link authentication (e.g., verifyyy://auth/callback)
+    const handleAuthUrl = async (url) => {
+      if (!url) return;
+      try {
+        const { queryParams } = Linking.parse(url);
+        if (queryParams?.code) {
+          await supabase.auth.exchangeCodeForSession(queryParams.code);
+        } else if (url.includes('#')) {
+          const hash = url.split('#')[1];
+          const params = new URLSearchParams(hash);
+          const access_token = params.get('access_token');
+          const refresh_token = params.get('refresh_token');
+          if (access_token && refresh_token) {
+            await supabase.auth.setSession({ access_token, refresh_token });
+          }
+        }
+      } catch (err) {
+        console.warn('Deep link authentication error:', err);
+      }
+    };
+
+    Linking.getInitialURL().then(handleAuthUrl);
+    const linkSub = Linking.addEventListener('url', ({ url }) => handleAuthUrl(url));
+
     // Fetch Dashboard Stats
     fetch('http://127.0.0.1:8000/api/v1/b2b/dashboard')
       .then(res => res.json())
@@ -58,6 +106,11 @@ export default function App() {
          }
       })
       .catch(err => console.error("Error fetching services:", err));
+
+    return () => {
+      authListener?.subscription?.unsubscribe();
+      linkSub?.remove?.();
+    };
   }, []);
 
   const renderStatCard = ({ item }) => (
@@ -171,6 +224,20 @@ export default function App() {
     </View>
   );
 
+  if (!isAuthenticated) {
+    return (
+      <SignInScreen
+        portalName="Verifyyy Superadmin"
+        portalRole="superadmin"
+        defaultEmail="superadmin@verifyyy.internal"
+        onLoginSuccess={(user) => {
+          setCurrentUser(user);
+          setIsAuthenticated(true);
+        }}
+      />
+    );
+  }
+
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
@@ -189,7 +256,21 @@ export default function App() {
                <Text style={{color: activeTab === 'products' ? '#fff' : '#cbd5e1', fontWeight: '600'}}>Our Products</Text>
            </TouchableOpacity>
            <TouchableOpacity style={styles.profileBtn}>
-             <Text style={styles.profileBtnText}>Admin</Text>
+             <Text style={styles.profileBtnText}>{currentUser?.email ? currentUser.email.split('@')[0] : 'Admin'}</Text>
+           </TouchableOpacity>
+           <TouchableOpacity 
+             onPress={async () => {
+               try {
+                 await signOut();
+               } catch (e) {
+                 console.warn("Sign out error:", e);
+               }
+               setIsAuthenticated(false);
+               setCurrentUser(null);
+             }} 
+             style={styles.signOutBtn}
+           >
+             <Text style={styles.signOutBtnText}>Sign Out ⎋</Text>
            </TouchableOpacity>
         </View>
       </View>
@@ -237,10 +318,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
+    marginRight: 10,
   },
   profileBtnText: {
     color: '#fff',
     fontWeight: '600',
+  },
+  signOutBtn: {
+    backgroundColor: 'rgba(239, 68, 68, 0.25)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.4)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  signOutBtnText: {
+    color: '#fca5a5',
+    fontWeight: '700',
+    fontSize: 12,
   },
   scrollContent: {
     padding: 24,

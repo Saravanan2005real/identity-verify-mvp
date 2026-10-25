@@ -185,8 +185,21 @@ for handler in paddlex_logger.handlers:
     paddlex_logger.removeHandler(handler)
 
 app = Flask(__name__)
-CORS(app)
+from werkzeug.utils import secure_filename
+import auth_validator
+# Security: Enforce explicit CORS allowed origins and request body limits
+ALLOWED_ORIGINS = [
+    "http://localhost:8081",
+    "http://localhost:8082",
+    "http://localhost:5174",
+    "http://127.0.0.1:8081",
+    "http://127.0.0.1:8082",
+    "http://127.0.0.1:5174",
+]
+CORS(app, origins=ALLOWED_ORIGINS, supports_credentials=True)
 
+# 10MB Request payload limit to prevent memory exhaustion / DoS
+app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
 
 # Ensure upload directory exists — use an absolute path so the folder is always
 # python_backend/ocr_uploads/ regardless of the working directory at launch time.
@@ -2489,7 +2502,8 @@ def best_ocr_pass(warped_img, upload_folder, filename_stem, hinted_type=None):
         try:
             lines, scores, avg_conf, parsed = run_paddle_ocr_on_image(img, tmp, hinted_type=hinted_type)
             rank = _score_ocr_parse(parsed, avg_conf, lines)
-            print(f"[OCR pass={label}] conf={avg_conf:.3f} rank={rank:.3f} parsed={parsed}")
+            doc_type_found = parsed.get("document_type", "UNKNOWN")
+            print(f"[OCR pass={label}] conf={avg_conf:.3f} rank={rank:.3f} doc_type={doc_type_found}")
             item = (rank, label, img, lines, scores, avg_conf, parsed)
             if best is None or item[0] > best[0]:
                 best = item
@@ -2533,10 +2547,7 @@ def best_ocr_pass(warped_img, upload_folder, filename_stem, hinted_type=None):
             )
         full_num = _digits_only(parsed.get("aadhaar_number", ""))
         if roi_num:
-            print(
-                f"[Aadhaar ROI] full={full_num} roi={roi_num} "
-                f"roi_valid={roi_valid} roi_lines={roi_lines}"
-            )
+            print(f"[Aadhaar ROI] roi_valid={roi_valid}")
             # Trust ROI digits for the printed UID; validity = real Verhoeff only
             parsed["aadhaar_number"] = _format_aadhaar_display(roi_num)
             parsed["aadhaar_number_validated"] = bool(roi_valid)
@@ -2888,6 +2899,26 @@ def _cross_verify_uploaded_vs_live(refs, holder_filename, id_filename):
 
 @app.route('/api/v1/live_verify', methods=['POST'])
 def live_verify_api():
+    caller_type, user_info, tenant_id, auth_token = _extract_caller_auth(request)
+    referer = request.headers.get("Referer", "")
+    is_safe_origin = any(referer.startswith(origin) for origin in ALLOWED_ORIGINS)
+    raw_token = request.headers.get("X-Applicant-Token") or request.args.get("applicant_token") or (request.json.get("applicant_token") if request.is_json and request.json else None)
+
+    # Workflow Step Enforcement: Check if live verification is allowed for this applicant token
+    if caller_type == "applicant":
+        if not auth_validator.check_step_allowed(user_info, "LIVE_VERIFY"):
+            return jsonify({"status": "error", "message": "Live face verification is not permitted in this pipeline."}), 403
+
+        # Prerequisite Enforcement: If pipeline contains document step (PAN/AADHAAR), applicant must have completed OCR first
+        allowed = user_info.get("allowed_steps", [])
+        has_doc_step = any("_FACE" in a or a in ("PAN", "AADHAAR") for a in allowed)
+        completed = set(user_info.get("completed_steps", []))
+        if has_doc_step and "OCR" not in completed and "PAN" not in completed and "AADHAAR" not in completed:
+            return jsonify({
+                "status": "error",
+                "message": "Mandatory prerequisite step (Document OCR) must be completed before live face verification."
+            }), 400
+
     data = request.json
     if not data or 'image' not in data:
         return jsonify({"error": "No image data provided"}), 400
@@ -2935,19 +2966,26 @@ def live_verify_api():
             if not verified and isinstance(fm_first, dict):
                 verified = bool(fm_first.get("verified"))
 
+            effective_tenant = tenant_id or "default-org"
+            signed_holder_url = auth_validator.generate_signed_asset_url(holder_filename, effective_tenant, ttl_seconds=900) if holder_filename else None
+
             sb_payload = {
                 "session_id": session_id,
+                "tenant_id": effective_tenant,
                 "face_match_verified": verified,
                 "face_match_distance": fm_first.get("distance") if isinstance(fm_first, dict) else None,
                 "face_match_threshold": fm_first.get("threshold") if isinstance(fm_first, dict) else None,
                 "liveness_verified": step41_complete,
                 "liveness_score": float(quality.get("sharpness", 0.0)) if isinstance(quality, dict) else 0.0,
                 "overall_status": "SUCCESS" if (verified and step41_complete) else "COMPLETED",
-                "live_holder_face_url": f"/ocr_uploads/{holder_filename}" if holder_filename else None,
+                "live_holder_face_url": signed_holder_url,
             }
-            supabase_sync_res = upsert_verification_record(sb_payload)
+            supabase_sync_res = upsert_verification_record(sb_payload, auth_token=auth_token)
         except Exception as sb_err:
             print(f"[Supabase Sync Error in live_verify]: {sb_err}")
+
+        if caller_type == "applicant" and raw_token and step41_complete:
+            auth_validator.record_applicant_step_completion(raw_token, "LIVE_VERIFY")
 
         return jsonify(_json_safe({
             "status": "success" if step41_complete else "incomplete",
@@ -2961,7 +2999,7 @@ def live_verify_api():
             "ocr_confidence": 0,
             "parsed_fields": {},
             "processed_image_url": None,
-            "holder_face_image_url": f"/ocr_uploads/{holder_filename}" if holder_filename else None,
+            "holder_face_image_url": signed_holder_url,
             "holder_face_source": holder_meta.get("source") if holder_meta else None,
             "id_face_image_url": None,
             "id_face_source": None,
@@ -2971,10 +3009,7 @@ def live_verify_api():
         }))
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        print(f"Error details: {repr(e)}")
-        return jsonify({"status": "failed", "error": str(e)}), 500
+        return jsonify({"status": "failed", "error": "An error occurred during live face verification"}), 500
 
 
         id_face, id_meta, holder_face, holder_meta = extract_holder_and_id_card_faces(
@@ -3108,18 +3143,55 @@ def live_face_check_api():
         return jsonify({"status": "failed", "error": str(e)}), 500
 
 
+ALLOWED_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.pdf'}
+
 @app.route('/api/v1/ocr', methods=['POST'])
 def run_ocr():
+    caller_type, user_info, tenant_id, auth_token, auth_error = _extract_caller_auth(request)
+
+    # Authentication failure — fail closed regardless of headers.
+    # Referer is NOT treated as authentication. Spoofing a Referer header is trivial.
+    if auth_error == "service_unavailable":
+        return jsonify({"status": "error",
+                        "message": "Authentication service temporarily unavailable"}), 503
+    if not caller_type:
+        return jsonify({"status": "error",
+                        "message": "Authentication required to perform OCR"}), 401
+
+    hinted_type = (request.form.get("document_type") or "").strip().upper() or None
+    raw_token = request.headers.get("X-Applicant-Token") or request.args.get("applicant_token")
+
+    # Workflow Step Enforcement: If caller is applicant, enforce step is in allowed workflow
+    if caller_type == "applicant":
+        target_step = hinted_type or "PAN"
+        if not auth_validator.check_step_allowed(user_info, target_step):
+            return jsonify({"status": "error", "message": f"Step '{target_step}' is not permitted in this verification pipeline."}), 403
+
     if 'file' not in request.files:
         return jsonify({"error": "No file uploaded"}), 400
         
     file = request.files['file']
-    if file.filename == '':
+    if not file or file.filename == '':
         return jsonify({"error": "No file selected"}), 400
 
-    filename = f"{uuid.uuid4()}_{file.filename}"
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in ALLOWED_IMAGE_EXTENSIONS:
+        return jsonify({"error": f"Invalid file type. Allowed: {', '.join(sorted(ALLOWED_IMAGE_EXTENSIONS))}"}), 400
+
+    raw_safe_name = secure_filename(file.filename) or f"upload{ext}"
+    filename = f"{uuid.uuid4()}_{raw_safe_name}"
     file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     file.save(file_path)
+
+    # Magic byte validation to prevent MIME-type spoofing
+    if not auth_validator.validate_file_content_and_magic(file_path):
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+        except Exception:
+            pass
+        return jsonify({"error": "File content does not match allowed image or PDF format."}), 400
+
     hinted_type = (request.form.get("document_type") or "").strip().upper() or None
 
     try:
@@ -3158,27 +3230,56 @@ def run_ocr():
         if not _save_jpg(pipeline_path, processed_img):
             return jsonify({"status": "failed", "error": "Failed to save OCR processed image"}), 500
 
-        # Sync OCR Extracted Results to Supabase
+        # Retention Policy: Clean up raw full-document upload file after processing
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+        except Exception as rm_err:
+            print(f"[Retention Cleanup Notice]: {rm_err}")
+
+        # Mask sensitive identity numbers in responses & database records
+        fields = dict(parsed_fields or {})
+        detected_doc_type = (fields.get("document_type") or ("pan" if fields.get("pan_number") else ("aadhaar" if fields.get("aadhaar_number") else "unknown"))).lower()
+        raw_id_num = fields.get("aadhaar_number") or fields.get("pan_number") or fields.get("id_number") or fields.get("dl_number")
+        masked_id_num = auth_validator.mask_identity_number(raw_id_num, detected_doc_type)
+
+        # Generate temporary signed URLs for temporary asset access (15 min TTL)
+        effective_tenant = tenant_id or "default-org"
+        signed_pipeline_url = auth_validator.generate_signed_asset_url(pipeline_filename, effective_tenant, ttl_seconds=900)
+        signed_face_url = auth_validator.generate_signed_asset_url(face_filename, effective_tenant, ttl_seconds=900) if face_filename else None
+
+        # Sync OCR Extracted Results to Supabase (storing masked ID and signed asset URL)
         supabase_sync_res = {"status": "skipped"}
         try:
             from supabase_client import upsert_verification_record
-            fields = parsed_fields or {}
-            id_num = fields.get("aadhaar_number") or fields.get("pan_number") or fields.get("id_number") or fields.get("dl_number")
-            detected_doc_type = (fields.get("document_type") or ("pan" if fields.get("pan_number") else ("aadhaar" if fields.get("aadhaar_number") else "unknown"))).lower()
             
             sb_payload = {
                 "session_id": stem,
+                "tenant_id": effective_tenant,
                 "document_type": detected_doc_type,
-                "id_number": id_num,
+                "id_number": masked_id_num,
                 "extracted_name": fields.get("name"),
                 "dob": fields.get("dob"),
                 "ocr_confidence": round(float(avg_confidence) * 100, 2),
                 "overall_status": "OCR_COMPLETED",
-                "extracted_face_url": f"/ocr_uploads/{face_filename}" if face_filename else None,
+                "extracted_face_url": signed_face_url,
             }
-            supabase_sync_res = upsert_verification_record(sb_payload)
+            supabase_sync_res = upsert_verification_record(sb_payload, auth_token=auth_token)
         except Exception as sb_err:
             print(f"[Supabase Sync Error in run_ocr]: {sb_err}")
+
+        # Record step completion in applicant session state
+        if caller_type == "applicant" and raw_token:
+            auth_validator.record_applicant_step_completion(raw_token, detected_doc_type.upper())
+            auth_validator.record_applicant_step_completion(raw_token, "OCR")
+
+        # Mask ID in returned response
+        if "aadhaar_number" in fields:
+            fields["aadhaar_number"] = masked_id_num
+        if "pan_number" in fields:
+            fields["pan_number"] = masked_id_num
+        if "id_number" in fields:
+            fields["id_number"] = masked_id_num
 
         return jsonify(_json_safe({
             "status": "success",
@@ -3188,41 +3289,276 @@ def run_ocr():
             "ocr_pass": ocr_pass,
             "raw_text": extracted_lines,
             "ocr_confidence": round(float(avg_confidence) * 100, 2),
-            "parsed_fields": parsed_fields,
-            "processed_image_url": f"/ocr_uploads/{pipeline_filename}",
-            "face_image_url": f"/ocr_uploads/{face_filename}" if face_filename else None,
+            "parsed_fields": fields,
+            "processed_image_url": signed_pipeline_url,
+            "face_image_url": signed_face_url,
             "face_source": face_meta.get("source"),
             "face_debug": face_meta,
             "supabase_sync": supabase_sync_res,
         }))
 
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        print(f"Error details: {repr(e)}")
-        return jsonify({"status": "failed", "error": str(e)}), 500
+        # Cleanup temporary uploaded file on error
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+        except Exception:
+            pass
+        return jsonify({"status": "failed", "error": "An error occurred during OCR verification"}), 500
+
+from werkzeug.utils import secure_filename
+import auth_validator
+
+def _extract_caller_auth(req):
+    """
+    Authenticate request caller via:
+    1. Supabase Bearer token (Admin / Superadmin / Reviewer)
+    2. Or signed applicant session token (X-Applicant-Token header or query param)
+
+    Returns:
+        tuple: (caller_type, user_info, tenant_id, auth_token, error)
+          caller_type: 'authenticated', 'applicant', or None
+          error: None | 'service_unavailable' (Supabase unreachable — return 503)
+
+    SECURITY: This function NEVER silences Supabase connectivity errors.
+    A ConnectionError from verify_supabase_token must propagate as 'service_unavailable'
+    so the caller returns HTTP 503, not fall through to weaker auth.
+    """
+    # 1. Check Bearer token (User / Admin)
+    auth_header = req.headers.get("Authorization", "")
+    if auth_header.lower().startswith("bearer "):
+        token = auth_header[7:].strip()
+        try:
+            user_data = auth_validator.verify_supabase_token(token)
+            memberships = auth_validator.get_user_tenant_membership(user_data["id"], token)
+            is_super = auth_validator.is_superadmin(user_data, memberships)
+            tenant_id = None
+            if memberships:
+                tenant_id = memberships[0].get("organization_id")
+            elif not is_super:
+                tenant_id = user_data.get("user_metadata", {}).get("tenant_id", "default-org")
+            return ("authenticated", {
+                "user": user_data,
+                "is_superadmin": is_super,
+                "memberships": memberships
+            }, tenant_id, token, None)
+        except ConnectionError:
+            # Supabase is unreachable — return service_unavailable signal.
+            # DO NOT fall through to applicant token check.
+            return (None, None, None, None, "service_unavailable")
+        except ValueError:
+            # Token is invalid/expired — do not fall through if a Bearer was supplied.
+            # Reject explicitly: the caller chose Bearer auth and it failed.
+            return (None, None, None, None, "invalid_token")
+        except Exception as e:
+            import traceback; traceback.print_exc()
+            return (None, None, None, None, "service_unavailable")
+
+    # 2. Check signed applicant session token (only reached if no Bearer header was present)
+    applicant_token = (
+        req.headers.get("X-Applicant-Token")
+        or req.args.get("applicant_token")
+        or (req.json.get("applicant_token") if req.is_json and req.json else None)
+    )
+    if applicant_token:
+        try:
+            payload = auth_validator.verify_applicant_token(applicant_token)
+            return ("applicant", payload, payload.get("tenant_id", "default-org"), None, None)
+        except ValueError:
+            return (None, None, None, None, "invalid_token")
+        except Exception:
+            return (None, None, None, None, "invalid_token")
+
+    return (None, None, None, None, None)
 
 @app.route('/ocr_uploads/<filename>')
 def uploaded_file(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+    # Sanitize filename against directory traversal
+    safe_name = secure_filename(filename)
+    if not safe_name or safe_name != filename:
+        return jsonify({"status": "error", "message": "Invalid filename requested"}), 400
+
+    # Authenticate the caller first (5-tuple from _extract_caller_auth)
+    caller_type, user_info, tenant_id, auth_token, auth_error = _extract_caller_auth(request)
+
+    # Fail closed on Supabase unavailability
+    if auth_error == "service_unavailable":
+        return jsonify({"status": "error", "message": "Authentication service temporarily unavailable"}), 503
+
+    # Check short-lived HMAC signed URL parameters (?expires=...&tid=...&op=...&sig=...)
+    exp_param = request.args.get("expires")
+    sig_param = request.args.get("sig")
+    tid_param = request.args.get("tid") or (tenant_id or "")
+    op_param  = request.args.get("op", "read")
+
+    is_signed_url_valid = False
+    if exp_param and sig_param and tid_param:
+        is_signed_url_valid = auth_validator.verify_signed_asset_url(
+            safe_name, exp_param, sig_param, tid_param, op_str=op_param
+        )
+
+    # SECURITY: Referer headers are attacker-controlled and are NOT a form of authentication.
+    # Access is granted ONLY via a valid HMAC-signed URL or a server-verified auth token.
+    if not is_signed_url_valid and not caller_type:
+        return jsonify({"status": "error", "message": "Unauthorized: valid signed URL or authorization token required"}), 401
+
+    # Scope check: authenticated (non-superadmin) users may only access their own tenant assets
+    if is_signed_url_valid and caller_type and not (user_info or {}).get("is_superadmin"):
+        # Verify the tid in the signed URL matches the caller's tenant
+        if tid_param and tenant_id and tid_param != tenant_id:
+            return jsonify({"status": "error", "message": "Signed URL tenant does not match your session"}), 403
+
+    return send_from_directory(app.config['UPLOAD_FOLDER'], safe_name)
 
 @app.route('/api/v1/supabase/get/<identifier>', methods=['GET'])
 def get_supabase_record_api(identifier):
+    """
+    Fetch verification record securely.
+    Enforces server-side authentication and tenant-level permissions to prevent IDOR attacks.
+    """
+    caller_type, user_info, tenant_id, auth_token, auth_error = _extract_caller_auth(request)
+    if auth_error == "service_unavailable":
+        return jsonify({"status": "error", "message": "Authentication service temporarily unavailable"}), 503
+    if not caller_type:
+        return jsonify({"status": "error", "message": "Authentication required"}), 401
+
     try:
         from supabase_client import get_verification_record
-        res = get_verification_record(identifier)
+        
+        # Superadmins can inspect any record; tenant admins/reviewers/applicants are scoped to their tenant
+        effective_tenant = None if (caller_type == "authenticated" and user_info.get("is_superadmin")) else tenant_id
+        
+        res = get_verification_record(identifier, tenant_id=effective_tenant, auth_token=auth_token)
+        
+        # IDOR protection: if record exists but belongs to a different tenant, return 403 Forbidden
+        if res.get("status") == "success" and res.get("data"):
+            rec_tenant = res["data"].get("tenant_id")
+            if effective_tenant and rec_tenant and rec_tenant != effective_tenant:
+                return jsonify({"status": "error", "message": "Access denied to cross-tenant record"}), 403
+                
         return jsonify(_json_safe(res))
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": "Failed to fetch verification record"}), 500
 
 @app.route('/api/v1/supabase/list', methods=['GET'])
 def get_supabase_list_api():
+    """
+    Fetch verification records list.
+    Enforces authentication and scopes results strictly to caller's tenant.
+    """
+    caller_type, user_info, tenant_id, auth_token, auth_error = _extract_caller_auth(request)
+    if auth_error == "service_unavailable":
+        return jsonify({"status": "error", "message": "Authentication service temporarily unavailable", "data": []}), 503
+    if caller_type != "authenticated":
+        return jsonify({"status": "error", "message": "Authentication required. Public listing is forbidden.", "data": []}), 401
+
     try:
         from supabase_client import list_verification_records
-        res = list_verification_records(limit=50)
+        effective_tenant = None if user_info.get("is_superadmin") else tenant_id
+        limit = min(int(request.args.get("limit", 50)), 100)
+        
+        res = list_verification_records(limit=limit, tenant_id=effective_tenant, auth_token=auth_token)
         return jsonify(_json_safe(res))
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e), "data": []}), 500
+        return jsonify({"status": "error", "message": "Failed to list verification records", "data": []}), 500
+
+@app.route('/api/v1/auth/applicant_session', methods=['POST'])
+def create_applicant_session_api():
+    """
+    Create a signed, time-limited applicant session token for unauthenticated link execution.
+    SECURITY: Only authenticated tenant admins or superadmins may issue applicant tokens.
+    Arbitrary token issuance is a critical authentication bypass and is forbidden.
+    """
+    caller_type, user_info, tenant_id, auth_token, auth_error = _extract_caller_auth(request)
+
+    if auth_error == "service_unavailable":
+        return jsonify({"status": "error", "message": "Authentication service temporarily unavailable"}), 503
+
+    # Reject if caller is not a verified server-side authenticated user.
+    # Applicant tokens (X-Applicant-Token) are NOT allowed to issue new applicant tokens.
+    if caller_type != "authenticated":
+        return jsonify({
+            "status": "error",
+            "message": "Forbidden: only authenticated tenant administrators may issue applicant session tokens."
+        }), 403
+
+    # Tenant admins can only issue tokens for their own tenant.
+    # Superadmins may specify any tenant.
+    is_super = (user_info or {}).get("is_superadmin", False)
+    data = request.json or {}
+    requested_tenant = data.get("tenant_id") or tenant_id
+    if not is_super and requested_tenant and requested_tenant != tenant_id:
+        return jsonify({
+            "status": "error",
+            "message": "Forbidden: tenant admins may only issue tokens for their own tenant."
+        }), 403
+
+    effective_tenant = requested_tenant or tenant_id or "default-org"
+    pid = data.get("pid") or f"FLOW-{uuid.uuid4().hex[:6].upper()}"
+    flow = data.get("flow") or "PAN_FACE"
+    ttl = min(int(data.get("ttl_seconds", 7200)), 86400)  # max 24h
+
+    token = auth_validator.create_applicant_token(pid, flow, effective_tenant, ttl_seconds=ttl)
+    return jsonify({
+        "status": "success",
+        "applicant_token": token,
+        "pid": pid,
+        "flow": flow,
+        "tenant_id": effective_tenant,
+        "expires_in": ttl
+    })
+
+def cleanup_expired_assets(retention_hours: int = 24):
+    """
+    Retention Policy Procedure:
+    Purges temporary verification images, face crops, and debug files older than retention_hours (default: 24h).
+    Returns count of removed files.
+    """
+    upload_dir = app.config.get('UPLOAD_FOLDER')
+    if not upload_dir or not os.path.exists(upload_dir):
+        return 0
+
+    now = time.time()
+    cutoff = now - (retention_hours * 3600)
+    removed_count = 0
+
+    try:
+        for fname in os.listdir(upload_dir):
+            fpath = os.path.join(upload_dir, fname)
+            if not os.path.isfile(fpath):
+                continue
+            # Check modification time
+            mtime = os.path.getmtime(fpath)
+            if mtime < cutoff:
+                try:
+                    os.remove(fpath)
+                    removed_count += 1
+                except Exception as del_err:
+                    print(f"[Cleanup Error on {fname}]: {del_err}")
+    except Exception as scan_err:
+        print(f"[Cleanup Scan Error]: {scan_err}")
+
+    return removed_count
+
+@app.route('/api/v1/admin/purge_expired_assets', methods=['POST'])
+def purge_expired_assets_api():
+    """
+    Protected Administrative endpoint to trigger data retention cleanup.
+    Requires authenticated Superadmin.
+    """
+    caller_type, user_info, tenant_id, auth_token, auth_error = _extract_caller_auth(request)
+    if auth_error == "service_unavailable":
+        return jsonify({"status": "error", "message": "Authentication service temporarily unavailable"}), 503
+    if caller_type != "authenticated" or not user_info.get("is_superadmin"):
+        return jsonify({"status": "error", "message": "Superadmin authentication required"}), 403
+
+    retention_hours = int(request.args.get("retention_hours") or (request.json.get("retention_hours") if request.is_json and request.json else 24))
+    count = cleanup_expired_assets(retention_hours=retention_hours)
+    return jsonify({
+        "status": "success",
+        "purged_files": count,
+        "retention_hours": retention_hours
+    })
 
 if __name__ == '__main__':
     # Standalone Flask on 5001 is optional. The product entrypoint is:
@@ -3231,3 +3567,4 @@ if __name__ == '__main__':
     print("(Optional standalone) OCR_STANDALONE=1 python -m ocr.engine")
     if os.getenv("OCR_STANDALONE", "").strip() in ("1", "true", "yes"):
         app.run(host='0.0.0.0', port=5001, debug=False, threaded=True)
+

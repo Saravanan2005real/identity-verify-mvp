@@ -1,38 +1,70 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException, Header, status
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
 from routers import dashboard
-from database import init_db
+from database import init_db, get_db, Company, DashboardStat, Product
+import auth_validator
 
 # Initialize database tables
 init_db()
 
 app = FastAPI(title="Super Admin API", version="1.0.0")
 
+ALLOWED_ORIGINS = [
+    "http://localhost:8081",
+    "http://localhost:8082",
+    "http://localhost:5174",
+    "http://127.0.0.1:8081",
+    "http://127.0.0.1:8082",
+    "http://127.0.0.1:5174",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
-app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
+def require_superadmin(authorization: str = Header(None)):
+    """
+    Enforce that the caller is authenticated via Supabase and possesses the 'superadmin' role.
+    Protects superadmin operations from ordinary users and tenant administrators.
+    """
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing or invalid Authorization header."
+        )
+
+    token = authorization[7:].strip()
+    try:
+        user_data = auth_validator.verify_supabase_token(token)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(e)
+        )
+
+    memberships = auth_validator.get_user_tenant_membership(user_data["id"], token)
+    if not auth_validator.is_superadmin(user_data, memberships):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Superadmin role required."
+        )
+
+    return {"user": user_data, "memberships": memberships}
+
+app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"], dependencies=[Depends(require_superadmin)])
 
 @app.get("/")
 def read_root():
-    return {"status": "success", "message": "Welcome to the Super Admin API"}
-
-from sqlalchemy.orm import Session
-from fastapi import Depends
-from database import get_db, Company, DashboardStat, Product
+    return {"status": "success", "message": "Super Admin API"}
 
 @app.get("/api/v1/b2b/dashboard")
-def get_b2b_dashboard(company_id: int = 1, db: Session = Depends(get_db)):
-    # Pull actual data from the database, or return 0 if none exists.
-    # We remove the hardcoded '150', '142', '5' from here.
+def get_b2b_dashboard(company_id: int = 1, db: Session = Depends(get_db), auth_user = Depends(require_superadmin)):
     stat = db.query(DashboardStat).first()
-    
-    # Normally you'd query links and pipelines directly
     return {
         "status": "success",
         "data": {
@@ -55,3 +87,4 @@ def get_b2b_services():
             {"id": "eye_tracking", "name": "Eye Tracking & Attention Analysis", "desc": "WebGazer eye tracking and gaze calibration"}
         ]
     }
+

@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/",
+      "destination": "/products/signin.html"
+    },
+    {
+      "source": "/products",
+      "destination": "/products/signin.html"
+    },
+    {
+      "source": "/((?!products/).*)",
+      "destination": "/products/$1"
+    }
+  ]
+}
+

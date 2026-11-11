@@ -134,7 +134,13 @@ export default function App() {
 
   const fetchSupabaseData = async () => {
     try {
-      const resp = await fetch('http://localhost:5001/api/v1/supabase/list');
+      const { data: sessionData } = await supabase.auth.getSession();
+      const headers = {};
+      if (sessionData?.session?.access_token) {
+        headers['Authorization'] = `Bearer ${sessionData.session.access_token}`;
+      }
+
+      const resp = await fetch('http://localhost:5001/api/v1/supabase/list', { headers });
       const data = await resp.json();
       if (data.status === 'success' && Array.isArray(data.data)) {
         const rows = data.data;
@@ -195,7 +201,7 @@ export default function App() {
     setPipeline(pipeline.filter(m => m.uniqueId !== uniqueId));
   };
 
-  const generateLink = () => {
+  const generateLink = async () => {
     if (pipeline.length === 0) return;
 
     const flowParams = pipeline.map(m => m.id).join(',');
@@ -205,7 +211,28 @@ export default function App() {
       ? `${window.location.protocol}//${window.location.hostname}:5174`
       : 'http://localhost:5174';
 
-    const link = `${origin}/verify.html?flow=${encodeURIComponent(flowParams)}&pid=${pid}`;
+    let applicantToken = '';
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const headers = { 'Content-Type': 'application/json' };
+      if (sessionData?.session?.access_token) {
+        headers['Authorization'] = `Bearer ${sessionData.session.access_token}`;
+      }
+      const tokResp = await fetch('http://localhost:5001/api/v1/auth/applicant_session', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ pid, flow: flowParams })
+      });
+      const tokData = await tokResp.json();
+      if (tokData.applicant_token) {
+        applicantToken = tokData.applicant_token;
+      }
+    } catch (e) {
+      console.warn("Could not generate backend applicant session token:", e);
+    }
+
+    const tokenQuery = applicantToken ? `&applicant_token=${encodeURIComponent(applicantToken)}` : '';
+    const link = `${origin}/verify.html?flow=${encodeURIComponent(flowParams)}&pid=${pid}${tokenQuery}`;
     setGeneratedLink(link);
     setModalVisible(true);
 

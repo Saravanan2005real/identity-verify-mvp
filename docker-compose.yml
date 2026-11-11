@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   ocr_module:
     build:
@@ -7,6 +5,16 @@ services:
       dockerfile: Dockerfile
     ports:
       - "5001:5001"
+    env_file:
+      - ./.env
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
+      - APPLICANT_SESSION_SECRET=${APPLICANT_SESSION_SECRET}
+      - ASSET_SIGNING_SECRET=${ASSET_SIGNING_SECRET}
+      - ALLOWED_CORS_ORIGINS=${ALLOWED_CORS_ORIGINS:-http://localhost:8081,http://localhost:8082,http://localhost:5174,http://127.0.0.1:8081,http://127.0.0.1:8082,http://127.0.0.1:5174}
+      - REVOCATION_BACKEND=${REVOCATION_BACKEND:-memory}
     volumes:
       - ./model_cache/deepface:/root/.deepface
       - ./model_cache/paddlex:/root/.paddlex

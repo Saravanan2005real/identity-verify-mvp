@@ -10,6 +10,7 @@ const pidTagEl = document.getElementById('pipeline-id-tag');
 const urlParams = new URLSearchParams(window.location.search);
 const flowString = urlParams.get('flow') || 'PAN_FACE,EYE_TRACKING';
 const pipelineId = urlParams.get('pid') || 'FLOW-' + Math.random().toString(36).substr(2, 6).toUpperCase();
+const applicantToken = urlParams.get('applicant_token') || '';
 
 if (pidTagEl) pidTagEl.textContent = `PID: ${pipelineId}`;
 
@@ -36,6 +37,12 @@ let videoStream = null;
 
 // Initialize Pipeline
 function initPipeline() {
+    // Security: Clean URL query parameters from browser address bar to prevent leaking sensitive applicant tokens
+    if (window.history && window.history.replaceState && applicantToken) {
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({ pid: pipelineId }, document.title, cleanUrl);
+    }
+
     if (stepperEl) {
         stepperEl.innerHTML = moduleKeys.map((modKey, idx) => `
             <div class="step-pill ${idx === 0 ? 'active' : ''}" id="pill-step-${idx}">
@@ -157,8 +164,14 @@ function renderDocFaceStep(modType) {
         uploadResults.classList.add('hidden');
 
         try {
+            const ocrHeaders = {};
+            if (applicantToken) {
+                ocrHeaders['X-Applicant-Token'] = applicantToken;
+            }
+
             const resp = await fetch(`${API_BASE}/api/v1/ocr`, {
                 method: 'POST',
+                headers: ocrHeaders,
                 body: formData,
             });
 
@@ -254,10 +267,15 @@ function renderDocFaceStep(modType) {
                 step1_face: uploadedFaceFilename
             };
 
+            const verifyHeaders = { 'Content-Type': 'application/json' };
+            if (applicantToken) {
+                verifyHeaders['X-Applicant-Token'] = applicantToken;
+            }
+
             try {
                 const resp = await fetch(`${API_BASE}/api/v1/live_verify`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: verifyHeaders,
                     body: JSON.stringify(payload)
                 });
 

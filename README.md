@@ -544,39 +544,42 @@ identity-verify-mvp/
 
 Verifyyy integrates natively with [Supabase](https://supabase.com) PostgreSQL database storage while remaining completely resilient to offline environments.
 
-### 1. Database Schema DDL
-Execute the schema script in your Supabase SQL Editor (`supabase_schema.sql`):
+### 1. Database Schema DDL & Hardened RLS Migrations
+Execute the hardened schema script in your Supabase SQL Editor ([`supabase_schema.sql`](file:///c:/Users/DINESH/Desktop/mvp/identity-verify-mvp/supabase_schema.sql)) or apply the version-controlled migration ([`migrations/20261024_000001_harden_rls_and_multi_tenancy.sql`](file:///c:/Users/DINESH/Desktop/mvp/identity-verify-mvp/migrations/20261024_000001_harden_rls_and_multi_tenancy.sql)):
 
 ```sql
-CREATE TABLE IF NOT EXISTS public.verifications (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    session_id VARCHAR(255) UNIQUE NOT NULL,
-    document_type VARCHAR(50),
-    id_number VARCHAR(100),
-    extracted_name VARCHAR(255),
-    dob VARCHAR(50),
-    ocr_confidence FLOAT DEFAULT 0.0,
-    face_match_verified BOOLEAN DEFAULT FALSE,
-    face_match_distance FLOAT,
-    face_match_threshold FLOAT,
-    liveness_verified BOOLEAN DEFAULT FALSE,
-    liveness_score FLOAT DEFAULT 0.0,
-    overall_status VARCHAR(50) DEFAULT 'PENDING',
-    extracted_face_url TEXT,
-    live_holder_face_url TEXT,
-    metadata JSONB DEFAULT '{}'::jsonb,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
+-- Hardened Multi-Tenant RLS & Anti-Tampering Trigger
 ALTER TABLE public.verifications ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Allow public read access" ON public.verifications FOR SELECT USING (true);
-CREATE POLICY "Allow public insert access" ON public.verifications FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow public update access" ON public.verifications FOR UPDATE USING (true);
+-- 1. Full access reserved for backend microservices via service_role key
+CREATE POLICY "Service role full access on verifications"
+    ON public.verifications FOR ALL TO service_role
+    USING (true) WITH CHECK (true);
 
-CREATE INDEX IF NOT EXISTS idx_verifications_session_id ON public.verifications(session_id);
-CREATE INDEX IF NOT EXISTS idx_verifications_id_number ON public.verifications(id_number);
+-- 2. Tenant administrators & reviewers restricted strictly to their organization's records
+CREATE POLICY "Tenant members can view verifications for their organization"
+    ON public.verifications FOR SELECT TO authenticated
+    USING (
+        (tenant_id IS NOT NULL AND public.is_org_member(tenant_id))
+        OR public.is_superadmin()
+    );
+
+-- 3. Tenant administrators can update verdicts strictly within their organization
+CREATE POLICY "Tenant admins can update verifications for their organization"
+    ON public.verifications FOR UPDATE TO authenticated
+    USING (
+        (tenant_id IS NOT NULL AND public.is_org_admin(tenant_id))
+        OR public.is_superadmin()
+    )
+    WITH CHECK (
+        (tenant_id IS NOT NULL AND public.is_org_admin(tenant_id))
+        OR public.is_superadmin()
+    );
+
+-- 4. Applicants restricted strictly to their assigned verification record
+CREATE POLICY "Applicants can view only their own assigned verification"
+    ON public.verifications FOR SELECT TO authenticated
+    USING (applicant_id = auth.uid());
 ```
 
 ### 2. Environment Configuration
@@ -631,15 +634,17 @@ Copy-Item .env.example .env
 cp .env.example .env
 ```
 
-Your `.env` file should contain:
+Your `.env` file must contain:
 ```ini
 # Supabase Cloud Configuration
-EXPO_PUBLIC_SUPABASE_URL=https://mhxhttawwpqywedzpybf.supabase.co
-EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_fa7-pjSYD5TS9Z-YxOUMGQ_JrX2jY-E
-
-SUPABASE_URL=https://mhxhttawwpqywedzpybf.supabase.co
-SUPABASE_KEY=sb_publishable_fa7-pjSYD5TS9Z-YxOUMGQ_JrX2jY-E
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_KEY=your-supabase-anon-or-publishable-key
 SUPABASE_TABLE=verifications
+
+# Application Secrets (Required at Startup — min 32 characters)
+# Generate with: python -c "import secrets; print(secrets.token_hex(32))"
+APPLICANT_SESSION_SECRET=replace-with-at-least-64-hex-characters-of-random-data
+ASSET_SIGNING_SECRET=replace-with-at-least-64-hex-characters-of-random-data
 ```
 
 ---
@@ -970,16 +975,37 @@ GET /api/v1/b2b/verification-services
 
 ---
 
-## Security, Privacy & UIDAI Compliance
+## Security Testing & Verification Suite
 
-- **UIDAI Data Masking**: Aadhaar card numbers are masked by default (first 8 digits masked: `XXXX XXXX 1234`) in compliant views.
+A comprehensive automated security testing suite is implemented in [`tests/test_security_controls.py`](tests/test_security_controls.py) to validate all implemented access controls, tenant boundaries, data protection mechanisms, and workflow integrity.
+
+### Running Security Tests
+```bash
+python -m pytest tests/test_security_controls.py -v
+```
+
+### Coverage of Security Controls
+- **Authentication & RBAC**: Confirms unauthenticated callers cannot read records (`/api/v1/supabase/list` and `/api/v1/supabase/get`) or invoke administrative operations (`/api/v1/admin/purge_expired_assets`).
+- **Tenant Isolation & IDOR**: Verifies that Tenant A cannot access or modify Tenant B's verification records.
+- **Applicant Workflow Security**: Enforces that applicant tokens are cryptographically signed with secure nonces, scoped strictly to assigned sessions, and cannot skip mandatory pipeline steps (prerequisite gating).
+- **Token Lifecycle**: Confirms expired, tampered, and revoked tokens are rejected.
+- **Data Protection & Masking**: Asserts Aadhaar (`XXXX-XXXX-LAST4`) and PAN (`ABCDE****F`) masking and verifies that raw assets require short-lived HMAC signed URLs.
+- **Upload Hardening**: Validates magic numbers against MIME spoofing and blocks path traversal attempts.
+
+---
+
+## Security, Privacy & Data Protection
+
+- **Identity Number Masking**: Aadhaar numbers are masked (`XXXX-XXXX-1234`) and PAN numbers are redacted (`ABCDE****F`) across all public views, API responses, and database synchronization records. *(Note: Masking numbers does not alone constitute regulatory compliance with UIDAI or other governing bodies).*
+- **Private Asset Storage & Signed URLs**: Document images, face crops, and selfies are never exposed via static URLs; access requires short-lived HMAC-SHA256 signed URLs with configurable TTLs.
 - **Strict PII Sanitization in Git**: The root `.gitignore` strictly excludes all uploaded applicant identity documents, live selfies, face crops, and temporary logs from version control.
-- **Isolated Secret Management**: Cloud credentials (`.env`) are never committed to the repository; `.env.example` provides safe placeholder schemas.
 - **Row Level Security (RLS)**: Enforces database boundaries so tenant clients access only their respective verification sessions.
 - **Ephemeral Processing**: Biometric embeddings are computed in memory during the verification request lifecycle without storing raw biometric vectors permanently.
+- **Configurable Data Retention**: Raw uploaded documents are cleaned up immediately following OCR extraction, and temporary debug assets are purged via configurable retention procedures.
 
 ---
 
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
+

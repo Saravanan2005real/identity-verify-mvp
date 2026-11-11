@@ -11,6 +11,11 @@ if sys.stdout.encoding != 'utf-8':
 if sys.stderr.encoding != 'utf-8':
     sys.stderr.reconfigure(encoding='utf-8')
 
+# Ensure engine directory is on sys.path for sibling module imports
+_this_dir = os.path.dirname(os.path.abspath(__file__))
+if _this_dir not in sys.path:
+    sys.path.insert(0, _this_dir)
+
 from types import ModuleType
 from importlib.machinery import ModuleSpec
 from unittest.mock import MagicMock
@@ -187,6 +192,9 @@ for handler in paddlex_logger.handlers:
 app = Flask(__name__)
 from werkzeug.utils import secure_filename
 import auth_validator
+
+# Validate security configuration immediately at application initialization
+auth_validator.validate_startup_secrets()
 # Security: Enforce explicit CORS allowed origins and request body limits
 ALLOWED_ORIGINS = [
     "http://localhost:8081",
@@ -3561,10 +3569,7 @@ def purge_expired_assets_api():
     })
 
 if __name__ == '__main__':
-    # Standalone Flask on 5001 is optional. The product entrypoint is:
-    #   python main.py   → everything on http://127.0.0.1:8080
-    print("OCR is in-process on the portal. Start the app with: python main.py")
-    print("(Optional standalone) OCR_STANDALONE=1 python -m ocr.engine")
-    if os.getenv("OCR_STANDALONE", "").strip() in ("1", "true", "yes"):
-        app.run(host='0.0.0.0', port=5001, debug=False, threaded=True)
+    port = int(os.getenv("PORT", "5001"))
+    print(f"* Starting Verifyyy AI OCR Engine on http://127.0.0.1:{port}...")
+    app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
 

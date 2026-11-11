@@ -1,0 +1,29 @@
+# Git and environment files
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+env/
+venv/
+ENV/
+
+# Node / Frontend
+node_modules/
+npm-debug.log*
+
+# Database & secrets
+*.db
+*.sqlite
+*.sqlite3
+*.pem
+*.key
+model_cache/
+ocr_uploads/

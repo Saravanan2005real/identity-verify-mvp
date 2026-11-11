@@ -76,11 +76,49 @@ export async function verifyOtp(email, token) {
 }
 
 /**
- * Send password reset email
+ * Send password reset email with optional redirect URL
  * @param {string} email
  */
 export async function resetPasswordForEmail(email) {
-  const { data, error } = await supabase.auth.resetPasswordForEmail(email.trim());
+  const redirectTo =
+    typeof window !== 'undefined' && window.location
+      ? window.location.origin
+      : undefined;
+
+  const { data, error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+    redirectTo,
+  });
+
+  if (error) throw error;
+
+  return data;
+}
+
+/**
+ * Verify received recovery OTP code
+ * @param {string} email
+ * @param {string} token
+ */
+export async function verifyPasswordResetOtp(email, token) {
+  const { data, error } = await supabase.auth.verifyOtp({
+    email: email.trim(),
+    token: token.trim(),
+    type: 'recovery',
+  });
+
+  if (error) throw error;
+
+  return data;
+}
+
+/**
+ * Update the user's password in Supabase
+ * @param {string} newPassword
+ */
+export async function updatePassword(newPassword) {
+  const { data, error } = await supabase.auth.updateUser({
+    password: newPassword,
+  });
 
   if (error) throw error;
 

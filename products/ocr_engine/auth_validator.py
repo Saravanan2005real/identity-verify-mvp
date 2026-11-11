@@ -33,44 +33,142 @@ import urllib.error
 
 logger = logging.getLogger("auth_validator")
 
-# ---------------------------------------------------------------------------
-# 1. Secret and environment loading — NO HARDCODED DEFAULTS
-# ---------------------------------------------------------------------------
-SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY", "") or os.getenv("EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "")
-SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-
-# Application secrets — MUST be set via environment; no fallback default
-APPLICANT_SESSION_SECRET = os.getenv("APPLICANT_SESSION_SECRET", "")
-ASSET_SIGNING_SECRET = os.getenv("ASSET_SIGNING_SECRET", "")
-
-# Allowed CORS origins — configurable; loopback only for development
-_raw_origins = os.getenv(
-    "ALLOWED_CORS_ORIGINS",
-    "http://localhost:8081,http://localhost:8082,http://localhost:5174,"
-    "http://127.0.0.1:8081,http://127.0.0.1:8082,http://127.0.0.1:5174",
-)
-ALLOWED_CORS_ORIGINS: set = {o.strip() for o in _raw_origins.split(",") if o.strip()}
-
 # Minimum acceptable secret length (32 hex chars = 128-bit minimum)
 _MIN_SECRET_LEN = 32
-
-# Revocation backend: "memory" (dev/single-instance) or "supabase" (production)
-_REVOCATION_BACKEND = os.getenv("REVOCATION_BACKEND", "memory").lower()
 
 # In-process registries (development/single-instance fallback)
 _ACTIVE_APPLICANT_SESSIONS: dict = {}
 _REVOKED_TOKEN_HASHES: set = set()
 
+# Module-level configuration placeholders
+SUPABASE_URL = ""
+SUPABASE_KEY = ""
+SUPABASE_SERVICE_ROLE_KEY = ""
+APPLICANT_SESSION_SECRET = ""
+ASSET_SIGNING_SECRET = ""
+ALLOWED_CORS_ORIGINS: set = set()
+_REVOCATION_BACKEND = "memory"
+
+
 # ---------------------------------------------------------------------------
-# 2. Startup secret validation
+# 1. Secret and environment loading — NO HARDCODED DEFAULTS
+# ---------------------------------------------------------------------------
+
+def load_environment() -> None:
+    """
+    Locate and load the root .env file if secrets are not already set.
+    Preserves any explicitly passed environment variables (override=False).
+    """
+    try:
+        from dotenv import load_dotenv, find_dotenv
+        _this_dir = os.path.dirname(os.path.abspath(__file__))
+        _repo_root = os.path.abspath(os.path.join(_this_dir, "..", ".."))
+        _root_env = os.path.join(_repo_root, ".env")
+        if os.path.exists(_root_env):
+            load_dotenv(_root_env, override=False)
+        else:
+            _found_env = find_dotenv(usecwd=True)
+            if _found_env:
+                load_dotenv(_found_env, override=False)
+    except ImportError:
+        pass
+
+
+def reload_secrets() -> None:
+    """
+    Synchronize module-level security configuration variables with current os.environ.
+    Ensures runtime/test environment changes are reflected immediately.
+    """
+    global SUPABASE_URL, SUPABASE_KEY, SUPABASE_SERVICE_ROLE_KEY
+    global APPLICANT_SESSION_SECRET, ASSET_SIGNING_SECRET
+    global ALLOWED_CORS_ORIGINS, _REVOCATION_BACKEND
+
+    SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
+    SUPABASE_KEY = os.getenv("SUPABASE_KEY", "") or os.getenv("EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "")
+    SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    APPLICANT_SESSION_SECRET = os.getenv("APPLICANT_SESSION_SECRET", "")
+    ASSET_SIGNING_SECRET = os.getenv("ASSET_SIGNING_SECRET", "")
+
+    raw_origins = os.getenv(
+        "ALLOWED_CORS_ORIGINS",
+        "http://localhost:8081,http://localhost:8082,http://localhost:5174,"
+        "http://127.0.0.1:8081,http://127.0.0.1:8082,http://127.0.0.1:5174",
+    )
+    ALLOWED_CORS_ORIGINS = {o.strip() for o in raw_origins.split(",") if o.strip()}
+    _REVOCATION_BACKEND = os.getenv("REVOCATION_BACKEND", "memory").lower()
+
+
+# Initial load from environment or .env at module import
+load_environment()
+reload_secrets()
+
+
+# ---------------------------------------------------------------------------
+# 2. Production Configuration Validation & Environment Guards
+# ---------------------------------------------------------------------------
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    return os.getenv(name, str(default)).strip().lower() in ("1", "true", "yes", "on")
+
+def is_production() -> bool:
+    return os.getenv("APP_ENV", "development").strip().lower() == "production"
+
+def local_fallback_allowed() -> bool:
+    """SQLite / in-memory fallback is a dev convenience only."""
+    if is_production():
+        return False
+    return _env_bool("ALLOW_LOCAL_FALLBACK", True)
+
+def validate_production_config() -> None:
+    """Fail closed: refuse to boot in production with dev-only settings."""
+    if not is_production():
+        return
+
+    problems = []
+
+    # 1. Token revocation must be shared and persistent
+    if os.getenv("REVOCATION_BACKEND", "memory").strip().lower() != "supabase":
+        problems.append("REVOCATION_BACKEND must be 'supabase' (memory is per-process and lost on restart)")
+
+    # 2. No silent local fallback
+    if _env_bool("ALLOW_LOCAL_FALLBACK", False):
+        problems.append("ALLOW_LOCAL_FALLBACK must be false")
+
+    # 3. CORS: explicit, https-only, no localhost, no wildcard
+    origins = [o.strip() for o in os.getenv("ALLOWED_CORS_ORIGINS", "").split(",") if o.strip()]
+    if not origins:
+        problems.append("ALLOWED_CORS_ORIGINS must be set")
+    for o in origins:
+        if o == "*":
+            problems.append("CORS wildcard '*' is not allowed")
+        elif not o.startswith("https://"):
+            problems.append(f"CORS origin must use https: {o}")
+        elif "localhost" in o or "127.0.0.1" in o:
+            problems.append(f"CORS origin must not be localhost: {o}")
+
+    # 4. Real Supabase credentials must exist
+    for key in ("SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"):
+        if not os.getenv(key, "").strip() or "your-" in os.getenv(key, ""):
+            problems.append(f"{key} is missing or still a placeholder")
+
+    if problems:
+        raise RuntimeError(
+            "PRODUCTION CONFIGURATION ERROR - refusing to start:\n  - " + "\n  - ".join(problems)
+        )
+
+
+# ---------------------------------------------------------------------------
+# 3. Startup secret validation
 # ---------------------------------------------------------------------------
 
 def validate_startup_secrets() -> None:
     """
     Call once at application startup.
-    Raises RuntimeError immediately if required secrets are absent or too short.
+    Raises RuntimeError immediately if required secrets are absent, too short,
+    or if production environment violates production configuration guards.
     """
+    reload_secrets()
+    validate_production_config()
     errors = []
     if not SUPABASE_URL or SUPABASE_URL.startswith("https://your-project-ref"):
         errors.append("SUPABASE_URL is not configured.")
@@ -96,6 +194,7 @@ def validate_startup_secrets() -> None:
         logger.critical(msg)
         raise RuntimeError(msg)
     logger.info("Startup secret validation passed.")
+
 
 
 # ---------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -11,21 +11,23 @@ import {
   Modal,
   Platform,
   Alert,
-  Button,
 } from 'react-native';
 import { supabase } from './lib/supabase';
 import {
   signIn,
   signUp,
-  signInWithOtp,
-  verifyOtp,
   resetPasswordForEmail,
+  verifyPasswordResetOtp,
+  updatePassword,
 } from './src/services/auth';
-import { signInWithGoogle } from './src/services/googleAuth';
+import {
+  validateEmailDomainPolicy,
+  getAllowedSuperadminDomains,
+} from './src/services/accessControl';
 
 const { width } = Dimensions.get('window');
 
-// Verifyyy Light Theme Palette - Exactly matching the Dashboard
+// Verifyyy Light Theme Palette
 const COLORS = {
   primary: '#0f766e', // teal-700
   primaryHover: '#0d5f58',
@@ -60,32 +62,37 @@ export default function SignInScreen({
 }) {
   const isWeb = width > 768;
 
-  // --- Auth Mode: 'password' | 'otp' ---
-  const [authMode, setAuthMode] = useState('password');
-  // --- Sign In vs Sign Up Mode ---
-  const [isSignUpMode, setIsSignUpMode] = useState(false);
+  // --- Auth Mode: 'signin' | 'signup' ---
+  const [authMode, setAuthMode] = useState('signin');
 
   // --- Form States ---
   const [email, setEmail] = useState(defaultEmail);
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
-  // --- OTP States ---
-  const [otpStep, setOtpStep] = useState('request'); // 'request' | 'verify'
-  const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
-  const [resendCountdown, setResendCountdown] = useState(45);
-  const [canResend, setCanResend] = useState(false);
-  const otpInputsRef = useRef([]);
+  // --- Verification Link Sent States ---
+  const [signupSuccess, setSignupSuccess] = useState(false);
+  const [signupSuccessEmail, setSignupSuccessEmail] = useState('');
 
   // --- Status & Feedback States ---
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [toastMessage, setToastMessage] = useState('');
+
+  // --- Forgot Password Flow States ---
+  // Steps: 'request' | 'enter_code' | 'set_password' | 'success'
   const [forgotModalVisible, setForgotModalVisible] = useState(false);
+  const [forgotStep, setForgotStep] = useState('request');
   const [fpEmail, setFpEmail] = useState('');
-  const [fpSent, setFpSent] = useState(false);
+  const [fpCode, setFpCode] = useState('');
+  const [fpNewPassword, setFpNewPassword] = useState('');
+  const [fpConfirmPassword, setFpConfirmPassword] = useState('');
+  const [fpShowPassword, setFpShowPassword] = useState(false);
   const [fpLoading, setFpLoading] = useState(false);
+  const [fpError, setFpError] = useState('');
 
   useEffect(() => {
     try {
@@ -94,36 +101,36 @@ export default function SignInScreen({
         if (saved && !email) setEmail(saved);
       }
     } catch (e) {}
-  }, []);
 
-  // Countdown timer for Resend OTP
-  useEffect(() => {
-    let timer = null;
-    if (otpStep === 'verify' && resendCountdown > 0) {
-      timer = setInterval(() => {
-        setResendCountdown((prev) => {
-          if (prev <= 1) {
-            setCanResend(true);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+    // Check if URL hash indicates a password recovery session
+    if (typeof window !== 'undefined' && window.location && window.location.hash) {
+      if (window.location.hash.includes('type=recovery')) {
+        setForgotStep('set_password');
+        setForgotModalVisible(true);
+      }
     }
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setForgotStep('set_password');
+        setForgotModalVisible(true);
+      }
+    });
+
     return () => {
-      if (timer) clearInterval(timer);
+      authListener?.subscription?.unsubscribe();
     };
-  }, [otpStep, resendCountdown]);
+  }, []);
 
   const triggerToast = (msg) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(''), 3500);
   };
 
-  // --- Password Authentication (Sign In / Sign Up) ---
-  const handlePasswordAuth = async () => {
+  // --- 1. Sign In (with Supabase Email & Password) ---
+  const handlePasswordSignIn = async () => {
     setErrorMessage('');
-    const cleanEmail = email.trim();
+    const cleanEmail = email.trim().toLowerCase();
 
     if (!cleanEmail || !EMAIL_REGEX.test(cleanEmail)) {
       setErrorMessage('Please enter a valid administrative email.');
@@ -138,170 +145,205 @@ export default function SignInScreen({
     setLoading(true);
 
     try {
-      if (isSignUpMode) {
-        const data = await signUp(cleanEmail, password);
-        if (data?.session) {
-          triggerToast('Superadmin account created successfully!');
-          if (rememberMe) {
-            try {
-              if (typeof window !== 'undefined' && window.localStorage) {
-                localStorage.setItem('verifyyy_superadmin_email', cleanEmail);
-              }
-            } catch (e) {}
-          }
-          if (onLoginSuccess) onLoginSuccess(data.user);
-        } else {
-          triggerToast('Account created! Please check your email to confirm registration or sign in.');
-          setIsSignUpMode(false);
+      const data = await signIn(cleanEmail, password);
+      const user = data?.user;
+
+      if (user) {
+        if (rememberMe) {
+          try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+              localStorage.setItem('verifyyy_superadmin_email', cleanEmail);
+            }
+          } catch (e) {}
         }
-      } else {
-        const data = await signIn(cleanEmail, password);
-        if (data?.user) {
-          if (rememberMe) {
-            try {
-              if (typeof window !== 'undefined' && window.localStorage) {
-                localStorage.setItem('verifyyy_superadmin_email', cleanEmail);
-              }
-            } catch (e) {}
-          }
-          triggerToast('Signed in successfully!');
-          if (onLoginSuccess) onLoginSuccess(data.user);
-        }
+        triggerToast('Signed in successfully!');
+        if (onLoginSuccess) onLoginSuccess(user);
       }
     } catch (err) {
-      setErrorMessage(err.message || 'Authentication failed. Please check credentials.');
+      const raw = (err.message || '').toLowerCase();
+      if (raw.includes('invalid login credentials')) {
+        setErrorMessage("Account doesn't exist or incorrect credentials. If you haven't created an account yet, please create a new account.");
+      } else if (raw.includes('email not confirmed')) {
+        setErrorMessage('Email address has not been confirmed yet. Please check your inbox and click the verification link sent by Supabase.');
+      } else {
+        setErrorMessage(err.message || 'Authentication failed. Please check credentials.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const [googleLoading, setGoogleLoading] = useState(false);
-
-  // --- Google OAuth Sign In ---
-  const handleGoogleSignIn = async () => {
+  // --- 2. Create Account (Sign Up with Email & Password stored in Supabase) ---
+  const handleSignUp = async () => {
     setErrorMessage('');
-    setGoogleLoading(true);
-    try {
-      const session = await signInWithGoogle();
-      if (session) {
-        if (Platform.OS !== 'web') {
-          Alert.alert('Success', 'Google sign-in successful!');
-        } else {
-          triggerToast('Google sign-in successful!');
-        }
-        if (onLoginSuccess) {
-          onLoginSuccess(session.user);
-        }
-      }
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'Google sign-in failed';
-      setErrorMessage(message);
-      if (Platform.OS !== 'web') {
-        Alert.alert('Sign-in failed', message);
-      }
-    } finally {
-      setGoogleLoading(false);
-    }
-  };
-
-  // --- OTP Flow ---
-  const handleRequestOtp = async () => {
-    setErrorMessage('');
-    const cleanEmail = email.trim();
+    const cleanEmail = email.trim().toLowerCase();
 
     if (!cleanEmail || !EMAIL_REGEX.test(cleanEmail)) {
-      setErrorMessage('Please enter a valid administrative email.');
+      setErrorMessage('Please enter a valid administrative email address.');
+      return;
+    }
+
+    // Corporate domain policy check (e.g. @zudoc.com when configured)
+    const domainPolicy = validateEmailDomainPolicy(cleanEmail);
+    if (!domainPolicy.allowed) {
+      setErrorMessage(domainPolicy.reason);
+      return;
+    }
+
+    if (!password || password.length < 6) {
+      setErrorMessage('Password must be at least 6 characters.');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setErrorMessage('Passwords do not match. Please re-enter your confirmation password.');
       return;
     }
 
     setLoading(true);
 
     try {
-      await signInWithOtp(cleanEmail);
-      setOtpStep('verify');
-      setResendCountdown(45);
-      setCanResend(false);
-      triggerToast(`Verification code sent to ${cleanEmail}`);
-    } catch (err) {
-      setErrorMessage(err.message || 'Failed to send OTP code.');
-    } finally {
-      setLoading(false);
-    }
-  };
+      const data = await signUp(cleanEmail, password);
 
-  const handleVerifyOtp = async () => {
-    setErrorMessage('');
-    const entered = otpDigits.join('');
-
-    if (entered.length < 6) {
-      setErrorMessage('Please enter all 6 digits of the code.');
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const data = await verifyOtp(email, entered);
-      if (data?.user) {
-        triggerToast('OTP verified successfully!');
+      // If Supabase immediately returns an active session
+      if (data?.session) {
+        triggerToast('Superadmin account created successfully!');
+        if (rememberMe) {
+          try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+              localStorage.setItem('verifyyy_superadmin_email', cleanEmail);
+            }
+          } catch (e) {}
+        }
         if (onLoginSuccess) onLoginSuccess(data.user);
+      } else {
+        // Supabase sent an email confirmation link
+        setSignupSuccessEmail(cleanEmail);
+        setSignupSuccess(true);
+        triggerToast('Verification link sent to your email!');
       }
     } catch (err) {
-      setErrorMessage(err.message || 'Invalid verification code.');
+      console.warn('Sign up error:', err);
+      const msg = (err?.message || '').toLowerCase();
+      if (!msg || msg === '{}' || err?.status === 500) {
+        setErrorMessage('Failed to send confirmation email (Supabase SMTP Error). Please verify SMTP settings in Supabase.');
+      } else if (msg.includes('already registered') || msg.includes('user already exists')) {
+        setErrorMessage('An account with this email already exists. Please sign in with your password.');
+      } else {
+        setErrorMessage(err.message || 'Failed to create Superadmin account.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const handleOtpDigitChange = (val, index) => {
-    const clean = val.replace(/[^0-9]/g, '');
-    const updated = [...otpDigits];
+  // --- Password Reset Step 1: Send Reset Code / Link ---
+  const handleSendResetCode = async () => {
+    setFpError('');
+    const cleanEmail = fpEmail.trim().toLowerCase();
 
-    if (clean.length > 1) {
-      const split = clean.slice(0, 6).split('');
-      for (let i = 0; i < 6; i++) {
-        updated[i] = split[i] || '';
-      }
-      setOtpDigits(updated);
-      if (split.length === 6 && otpInputsRef.current[5]) {
-        otpInputsRef.current[5].focus();
-      }
+    if (!cleanEmail || !EMAIL_REGEX.test(cleanEmail)) {
+      setFpError('Please enter a valid administrative email.');
       return;
     }
 
-    updated[index] = clean;
-    setOtpDigits(updated);
-
-    if (clean && index < 5 && otpInputsRef.current[index + 1]) {
-      otpInputsRef.current[index + 1].focus();
-    }
-  };
-
-  const handleOtpKeyPress = (e, index) => {
-    if (e.nativeEvent.key === 'Backspace' && !otpDigits[index] && index > 0) {
-      otpInputsRef.current[index - 1]?.focus();
-    }
-  };
-
-  // --- Password Reset ---
-  const handleSendResetEmail = async () => {
-    if (!fpEmail.trim() || !EMAIL_REGEX.test(fpEmail.trim())) {
-      setErrorMessage('Please enter a valid administrative email.');
-      return;
-    }
     setFpLoading(true);
     try {
-      await resetPasswordForEmail(fpEmail);
-      setFpSent(true);
+      await resetPasswordForEmail(cleanEmail);
+      setForgotStep('enter_code');
+      triggerToast('Password reset code / link sent to your email!');
     } catch (err) {
-      setErrorMessage(err.message || 'Password reset request failed.');
+      console.warn('Password reset request error:', err);
+      const msg = err?.message || '';
+      if (!msg || msg === '{}' || err?.status === 500) {
+        setFpError('Supabase email delivery failed (SMTP Error). Please check your SMTP credentials in Supabase Dashboard, or toggle Custom SMTP off.');
+      } else {
+        setFpError(msg);
+      }
     } finally {
       setFpLoading(false);
     }
   };
+
+  // --- Password Reset Step 2: Verify OTP Code & Set New Password ---
+  const handleVerifyCodeAndReset = async () => {
+    setFpError('');
+    const cleanCode = fpCode.trim();
+
+    if (!cleanCode) {
+      setFpError('Please enter the OTP code received in your email.');
+      return;
+    }
+
+    if (!fpNewPassword || fpNewPassword.length < 6) {
+      setFpError('New password must be at least 6 characters.');
+      return;
+    }
+
+    if (fpNewPassword !== fpConfirmPassword) {
+      setFpError('Passwords do not match. Please re-enter.');
+      return;
+    }
+
+    setFpLoading(true);
+    try {
+      // 1. Verify recovery code with Supabase
+      await verifyPasswordResetOtp(fpEmail, cleanCode);
+      // 2. Update password for authenticated recovery session in Supabase
+      await updatePassword(fpNewPassword);
+
+      setForgotStep('success');
+      triggerToast('Password updated successfully in Supabase!');
+    } catch (err) {
+      console.warn('Verify code error:', err);
+      const msg = (err?.message || '').toLowerCase();
+      if (!msg || msg === '{}' || err?.status === 500) {
+        setFpError('Failed to verify OTP code. Please check that the code is correct or request a new one.');
+      } else if (msg.includes('invalid') || msg.includes('expired') || msg.includes('token')) {
+        setFpError('Invalid or expired reset code. Please request a new code or click the email link.');
+      } else {
+        setFpError(err.message || 'Failed to update password.');
+      }
+    } finally {
+      setFpLoading(false);
+    }
+  };
+
+  // --- Password Reset Step 2b: Set New Password from Recovery Link Click ---
+  const handleSetPasswordFromLink = async () => {
+    setFpError('');
+
+    if (!fpNewPassword || fpNewPassword.length < 6) {
+      setFpError('New password must be at least 6 characters.');
+      return;
+    }
+
+    if (fpNewPassword !== fpConfirmPassword) {
+      setFpError('Passwords do not match. Please re-enter.');
+      return;
+    }
+
+    setFpLoading(true);
+    try {
+      await updatePassword(fpNewPassword);
+      setForgotStep('success');
+      triggerToast('Password updated successfully in Supabase!');
+    } catch (err) {
+      console.warn('Set password link error:', err);
+      const msg = err?.message || '';
+      if (!msg || msg === '{}' || err?.status === 500) {
+        setFpError('Failed to update password. Your reset session may have expired. Please request a new link.');
+      } else {
+        setFpError(msg);
+      }
+    } finally {
+      setFpLoading(false);
+    }
+  };
+
+  const allowedDomains = getAllowedSuperadminDomains();
+  const domainHint = allowedDomains.length > 0 ? `@${allowedDomains.join(' or @')}` : null;
+  const emailPlaceholder = allowedDomains.length > 0 ? `admin@${allowedDomains[0]}` : 'yourname@gmail.com';
 
   return (
     <View style={styles.screenContainer}>
@@ -313,7 +355,7 @@ export default function SignInScreen({
       ) : null}
 
       <ScrollView contentContainerStyle={styles.scrollWrapper}>
-        <View style={[styles.authCard, { maxWidth: isWeb ? 440 : '100%' }]}>
+        <View style={[styles.authCard, { maxWidth: isWeb ? 460 : '100%' }]}>
           {/* Header Brand */}
           <View style={styles.brandHeader}>
             <View style={styles.logoRow}>
@@ -325,180 +367,116 @@ export default function SignInScreen({
             <Text style={styles.portalTitle}>{portalName}</Text>
           </View>
 
-          {/* Auth Mode Tabs (Password Login vs Email OTP) */}
-          <View style={styles.tabsContainer}>
-            <TouchableOpacity
-              style={[styles.tabButton, authMode === 'password' && styles.tabButtonActive]}
-              onPress={() => {
-                setAuthMode('password');
-                setErrorMessage('');
-              }}
-            >
-              <Text style={[styles.tabText, authMode === 'password' && styles.tabTextActive]}>
-                {isSignUpMode ? 'Register' : 'Password Login'}
+          {/* Verification Link Sent State */}
+          {signupSuccess ? (
+            <View style={styles.verificationNoticeCard}>
+              <View style={styles.verificationIconCircle}>
+                <Text style={styles.verificationIconText}>✉️</Text>
+              </View>
+              <Text style={styles.verificationNoticeTitle}>Verify Your Email</Text>
+              <Text style={styles.verificationNoticeText}>
+                We've sent a verification link to{' '}
+                <Text style={{ fontWeight: '700', color: COLORS.primary }}>{signupSuccessEmail}</Text>.
               </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.tabButton, authMode === 'otp' && styles.tabButtonActive]}
-              onPress={() => {
-                setAuthMode('otp');
-                setErrorMessage('');
-              }}
-            >
-              <Text style={[styles.tabText, authMode === 'otp' && styles.tabTextActive]}>
-                Email OTP
+              <Text style={styles.verificationNoticeSubtext}>
+                Your password has been securely stored in Supabase. Please open your inbox and click the verification link to activate your Superadmin account.
               </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Error Banner */}
-          {errorMessage ? (
-            <View style={styles.errorBox}>
-              <Text style={styles.errorText}>{errorMessage}</Text>
-            </View>
-          ) : null}
-
-          {/* MODE 1: Password Login */}
-          {authMode === 'password' && (
-            <View style={styles.formSection}>
-              {/* Email */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Work Email Address</Text>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="superadmin@verifyyy.ai"
-                  placeholderTextColor={COLORS.textMuted}
-                  value={email}
-                  onChangeText={(val) => {
-                    setEmail(val);
-                    setErrorMessage('');
-                  }}
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  autoCorrect={false}
-                />
-              </View>
-
-              {/* Password */}
-              <View style={styles.inputGroup}>
-                <View style={styles.labelRow}>
-                  <Text style={styles.inputLabel}>Password</Text>
-                  {!isSignUpMode && (
-                    <TouchableOpacity
-                      onPress={() => {
-                        setFpEmail(email);
-                        setFpSent(false);
-                        setForgotModalVisible(true);
-                      }}
-                    >
-                      <Text style={styles.forgotLink}>Forgot?</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                <View style={styles.passwordInputWrapper}>
-                  <TextInput
-                    style={[styles.textInput, { paddingRight: 64 }]}
-                    placeholder={isSignUpMode ? 'Create password' : 'Enter password'}
-                    placeholderTextColor={COLORS.textMuted}
-                    value={password}
-                    onChangeText={(val) => {
-                      setPassword(val);
-                      setErrorMessage('');
-                    }}
-                    secureTextEntry={!showPassword}
-                    autoCapitalize="none"
-                  />
-                  <TouchableOpacity
-                    style={styles.eyeToggleBtn}
-                    onPress={() => setShowPassword(!showPassword)}
-                  >
-                    <Text style={styles.eyeToggleText}>{showPassword ? 'Hide' : 'Show'}</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Keep signed in */}
-              <View style={styles.rememberRow}>
-                <TouchableOpacity
-                  style={styles.checkboxContainer}
-                  onPress={() => setRememberMe(!rememberMe)}
-                >
-                  <View style={[styles.checkboxBox, rememberMe && styles.checkboxChecked]}>
-                    {rememberMe && <Text style={styles.checkMark}>✓</Text>}
-                  </View>
-                  <Text style={styles.rememberText}>Keep me signed in</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Submit Button */}
               <TouchableOpacity
-                style={[styles.primaryButton, loading && styles.buttonDisabled]}
-                onPress={handlePasswordAuth}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#ffffff" size="small" />
-                ) : (
-                  <Text style={styles.primaryButtonText}>
-                    {isSignUpMode ? 'Create Account' : 'Sign In'}
-                  </Text>
-                )}
-              </TouchableOpacity>
-
-              {/* Toggle Sign Up / Sign In */}
-              <TouchableOpacity
-                style={styles.switchModeRow}
+                style={styles.primaryButton}
                 onPress={() => {
-                  setIsSignUpMode(!isSignUpMode);
+                  setSignupSuccess(false);
+                  setAuthMode('signin');
                   setErrorMessage('');
                 }}
               >
-                <Text style={styles.switchModeText}>
-                  {isSignUpMode
-                    ? 'Already have an account? Sign In'
-                    : 'First time user? Create a new account'}
-                </Text>
+                <Text style={styles.primaryButtonText}>Proceed to Sign In</Text>
               </TouchableOpacity>
-
-              {/* Divider */}
-              <View style={styles.dividerRow}>
-                <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>or</Text>
-                <View style={styles.dividerLine} />
-              </View>
-
-              {/* Google Sign In Button */}
               <TouchableOpacity
-                style={[styles.googleButton, (googleLoading || loading) && styles.buttonDisabled]}
-                onPress={handleGoogleSignIn}
-                disabled={googleLoading || loading}
+                style={styles.secondaryLinkBtn}
+                onPress={async () => {
+                  try {
+                    await supabase.auth.resend({
+                      type: 'signup',
+                      email: signupSuccessEmail,
+                    });
+                    triggerToast('Verification link resent!');
+                  } catch (e) {
+                    triggerToast('Please wait a moment before requesting another link.');
+                  }
+                }}
               >
-                {googleLoading ? (
-                  <ActivityIndicator color={COLORS.primary} size="small" />
-                ) : (
-                  <View style={styles.googleButtonContent}>
-                    <View style={styles.googleIconBadge}>
-                      <Text style={styles.googleIconText}>G</Text>
-                    </View>
-                    <Text style={styles.googleButtonText}>Continue with Google</Text>
-                  </View>
-                )}
+                <Text style={styles.secondaryLinkText}>Resend verification email</Text>
               </TouchableOpacity>
             </View>
-          )}
+          ) : (
+            <>
+              {/* Security Gate Notice */}
+              <View style={styles.securityBanner}>
+                <Text style={styles.securityBannerIcon}>🔒</Text>
+                <View style={styles.securityBannerContent}>
+                  <Text style={styles.securityBannerTitle}>Restricted Portal</Text>
+                  <Text style={styles.securityBannerText}>
+                    {domainHint
+                      ? `Access restricted to verified ${domainHint} accounts with Supabase password auth.`
+                      : 'Authenticated Superadmin access backed by Supabase authentication.'}
+                  </Text>
+                </View>
+              </View>
 
-          {/* MODE 2: Email OTP */}
-          {authMode === 'otp' && (
-            <View style={styles.formSection}>
-              {otpStep === 'request' ? (
-                <>
+              {/* Auth Mode Tabs (Sign In | Create Account | Redeem Key) */}
+              <View style={styles.tabsContainer}>
+                <TouchableOpacity
+                  style={[styles.tabButton, authMode === 'signin' && styles.tabButtonActive]}
+                  onPress={() => {
+                    setAuthMode('signin');
+                    setErrorMessage('');
+                  }}
+                >
+                  <Text style={[styles.tabText, authMode === 'signin' && styles.tabTextActive]}>
+                    Sign In
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.tabButton, authMode === 'signup' && styles.tabButtonActive]}
+                  onPress={() => {
+                    setAuthMode('signup');
+                    setErrorMessage('');
+                  }}
+                >
+                  <Text style={[styles.tabText, authMode === 'signup' && styles.tabTextActive]}>
+                    Create Account
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Error Banner with Quick Action */}
+              {errorMessage ? (
+                <View style={styles.errorBox}>
+                  <Text style={styles.errorText}>{errorMessage}</Text>
+                  {errorMessage.includes("doesn't exist") && authMode === 'signin' && (
+                    <TouchableOpacity
+                      style={styles.errorActionBtn}
+                      onPress={() => {
+                        setAuthMode('signup');
+                        setErrorMessage('');
+                      }}
+                    >
+                      <Text style={styles.errorActionText}>👉 Create New Account with {email || 'this email'}</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ) : null}
+
+              {/* MODE 1: Sign In */}
+              {authMode === 'signin' && (
+                <View style={styles.formSection}>
+                  {/* Email */}
                   <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Work Email Address</Text>
+                    <Text style={styles.inputLabel}>Email Address</Text>
                     <TextInput
                       style={styles.textInput}
-                      placeholder="superadmin@verifyyy.ai"
+                      placeholder={emailPlaceholder}
                       placeholderTextColor={COLORS.textMuted}
                       value={email}
                       onChangeText={(val) => {
@@ -507,155 +485,444 @@ export default function SignInScreen({
                       }}
                       autoCapitalize="none"
                       keyboardType="email-address"
+                      autoCorrect={false}
                     />
                   </View>
 
-                  <TouchableOpacity
-                    style={[styles.primaryButton, loading && styles.buttonDisabled]}
-                    onPress={handleRequestOtp}
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <ActivityIndicator color="#ffffff" size="small" />
-                    ) : (
-                      <Text style={styles.primaryButtonText}>Send Verification Code</Text>
-                    )}
-                  </TouchableOpacity>
+                  {/* Password */}
+                  <View style={styles.inputGroup}>
+                    <View style={styles.labelRow}>
+                      <Text style={styles.inputLabel}>Password</Text>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setFpEmail(email);
+                          setForgotStep('request');
+                          setFpError('');
+                          setFpCode('');
+                          setFpNewPassword('');
+                          setFpConfirmPassword('');
+                          setForgotModalVisible(true);
+                        }}
+                      >
+                        <Text style={styles.forgotLink}>Forgot?</Text>
+                      </TouchableOpacity>
+                    </View>
 
-                  {/* Divider */}
-                  <View style={styles.dividerRow}>
-                    <View style={styles.dividerLine} />
-                    <Text style={styles.dividerText}>or</Text>
-                    <View style={styles.dividerLine} />
+                    <View style={styles.passwordInputWrapper}>
+                      <TextInput
+                        style={[styles.textInput, { paddingRight: 64 }]}
+                        placeholder="Enter your password"
+                        placeholderTextColor={COLORS.textMuted}
+                        value={password}
+                        onChangeText={(val) => {
+                          setPassword(val);
+                          setErrorMessage('');
+                        }}
+                        secureTextEntry={!showPassword}
+                        autoCapitalize="none"
+                      />
+                      <TouchableOpacity
+                        style={styles.eyeToggleBtn}
+                        onPress={() => setShowPassword(!showPassword)}
+                      >
+                        <Text style={styles.eyeToggleText}>{showPassword ? 'Hide' : 'Show'}</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
 
-                  {/* Google Sign In Button */}
-                  <TouchableOpacity
-                    style={[styles.googleButton, (googleLoading || loading) && styles.buttonDisabled]}
-                    onPress={handleGoogleSignIn}
-                    disabled={googleLoading || loading}
-                  >
-                    {googleLoading ? (
-                      <ActivityIndicator color={COLORS.primary} size="small" />
-                    ) : (
-                      <View style={styles.googleButtonContent}>
-                        <View style={styles.googleIconBadge}>
-                          <Text style={styles.googleIconText}>G</Text>
-                        </View>
-                        <Text style={styles.googleButtonText}>Continue with Google</Text>
+                  {/* Keep signed in */}
+                  <View style={styles.rememberRow}>
+                    <TouchableOpacity
+                      style={styles.checkboxContainer}
+                      onPress={() => setRememberMe(!rememberMe)}
+                    >
+                      <View style={[styles.checkboxBox, rememberMe && styles.checkboxChecked]}>
+                        {rememberMe && <Text style={styles.checkMark}>✓</Text>}
                       </View>
-                    )}
-                  </TouchableOpacity>
-                </>
-              ) : (
-                <>
-                  <View style={styles.otpSentCard}>
-                    <Text style={styles.otpSentText}>
-                      Code sent to <Text style={{ fontWeight: '700', color: COLORS.primary }}>{email}</Text>
-                    </Text>
-                    <TouchableOpacity onPress={() => setOtpStep('request')}>
-                      <Text style={styles.changeEmailText}>Change Email</Text>
+                      <Text style={styles.rememberText}>Keep me signed in</Text>
                     </TouchableOpacity>
                   </View>
 
-                  <Text style={[styles.inputLabel, { textAlign: 'center', marginTop: 14 }]}>
-                    Enter 6-Digit Code
-                  </Text>
-
-                  {/* 6 OTP Boxes */}
-                  <View style={styles.otpBoxesRow}>
-                    {otpDigits.map((digit, idx) => (
-                      <TextInput
-                        key={idx}
-                        ref={(ref) => (otpInputsRef.current[idx] = ref)}
-                        style={styles.otpBox}
-                        maxLength={1}
-                        keyboardType="numeric"
-                        value={digit}
-                        onChangeText={(val) => handleOtpDigitChange(val, idx)}
-                        onKeyPress={(e) => handleOtpKeyPress(e, idx)}
-                        textAlign="center"
-                      />
-                    ))}
-                  </View>
-
-                  <View style={styles.resendRow}>
-                    {!canResend ? (
-                      <Text style={styles.resendTimerText}>
-                        Resend code in 00:{resendCountdown < 10 ? `0${resendCountdown}` : resendCountdown}
-                      </Text>
-                    ) : (
-                      <TouchableOpacity onPress={handleRequestOtp}>
-                        <Text style={styles.resendActionText}>Resend Code</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-
+                  {/* Submit Button */}
                   <TouchableOpacity
                     style={[styles.primaryButton, loading && styles.buttonDisabled]}
-                    onPress={handleVerifyOtp}
+                    onPress={handlePasswordSignIn}
                     disabled={loading}
                   >
                     {loading ? (
                       <ActivityIndicator color="#ffffff" size="small" />
                     ) : (
-                      <Text style={styles.primaryButtonText}>Verify &amp; Sign In</Text>
+                      <Text style={styles.primaryButtonText}>Sign In as Superadmin</Text>
                     )}
                   </TouchableOpacity>
-                </>
+
+                  {/* Switch to Create Account */}
+                  <TouchableOpacity
+                    style={styles.switchModeRow}
+                    onPress={() => {
+                      setAuthMode('signup');
+                      setErrorMessage('');
+                    }}
+                  >
+                    <Text style={styles.switchModeText}>
+                      Don't have an account yet? <Text style={{ fontWeight: '700' }}>Create an Account →</Text>
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               )}
-            </View>
+
+              {/* MODE 2: Create Account (Sign Up with Password) */}
+              {authMode === 'signup' && (
+                <View style={styles.formSection}>
+                  <View style={styles.infoBox}>
+                    <Text style={styles.infoBoxText}>
+                      Create your Superadmin account. Your password will be securely encrypted and saved in Supabase.
+                    </Text>
+                  </View>
+
+                  {/* Email */}
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Email Address</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder={emailPlaceholder}
+                      placeholderTextColor={COLORS.textMuted}
+                      value={email}
+                      onChangeText={(val) => {
+                        setEmail(val);
+                        setErrorMessage('');
+                      }}
+                      autoCapitalize="none"
+                      keyboardType="email-address"
+                      autoCorrect={false}
+                    />
+                  </View>
+
+                  {/* Create Password */}
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Create Password (min 6 characters)</Text>
+                    <View style={styles.passwordInputWrapper}>
+                      <TextInput
+                        style={[styles.textInput, { paddingRight: 64 }]}
+                        placeholder="Create a strong password"
+                        placeholderTextColor={COLORS.textMuted}
+                        value={password}
+                        onChangeText={(val) => {
+                          setPassword(val);
+                          setErrorMessage('');
+                        }}
+                        secureTextEntry={!showPassword}
+                        autoCapitalize="none"
+                      />
+                      <TouchableOpacity
+                        style={styles.eyeToggleBtn}
+                        onPress={() => setShowPassword(!showPassword)}
+                      >
+                        <Text style={styles.eyeToggleText}>{showPassword ? 'Hide' : 'Show'}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* Confirm Password */}
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Confirm Password</Text>
+                    <View style={styles.passwordInputWrapper}>
+                      <TextInput
+                        style={[styles.textInput, { paddingRight: 64 }]}
+                        placeholder="Re-enter password"
+                        placeholderTextColor={COLORS.textMuted}
+                        value={confirmPassword}
+                        onChangeText={(val) => {
+                          setConfirmPassword(val);
+                          setErrorMessage('');
+                        }}
+                        secureTextEntry={!showConfirmPassword}
+                        autoCapitalize="none"
+                      />
+                      <TouchableOpacity
+                        style={styles.eyeToggleBtn}
+                        onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                      >
+                        <Text style={styles.eyeToggleText}>{showConfirmPassword ? 'Hide' : 'Show'}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* Submit Button */}
+                  <TouchableOpacity
+                    style={[styles.primaryButton, loading && styles.buttonDisabled]}
+                    onPress={handleSignUp}
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#ffffff" size="small" />
+                    ) : (
+                      <Text style={styles.primaryButtonText}>Create Superadmin Account</Text>
+                    )}
+                  </TouchableOpacity>
+
+                  {/* Switch to Sign In */}
+                  <TouchableOpacity
+                    style={styles.switchModeRow}
+                    onPress={() => {
+                      setAuthMode('signin');
+                      setErrorMessage('');
+                    }}
+                  >
+                    <Text style={styles.switchModeText}>
+                      Already have an account? <Text style={{ fontWeight: '700' }}>Sign In with Password →</Text>
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </>
           )}
         </View>
       </ScrollView>
 
-      {/* Forgot Password Modal */}
+      {/* Comprehensive Forgot Password Pipeline Modal */}
       <Modal visible={forgotModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Reset Password</Text>
-            <Text style={styles.modalSubtitle}>
-              Enter your work email address to receive password reset instructions.
-            </Text>
-
-            {!fpSent ? (
+            {/* Step 1: Request Reset Code / Link */}
+            {forgotStep === 'request' && (
               <>
+                <Text style={styles.modalTitle}>Reset Password</Text>
+                <Text style={styles.modalSubtitle}>
+                  Enter your email address to receive a recovery code and verification link.
+                </Text>
+
+                {fpError ? (
+                  <View style={styles.modalErrorBox}>
+                    <Text style={styles.modalErrorText}>{fpError}</Text>
+                  </View>
+                ) : null}
+
                 <TextInput
                   style={[styles.textInput, { marginBottom: 16 }]}
-                  placeholder="superadmin@verifyyy.ai"
+                  placeholder={emailPlaceholder}
                   placeholderTextColor={COLORS.textMuted}
                   value={fpEmail}
-                  onChangeText={setFpEmail}
+                  onChangeText={(val) => {
+                    setFpEmail(val);
+                    setFpError('');
+                  }}
                   autoCapitalize="none"
                   keyboardType="email-address"
                 />
+
                 <TouchableOpacity
                   style={[styles.primaryButton, fpLoading && styles.buttonDisabled]}
-                  onPress={handleSendResetEmail}
+                  onPress={handleSendResetCode}
                   disabled={fpLoading}
                 >
                   {fpLoading ? (
                     <ActivityIndicator color="#fff" size="small" />
                   ) : (
-                    <Text style={styles.primaryButtonText}>Send Reset Link</Text>
+                    <Text style={styles.primaryButtonText}>Send Reset Code / Link</Text>
                   )}
                 </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.modalCloseBtn}
+                  onPress={() => {
+                    setForgotModalVisible(false);
+                    setFpError('');
+                  }}
+                >
+                  <Text style={styles.modalCloseBtnText}>Cancel</Text>
+                </TouchableOpacity>
               </>
-            ) : (
-              <View style={styles.fpSuccessBox}>
-                <Text style={styles.fpSuccessTitle}>Reset Link Sent</Text>
-                <Text style={styles.fpSuccessMsg}>
-                  Check your inbox at <Text style={{ color: COLORS.primary, fontWeight: '700' }}>{fpEmail}</Text>.
-                </Text>
-              </View>
             )}
 
-            <TouchableOpacity
-              style={styles.modalCloseBtn}
-              onPress={() => setForgotModalVisible(false)}
-            >
-              <Text style={styles.modalCloseBtnText}>Close</Text>
-            </TouchableOpacity>
+            {/* Step 2: Enter Code & New Password */}
+            {forgotStep === 'enter_code' && (
+              <>
+                <Text style={styles.modalTitle}>Set New Password</Text>
+                <Text style={styles.modalSubtitle}>
+                  We've sent a recovery code / link to{' '}
+                  <Text style={{ fontWeight: '700', color: COLORS.primary }}>{fpEmail}</Text>.
+                  Enter the code from your email and set your new password below.
+                </Text>
+
+                {fpError ? (
+                  <View style={styles.modalErrorBox}>
+                    <Text style={styles.modalErrorText}>{fpError}</Text>
+                  </View>
+                ) : null}
+
+                {/* OTP Code */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Recovery Code / OTP (from email)</Text>
+                  <TextInput
+                    style={[styles.textInput, styles.monospaceInput]}
+                    placeholder="Enter 6-digit code or token"
+                    placeholderTextColor={COLORS.textMuted}
+                    value={fpCode}
+                    onChangeText={(val) => {
+                      setFpCode(val.trim());
+                      setFpError('');
+                    }}
+                    autoCapitalize="none"
+                  />
+                </View>
+
+                {/* New Password */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>New Password (min 6 characters)</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="Enter new password"
+                    placeholderTextColor={COLORS.textMuted}
+                    value={fpNewPassword}
+                    onChangeText={(val) => {
+                      setFpNewPassword(val);
+                      setFpError('');
+                    }}
+                    secureTextEntry={!fpShowPassword}
+                    autoCapitalize="none"
+                  />
+                </View>
+
+                {/* Confirm New Password */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Confirm New Password</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="Re-enter new password"
+                    placeholderTextColor={COLORS.textMuted}
+                    value={fpConfirmPassword}
+                    onChangeText={(val) => {
+                      setFpConfirmPassword(val);
+                      setFpError('');
+                    }}
+                    secureTextEntry={!fpShowPassword}
+                    autoCapitalize="none"
+                  />
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.primaryButton, fpLoading && styles.buttonDisabled]}
+                  onPress={handleVerifyCodeAndReset}
+                  disabled={fpLoading}
+                >
+                  {fpLoading ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.primaryButtonText}>Update Password &amp; Continue</Text>
+                  )}
+                </TouchableOpacity>
+
+                <View style={{ marginTop: 12, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 11, color: COLORS.textMuted, textAlign: 'center', lineHeight: 15 }}>
+                    💡 Received a link instead? You can also click the link directly in your email to open the password reset screen.
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.modalCloseBtn, { marginTop: 8 }]}
+                  onPress={() => setForgotStep('request')}
+                >
+                  <Text style={styles.modalCloseBtnText}>← Back to change email</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {/* Step 2b: Direct Password Reset from Email Link Click */}
+            {forgotStep === 'set_password' && (
+              <>
+                <Text style={styles.modalTitle}>Set New Password</Text>
+                <Text style={styles.modalSubtitle}>
+                  Recovery link verified! Please choose your new Superadmin password below.
+                </Text>
+
+                {fpError ? (
+                  <View style={styles.modalErrorBox}>
+                    <Text style={styles.modalErrorText}>{fpError}</Text>
+                  </View>
+                ) : null}
+
+                {/* New Password */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>New Password (min 6 characters)</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="Enter new password"
+                    placeholderTextColor={COLORS.textMuted}
+                    value={fpNewPassword}
+                    onChangeText={(val) => {
+                      setFpNewPassword(val);
+                      setFpError('');
+                    }}
+                    secureTextEntry={!fpShowPassword}
+                    autoCapitalize="none"
+                  />
+                </View>
+
+                {/* Confirm New Password */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Confirm New Password</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    placeholder="Re-enter new password"
+                    placeholderTextColor={COLORS.textMuted}
+                    value={fpConfirmPassword}
+                    onChangeText={(val) => {
+                      setFpConfirmPassword(val);
+                      setFpError('');
+                    }}
+                    secureTextEntry={!fpShowPassword}
+                    autoCapitalize="none"
+                  />
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.primaryButton, fpLoading && styles.buttonDisabled]}
+                  onPress={handleSetPasswordFromLink}
+                  disabled={fpLoading}
+                >
+                  {fpLoading ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.primaryButtonText}>Save New Password &amp; Sign In</Text>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.modalCloseBtn}
+                  onPress={() => setForgotModalVisible(false)}
+                >
+                  <Text style={styles.modalCloseBtnText}>Close</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {/* Step 3: Success Confirmation */}
+            {forgotStep === 'success' && (
+              <View style={styles.fpSuccessBox}>
+                <View style={styles.verificationIconCircle}>
+                  <Text style={styles.verificationIconText}>✓</Text>
+                </View>
+                <Text style={styles.fpSuccessTitle}>Password Updated!</Text>
+                <Text style={styles.fpSuccessMsg}>
+                  Your new password has been securely updated in Supabase. You can now sign in using your updated password.
+                </Text>
+
+                <TouchableOpacity
+                  style={[styles.primaryButton, { width: '100%', marginTop: 16 }]}
+                  onPress={() => {
+                    setForgotModalVisible(false);
+                    setForgotStep('request');
+                    setAuthMode('signin');
+                    if (fpEmail) setEmail(fpEmail);
+                    setPassword('');
+                    setConfirmPassword('');
+                  }}
+                >
+                  <Text style={styles.primaryButtonText}>Sign In with New Password</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </View>
       </Modal>
@@ -666,62 +933,39 @@ export default function SignInScreen({
 const styles = StyleSheet.create({
   screenContainer: {
     flex: 1,
-    backgroundColor: COLORS.background, // Light theme #f8fafc
+    backgroundColor: COLORS.background,
   },
   scrollWrapper: {
-    minHeight: '100%',
+    flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
-  },
-  toastBanner: {
-    position: 'absolute',
-    top: 20,
-    alignSelf: 'center',
-    zIndex: 9999,
-    backgroundColor: '#ffffff',
-    borderColor: COLORS.primary,
-    borderWidth: 1,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  toastText: {
-    fontFamily: FONT_FAMILY,
-    color: COLORS.primary,
-    fontWeight: '700',
-    fontSize: 13,
+    padding: 20,
   },
   authCard: {
     width: '100%',
-    backgroundColor: COLORS.card, // solid white #ffffff matching dashboard
-    borderRadius: 16,
-    padding: 36,
+    backgroundColor: COLORS.card,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: COLORS.border,
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 4,
+    padding: 28,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 3,
   },
   brandHeader: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
   },
   logoRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   brandName: {
     fontFamily: FONT_FAMILY,
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '800',
     color: COLORS.primary,
     letterSpacing: -0.5,
@@ -736,42 +980,72 @@ const styles = StyleSheet.create({
   },
   portalBadgeText: {
     fontFamily: FONT_FAMILY,
-    fontSize: 11,
-    fontWeight: '800',
     color: COLORS.primary,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   portalTitle: {
     fontFamily: FONT_FAMILY,
+    fontSize: 14,
+    color: COLORS.textMuted,
+    fontWeight: '500',
+  },
+  securityBanner: {
+    flexDirection: 'row',
+    backgroundColor: '#f1f5f9',
+    borderColor: '#e2e8f0',
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 16,
+    alignItems: 'center',
+    gap: 10,
+  },
+  securityBannerIcon: {
     fontSize: 16,
-    fontWeight: '600',
+  },
+  securityBannerContent: {
+    flex: 1,
+  },
+  securityBannerTitle: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 12,
+    fontWeight: '700',
     color: COLORS.textMain,
-    marginTop: 2,
+    marginBottom: 1,
+  },
+  securityBannerText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 11,
+    color: COLORS.textMuted,
+    lineHeight: 15,
   },
   tabsContainer: {
     flexDirection: 'row',
     backgroundColor: '#f1f5f9',
-    borderRadius: 10,
+    borderRadius: 8,
     padding: 4,
-    marginBottom: 22,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    marginBottom: 18,
+    gap: 4,
   },
   tabButton: {
     flex: 1,
-    paddingVertical: 9,
+    paddingVertical: 8,
     alignItems: 'center',
-    borderRadius: 7,
+    justifyContent: 'center',
+    borderRadius: 6,
   },
   tabButtonActive: {
     backgroundColor: '#ffffff',
     shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
     elevation: 1,
   },
   tabText: {
     fontFamily: FONT_FAMILY,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: COLORS.textMuted,
   },
@@ -783,22 +1057,127 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.dangerBg,
     borderColor: COLORS.dangerBorder,
     borderWidth: 1,
-    padding: 10,
     borderRadius: 8,
+    padding: 10,
     marginBottom: 16,
   },
   errorText: {
     fontFamily: FONT_FAMILY,
     color: COLORS.danger,
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 13,
+    lineHeight: 18,
     textAlign: 'center',
+  },
+  errorActionBtn: {
+    marginTop: 8,
+    alignSelf: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    backgroundColor: '#ffffff',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: COLORS.dangerBorder,
+  },
+  errorActionText: {
+    fontFamily: FONT_FAMILY,
+    color: COLORS.primary,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  infoBox: {
+    backgroundColor: '#f0fdfa',
+    borderColor: '#ccfbf1',
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 14,
+  },
+  infoBoxText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 12,
+    color: '#0f766e',
+    lineHeight: 16,
+  },
+  verificationNoticeCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 24,
+    alignItems: 'center',
+  },
+  verificationIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(15, 118, 110, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  verificationIconText: {
+    fontSize: 28,
+  },
+  verificationNoticeTitle: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 20,
+    fontWeight: '700',
+    color: COLORS.textMain,
+    marginBottom: 8,
+  },
+  verificationNoticeText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 14,
+    color: COLORS.textMain,
+    textAlign: 'center',
+    marginBottom: 8,
+    lineHeight: 20,
+  },
+  verificationNoticeSubtext: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 13,
+    color: COLORS.textMuted,
+    textAlign: 'center',
+    marginBottom: 20,
+    lineHeight: 18,
+  },
+  secondaryLinkBtn: {
+    marginTop: 12,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  secondaryLinkText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 13,
+    color: COLORS.primary,
+    fontWeight: '600',
   },
   formSection: {
     width: '100%',
   },
+  redeemNoticeBox: {
+    backgroundColor: '#f0fdf4',
+    borderColor: '#bbf7d0',
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 14,
+  },
+  redeemNoticeTitle: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#166534',
+    marginBottom: 2,
+  },
+  redeemNoticeText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 11,
+    color: '#15803d',
+    lineHeight: 16,
+  },
   inputGroup: {
-    marginBottom: 18,
+    marginBottom: 14,
   },
   labelRow: {
     flexDirection: 'row',
@@ -826,9 +1205,17 @@ const styles = StyleSheet.create({
     borderColor: COLORS.inputBorder,
     borderRadius: 8,
     paddingHorizontal: 14,
-    paddingVertical: 11,
+    paddingVertical: 10,
     fontSize: 14,
     color: COLORS.textMain,
+  },
+  monospaceInput: {
+    fontFamily: Platform.select({
+      web: 'monospace, "Courier New", Courier',
+      default: undefined,
+    }),
+    fontWeight: '700',
+    letterSpacing: 1,
   },
   passwordInputWrapper: {
     position: 'relative',
@@ -847,24 +1234,24 @@ const styles = StyleSheet.create({
   },
   rememberRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    justifyContent: 'space-between',
+    marginBottom: 18,
   },
   checkboxContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
   },
   checkboxBox: {
-    width: 17,
-    height: 17,
+    width: 18,
+    height: 18,
     borderRadius: 4,
     borderWidth: 1,
     borderColor: COLORS.inputBorder,
-    backgroundColor: '#ffffff',
+    marginRight: 8,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#ffffff',
   },
   checkboxChecked: {
     backgroundColor: COLORS.primary,
@@ -872,23 +1259,29 @@ const styles = StyleSheet.create({
   },
   checkMark: {
     color: '#ffffff',
-    fontSize: 10,
-    fontWeight: '800',
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 14,
   },
   rememberText: {
     fontFamily: FONT_FAMILY,
     fontSize: 13,
-    color: COLORS.textMuted,
+    color: COLORS.textMain,
   },
   primaryButton: {
     backgroundColor: COLORS.primary,
     borderRadius: 8,
-    paddingVertical: 13,
+    paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
   },
   buttonDisabled: {
-    opacity: 0.6,
+    opacity: 0.65,
   },
   primaryButtonText: {
     fontFamily: FONT_FAMILY,
@@ -900,65 +1293,37 @@ const styles = StyleSheet.create({
     marginTop: 16,
     alignItems: 'center',
   },
+  switchModeRowSecondary: {
+    marginTop: 10,
+    alignItems: 'center',
+  },
   switchModeText: {
     fontFamily: FONT_FAMILY,
+    fontSize: 13,
     color: COLORS.primary,
+  },
+  toastBanner: {
+    position: 'absolute',
+    top: 20,
+    left: '50%',
+    transform: [{ translateX: -160 }],
+    width: 320,
+    backgroundColor: '#10b981',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    zIndex: 999,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 5,
+  },
+  toastText: {
+    fontFamily: FONT_FAMILY,
+    color: '#ffffff',
     fontSize: 13,
     fontWeight: '600',
-  },
-  otpSentCard: {
-    backgroundColor: COLORS.primaryLight,
-    borderColor: 'rgba(15, 118, 110, 0.2)',
-    borderWidth: 1,
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  otpSentText: {
-    fontFamily: FONT_FAMILY,
-    fontSize: 13,
-    color: COLORS.textMain,
-    marginBottom: 4,
-  },
-  changeEmailText: {
-    fontFamily: FONT_FAMILY,
-    fontSize: 12,
-    color: COLORS.primary,
-    fontWeight: '700',
-  },
-  otpBoxesRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-    marginVertical: 14,
-  },
-  otpBox: {
-    width: 44,
-    height: 48,
-    borderRadius: 8,
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: COLORS.inputBorder,
-    color: COLORS.textMain,
-    fontSize: 20,
-    fontWeight: '700',
-    fontFamily: Platform.OS === 'web' ? 'monospace' : undefined,
-  },
-  resendRow: {
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  resendTimerText: {
-    fontFamily: FONT_FAMILY,
-    fontSize: 12,
-    color: COLORS.textMuted,
-  },
-  resendActionText: {
-    fontFamily: FONT_FAMILY,
-    fontSize: 12,
-    color: COLORS.primary,
-    fontWeight: '700',
+    textAlign: 'center',
   },
   modalOverlay: {
     flex: 1,
@@ -969,7 +1334,7 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     width: '100%',
-    maxWidth: 380,
+    maxWidth: 420,
     backgroundColor: '#ffffff',
     borderRadius: 14,
     padding: 28,
@@ -994,6 +1359,22 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     textAlign: 'center',
     marginBottom: 16,
+    lineHeight: 18,
+  },
+  modalErrorBox: {
+    backgroundColor: COLORS.dangerBg,
+    borderColor: COLORS.dangerBorder,
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 8,
+    marginBottom: 12,
+  },
+  modalErrorText: {
+    fontFamily: FONT_FAMILY,
+    color: COLORS.danger,
+    fontSize: 12,
+    lineHeight: 16,
+    textAlign: 'center',
   },
   modalCloseBtn: {
     marginTop: 12,
@@ -1012,68 +1393,16 @@ const styles = StyleSheet.create({
   },
   fpSuccessTitle: {
     fontFamily: FONT_FAMILY,
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     color: COLORS.textMain,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   fpSuccessMsg: {
     fontFamily: FONT_FAMILY,
     fontSize: 13,
     color: COLORS.textMuted,
     textAlign: 'center',
-  },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 18,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#e2e8f0',
-  },
-  dividerText: {
-    fontFamily: FONT_FAMILY,
-    marginHorizontal: 12,
-    fontSize: 12,
-    color: COLORS.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  googleButton: {
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#cbd5e1',
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  googleButtonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-  },
-  googleIconBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#4285F4',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  googleIconText: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '800',
-    lineHeight: 14,
-  },
-  googleButtonText: {
-    fontFamily: FONT_FAMILY,
-    color: COLORS.textMain,
-    fontSize: 14,
-    fontWeight: '600',
+    lineHeight: 18,
   },
 });

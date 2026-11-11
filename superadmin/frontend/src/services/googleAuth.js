@@ -1,3 +1,9 @@
+/**
+ * Google OAuth Service (DEPRECATED for Superadmin Portal)
+ * Google OAuth login is disconnected from the Superadmin portal.
+ * Superadmin authentication is restricted to Password, Email OTP, and verified Access Key redemption.
+ */
+
 import { Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';

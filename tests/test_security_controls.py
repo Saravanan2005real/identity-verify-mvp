@@ -28,6 +28,7 @@ import base64
 import tempfile
 import urllib.request
 import urllib.error
+import subprocess
 import pytest
 
 # ---------------------------------------------------------------------------
@@ -324,6 +325,213 @@ class TestWorkflowStepEnforcement:
         token = av.create_applicant_token("PID-AADH", "AADHAAR", "org-test", ttl_seconds=3600)
         payload = av.verify_applicant_token(token)
         assert not av.check_step_allowed(payload, "PAN")
+
+
+class TestStartupSecretValidation:
+    """UNIT — Startup secret validation enforces presence and minimum strength."""
+
+    def test_valid_secrets_pass_validation(self, monkeypatch):
+        """Startup validation succeeds when all secrets are present and meet minimum length."""
+        monkeypatch.setenv("APPLICANT_SESSION_SECRET", "a" * 64)
+        monkeypatch.setenv("ASSET_SIGNING_SECRET", "b" * 64)
+        monkeypatch.setenv("SUPABASE_URL", "https://valid.supabase.co")
+        monkeypatch.setenv("SUPABASE_KEY", "valid-key-at-least-some-chars")
+        av.validate_startup_secrets()
+
+    def test_missing_applicant_secret_fails(self, monkeypatch):
+        """Startup validation raises RuntimeError when APPLICANT_SESSION_SECRET is empty/missing."""
+        monkeypatch.setenv("APPLICANT_SESSION_SECRET", "")
+        monkeypatch.setenv("ASSET_SIGNING_SECRET", "b" * 64)
+        monkeypatch.setenv("SUPABASE_URL", "https://valid.supabase.co")
+        monkeypatch.setenv("SUPABASE_KEY", "valid-key")
+        with pytest.raises(RuntimeError, match="APPLICANT_SESSION_SECRET is not set"):
+            av.validate_startup_secrets()
+
+    def test_short_applicant_secret_fails(self, monkeypatch):
+        """Startup validation raises RuntimeError when APPLICANT_SESSION_SECRET is < 32 characters."""
+        monkeypatch.setenv("APPLICANT_SESSION_SECRET", "short_secret_16c")
+        monkeypatch.setenv("ASSET_SIGNING_SECRET", "b" * 64)
+        monkeypatch.setenv("SUPABASE_URL", "https://valid.supabase.co")
+        monkeypatch.setenv("SUPABASE_KEY", "valid-key")
+        with pytest.raises(RuntimeError, match="APPLICANT_SESSION_SECRET is too short"):
+            av.validate_startup_secrets()
+
+    def test_missing_asset_signing_secret_fails(self, monkeypatch):
+        """Startup validation raises RuntimeError when ASSET_SIGNING_SECRET is empty/missing."""
+        monkeypatch.setenv("APPLICANT_SESSION_SECRET", "a" * 64)
+        monkeypatch.setenv("ASSET_SIGNING_SECRET", "")
+        monkeypatch.setenv("SUPABASE_URL", "https://valid.supabase.co")
+        monkeypatch.setenv("SUPABASE_KEY", "valid-key")
+        with pytest.raises(RuntimeError, match="ASSET_SIGNING_SECRET is not set"):
+            av.validate_startup_secrets()
+
+    def test_short_asset_signing_secret_fails(self, monkeypatch):
+        """Startup validation raises RuntimeError when ASSET_SIGNING_SECRET is < 32 characters."""
+        monkeypatch.setenv("APPLICANT_SESSION_SECRET", "a" * 64)
+        monkeypatch.setenv("ASSET_SIGNING_SECRET", "short_key_16char")
+        monkeypatch.setenv("SUPABASE_URL", "https://valid.supabase.co")
+        monkeypatch.setenv("SUPABASE_KEY", "valid-key")
+        with pytest.raises(RuntimeError, match="ASSET_SIGNING_SECRET is too short"):
+            av.validate_startup_secrets()
+
+    def test_unconfigured_supabase_url_fails(self, monkeypatch):
+        """Startup validation raises RuntimeError when SUPABASE_URL is unconfigured."""
+        monkeypatch.setenv("APPLICANT_SESSION_SECRET", "a" * 64)
+        monkeypatch.setenv("ASSET_SIGNING_SECRET", "b" * 64)
+        monkeypatch.setenv("SUPABASE_URL", "https://your-project-ref.supabase.co")
+        monkeypatch.setenv("SUPABASE_KEY", "valid-key")
+        with pytest.raises(RuntimeError, match="SUPABASE_URL is not configured"):
+            av.validate_startup_secrets()
+
+
+class TestProductionConfigGuards:
+    """UNIT — Verifies fail-closed production security configuration validation."""
+
+    def test_production_guard_skipped_in_development(self, monkeypatch):
+        """validate_production_config does nothing when APP_ENV is development."""
+        monkeypatch.setenv("APP_ENV", "development")
+        monkeypatch.setenv("REVOCATION_BACKEND", "memory")
+        av.validate_production_config()
+
+    def test_production_guard_rejects_memory_revocation(self, monkeypatch):
+        """Production refuses to start if REVOCATION_BACKEND is memory."""
+        monkeypatch.setenv("APP_ENV", "production")
+        monkeypatch.setenv("REVOCATION_BACKEND", "memory")
+        monkeypatch.setenv("ALLOW_LOCAL_FALLBACK", "false")
+        monkeypatch.setenv("ALLOWED_CORS_ORIGINS", "https://verifyyy.example.com")
+        monkeypatch.setenv("SUPABASE_URL", "https://real-prod.supabase.co")
+        monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "real-service-role-key-12345")
+        with pytest.raises(RuntimeError, match="REVOCATION_BACKEND must be 'supabase'"):
+            av.validate_production_config()
+
+    def test_production_guard_rejects_local_fallback(self, monkeypatch):
+        """Production refuses to start if ALLOW_LOCAL_FALLBACK is true."""
+        monkeypatch.setenv("APP_ENV", "production")
+        monkeypatch.setenv("REVOCATION_BACKEND", "supabase")
+        monkeypatch.setenv("ALLOW_LOCAL_FALLBACK", "true")
+        monkeypatch.setenv("ALLOWED_CORS_ORIGINS", "https://verifyyy.example.com")
+        monkeypatch.setenv("SUPABASE_URL", "https://real-prod.supabase.co")
+        monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "real-service-role-key-12345")
+        with pytest.raises(RuntimeError, match="ALLOW_LOCAL_FALLBACK must be false"):
+            av.validate_production_config()
+
+    def test_production_guard_rejects_insecure_cors(self, monkeypatch):
+        """Production refuses to start with wildcard, http, or localhost CORS origins."""
+        monkeypatch.setenv("APP_ENV", "production")
+        monkeypatch.setenv("REVOCATION_BACKEND", "supabase")
+        monkeypatch.setenv("ALLOW_LOCAL_FALLBACK", "false")
+        monkeypatch.setenv("SUPABASE_URL", "https://real-prod.supabase.co")
+        monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "real-service-role-key-12345")
+
+        # Test http origin rejection
+        monkeypatch.setenv("ALLOWED_CORS_ORIGINS", "http://insecure.example.com")
+        with pytest.raises(RuntimeError, match="CORS origin must use https"):
+            av.validate_production_config()
+
+        # Test localhost origin rejection
+        monkeypatch.setenv("ALLOWED_CORS_ORIGINS", "https://localhost:8081,https://verifyyy.example.com")
+        with pytest.raises(RuntimeError, match="CORS origin must not be localhost"):
+            av.validate_production_config()
+
+        # Test wildcard origin rejection
+        monkeypatch.setenv("ALLOWED_CORS_ORIGINS", "*")
+        with pytest.raises(RuntimeError, match="CORS wildcard '\\*' is not allowed"):
+            av.validate_production_config()
+
+    def test_production_guard_rejects_missing_service_role_key(self, monkeypatch):
+        """Production refuses to start without SUPABASE_SERVICE_ROLE_KEY."""
+        monkeypatch.setenv("APP_ENV", "production")
+        monkeypatch.setenv("REVOCATION_BACKEND", "supabase")
+        monkeypatch.setenv("ALLOW_LOCAL_FALLBACK", "false")
+        monkeypatch.setenv("ALLOWED_CORS_ORIGINS", "https://verifyyy.example.com")
+        monkeypatch.setenv("SUPABASE_URL", "https://real-prod.supabase.co")
+        monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "")
+        with pytest.raises(RuntimeError, match="SUPABASE_SERVICE_ROLE_KEY is missing"):
+            av.validate_production_config()
+
+    def test_production_guard_passes_with_valid_production_config(self, monkeypatch):
+        """validate_production_config succeeds when all production criteria are satisfied."""
+        monkeypatch.setenv("APP_ENV", "production")
+        monkeypatch.setenv("REVOCATION_BACKEND", "supabase")
+        monkeypatch.setenv("ALLOW_LOCAL_FALLBACK", "false")
+        monkeypatch.setenv("ALLOWED_CORS_ORIGINS", "https://verifyyy.example.com,https://admin.verifyyy.com")
+        monkeypatch.setenv("SUPABASE_URL", "https://real-prod.supabase.co")
+        monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "real-service-role-key-12345")
+        av.validate_production_config()
+
+    def test_local_fallback_allowed_behavior(self, monkeypatch):
+        """local_fallback_allowed is strictly False in production, configurable in development."""
+        monkeypatch.setenv("APP_ENV", "production")
+        monkeypatch.setenv("ALLOW_LOCAL_FALLBACK", "true")
+        assert av.local_fallback_allowed() is False
+
+        monkeypatch.setenv("APP_ENV", "development")
+        monkeypatch.setenv("ALLOW_LOCAL_FALLBACK", "true")
+        assert av.local_fallback_allowed() is True
+
+        monkeypatch.setenv("ALLOW_LOCAL_FALLBACK", "false")
+        assert av.local_fallback_allowed() is False
+
+    def test_validate_startup_secrets_invokes_production_guard(self, monkeypatch):
+        """validate_startup_secrets calls validate_production_config and fails in production."""
+        monkeypatch.setenv("APP_ENV", "production")
+        monkeypatch.setenv("APPLICANT_SESSION_SECRET", "a" * 64)
+        monkeypatch.setenv("ASSET_SIGNING_SECRET", "b" * 64)
+        monkeypatch.setenv("SUPABASE_URL", "https://real-prod.supabase.co")
+        monkeypatch.setenv("SUPABASE_KEY", "real-anon-key")
+        monkeypatch.setenv("REVOCATION_BACKEND", "memory")
+        with pytest.raises(RuntimeError, match="REVOCATION_BACKEND must be 'supabase'"):
+            av.validate_startup_secrets()
+
+
+class TestStartupPaths:
+    """UNIT — Verifies environment loading and failure modes across execution entry points."""
+
+    def test_root_env_loading(self):
+        """Verify load_environment discovers the root .env file and sets values."""
+        av.load_environment()
+        assert os.path.exists(os.path.join(BASE_DIR, ".env"))
+
+    def test_direct_execution_missing_secret_aborts_process(self):
+        """
+        Verify that attempting to import/run the application directly without required secrets
+        aborts process startup with a non-zero exit code and RuntimeError.
+        """
+        code = (
+            "import sys, os;"
+            f"sys.path.insert(0, r'{OCR_DIR}');"
+            "os.environ['APPLICANT_SESSION_SECRET'] = '';"
+            "os.environ['ASSET_SIGNING_SECRET'] = '';"
+            "import auth_validator as v;"
+            "v.validate_startup_secrets()"
+        )
+        proc = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True,
+            text=True
+        )
+        assert proc.returncode != 0
+        assert "SECURITY CONFIGURATION ERROR" in proc.stderr or "RuntimeError" in proc.stderr
+
+    def test_superadmin_missing_secret_aborts_process(self):
+        """
+        Verify that Superadmin backend aborts startup when secrets are missing.
+        """
+        code = (
+            "import sys, os;"
+            f"sys.path.insert(0, r'{SUPERADMIN_BACKEND_DIR}');"
+            "os.environ['APPLICANT_SESSION_SECRET'] = '';"
+            "os.environ['ASSET_SIGNING_SECRET'] = '';"
+            "import auth_validator as v;"
+            "v.validate_startup_secrets()"
+        )
+        proc = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True,
+            text=True
+        )
+        assert proc.returncode != 0
+        assert "SECURITY CONFIGURATION ERROR" in proc.stderr or "RuntimeError" in proc.stderr
 
 
 # ===========================================================================

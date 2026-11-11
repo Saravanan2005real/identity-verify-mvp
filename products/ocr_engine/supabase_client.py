@@ -3,9 +3,17 @@ import json
 import logging
 import urllib.request
 import urllib.parse
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 
-load_dotenv()
+_this_dir = os.path.dirname(os.path.abspath(__file__))
+_repo_root = os.path.abspath(os.path.join(_this_dir, "..", ".."))
+_root_env = os.path.join(_repo_root, ".env")
+if os.path.exists(_root_env):
+    load_dotenv(_root_env, override=False)
+else:
+    _found = find_dotenv(usecwd=True)
+    if _found:
+        load_dotenv(_found, override=False)
 
 logger = logging.getLogger("supabase_client")
 logging.basicConfig(level=logging.INFO)
@@ -49,6 +57,12 @@ def get_verification_record(identifier: str, tenant_id: str = None, auth_token: 
     The tenant_id filter is always applied as an AND clause so it cannot be bypassed.
     """
     if not is_configured():
+        import auth_validator
+        if not auth_validator.local_fallback_allowed():
+            raise RuntimeError(
+                "PRODUCTION CONFIGURATION ERROR: Supabase is unconfigured. "
+                "Local fallback is disallowed in production."
+            )
         logger.info("[Supabase] Skipping GET: Supabase URL/Key not configured yet.")
         return {"status": "unconfigured", "data": None}
 
@@ -84,6 +98,12 @@ def list_verification_records(limit: int = 50, tenant_id: str = None, auth_token
     Enforces tenant_id scoping to prevent cross-tenant enumeration.
     """
     if not is_configured():
+        import auth_validator
+        if not auth_validator.local_fallback_allowed():
+            raise RuntimeError(
+                "PRODUCTION CONFIGURATION ERROR: Supabase is unconfigured. "
+                "Local fallback is disallowed in production."
+            )
         return {"status": "unconfigured", "data": []}
 
     try:
@@ -106,6 +126,12 @@ def upsert_verification_record(payload: dict, auth_token: str = None) -> dict:
     Save or update verification data in Supabase table via POST/UPSERT.
     """
     if not is_configured():
+        import auth_validator
+        if not auth_validator.local_fallback_allowed():
+            raise RuntimeError(
+                "PRODUCTION CONFIGURATION ERROR: Supabase sync is unconfigured. "
+                "Local fallback is disallowed in production."
+            )
         logger.info("[Supabase] Local verification complete. Supabase sync skipped (placeholder credentials).")
         return {"status": "unconfigured", "synced": False}
 

@@ -132,19 +132,30 @@ def validate_production_config() -> None:
 # 3. Startup secret validation
 # ---------------------------------------------------------------------------
 
+def _is_placeholder_secret(val: str) -> bool:
+    if not val:
+        return True
+    s = str(val).strip()
+    if "CHANGE_ME" in s or "your-" in s:
+        return True
+    if len(s) > 1 and len(set(s)) == 1:
+        return True
+    return False
+
 def validate_startup_secrets() -> None:
     """
     Call once at application startup.
     Raises RuntimeError immediately if required secrets are absent, too short,
+    contain placeholders (CHANGE_ME, your-, repeated chars),
     or if production environment violates production configuration guards.
     """
     reload_secrets()
     validate_production_config()
     errors = []
-    if not SUPABASE_URL or SUPABASE_URL.startswith("https://your-project-ref"):
-        errors.append("SUPABASE_URL is not configured.")
-    if not SUPABASE_KEY:
-        errors.append("SUPABASE_KEY (publishable/anon key) is not configured.")
+    if not SUPABASE_URL or SUPABASE_URL.startswith("https://your-project-ref") or "your-" in SUPABASE_URL or "CHANGE_ME" in SUPABASE_URL:
+        errors.append("SUPABASE_URL is not configured or contains placeholder.")
+    if not SUPABASE_KEY or _is_placeholder_secret(SUPABASE_KEY):
+        errors.append("SUPABASE_KEY (publishable/anon key) is not configured or contains placeholder.")
     if not APPLICANT_SESSION_SECRET:
         errors.append("APPLICANT_SESSION_SECRET is not set.")
     elif len(APPLICANT_SESSION_SECRET) < _MIN_SECRET_LEN:
@@ -153,6 +164,8 @@ def validate_startup_secrets() -> None:
             f"minimum {_MIN_SECRET_LEN} characters required. "
             "Generate: python -c \"import secrets; print(secrets.token_hex(32))\""
         )
+    elif _is_placeholder_secret(APPLICANT_SESSION_SECRET):
+        errors.append("APPLICANT_SESSION_SECRET contains placeholder (CHANGE_ME/your-) or repeated characters.")
     if errors:
         msg = "SECURITY CONFIGURATION ERROR — application cannot start:\n" + "\n".join(f"  * {e}" for e in errors)
         logger.critical(msg)
@@ -245,21 +258,22 @@ def is_superadmin(user_data: dict, memberships: list) -> bool:
     if allowed_emails and is_confirmed and email in allowed_emails:
         return True
 
-    # 3. Database AuthorizedSuperadmin active registry
-    try:
-        from database import SessionLocal, AuthorizedSuperadmin
-        db = SessionLocal()
+    # 3. Database AuthorizedSuperadmin active registry (requires confirmed email)
+    if is_confirmed:
         try:
-            admin = db.query(AuthorizedSuperadmin).filter(
-                AuthorizedSuperadmin.email == email,
-                AuthorizedSuperadmin.status == "ACTIVE"
-            ).first()
-            if admin:
-                return True
-        finally:
-            db.close()
-    except Exception:
-        pass
+            from database import SessionLocal, AuthorizedSuperadmin
+            db = SessionLocal()
+            try:
+                admin = db.query(AuthorizedSuperadmin).filter(
+                    AuthorizedSuperadmin.email == email,
+                    AuthorizedSuperadmin.status == "ACTIVE"
+                ).first()
+                if admin:
+                    return True
+            finally:
+                db.close()
+        except Exception:
+            pass
 
     return False
 

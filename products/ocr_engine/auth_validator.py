@@ -196,19 +196,30 @@ def validate_production_config() -> None:
 # 3. Startup secret validation
 # ---------------------------------------------------------------------------
 
+def _is_placeholder_secret(val: str) -> bool:
+    if not val:
+        return True
+    s = str(val).strip()
+    if "CHANGE_ME" in s or "your-" in s:
+        return True
+    if len(s) > 1 and len(set(s)) == 1:
+        return True
+    return False
+
 def validate_startup_secrets() -> None:
     """
     Call once at application startup.
     Raises RuntimeError immediately if required secrets are absent, too short,
+    contain placeholders (CHANGE_ME, your-, repeated chars),
     or if production environment violates production configuration guards.
     """
     reload_secrets()
     validate_production_config()
     errors = []
-    if not SUPABASE_URL or SUPABASE_URL.startswith("https://your-project-ref"):
-        errors.append("SUPABASE_URL is not configured.")
-    if not SUPABASE_KEY:
-        errors.append("SUPABASE_KEY (publishable/anon key) is not configured.")
+    if not SUPABASE_URL or SUPABASE_URL.startswith("https://your-project-ref") or "your-" in SUPABASE_URL or "CHANGE_ME" in SUPABASE_URL:
+        errors.append("SUPABASE_URL is not configured or contains placeholder.")
+    if not SUPABASE_KEY or _is_placeholder_secret(SUPABASE_KEY):
+        errors.append("SUPABASE_KEY (publishable/anon key) is not configured or contains placeholder.")
     if not APPLICANT_SESSION_SECRET:
         errors.append("APPLICANT_SESSION_SECRET is not set.")
     elif len(APPLICANT_SESSION_SECRET) < _MIN_SECRET_LEN:
@@ -217,6 +228,8 @@ def validate_startup_secrets() -> None:
             f"minimum {_MIN_SECRET_LEN} characters required. "
             "Generate: python -c \"import secrets; print(secrets.token_hex(32))\""
         )
+    elif _is_placeholder_secret(APPLICANT_SESSION_SECRET):
+        errors.append("APPLICANT_SESSION_SECRET contains placeholder (CHANGE_ME/your-) or repeated characters.")
     if not ASSET_SIGNING_SECRET:
         errors.append("ASSET_SIGNING_SECRET is not set.")
     elif len(ASSET_SIGNING_SECRET) < _MIN_SECRET_LEN:
@@ -224,6 +237,8 @@ def validate_startup_secrets() -> None:
             f"ASSET_SIGNING_SECRET is too short ({len(ASSET_SIGNING_SECRET)} chars); "
             f"minimum {_MIN_SECRET_LEN} characters required."
         )
+    elif _is_placeholder_secret(ASSET_SIGNING_SECRET):
+        errors.append("ASSET_SIGNING_SECRET contains placeholder (CHANGE_ME/your-) or repeated characters.")
     if errors:
         msg = "SECURITY CONFIGURATION ERROR — application cannot start:\n" + "\n".join(f"  * {e}" for e in errors)
         logger.critical(msg)

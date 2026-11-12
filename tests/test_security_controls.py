@@ -340,12 +340,15 @@ class TestWorkflowStepEnforcement:
 
 
 class TestStartupSecretValidation:
-    """UNIT — Startup secret validation enforces presence and minimum strength."""
+    """UNIT — Startup secret validation enforces presence, minimum strength, and non-placeholder values."""
+
+    VALID_APP_SECRET = "0123456789abcdef0123456789abcdef0123456789abcdef"
+    VALID_ASSET_SECRET = "fedcba9876543210fedcba9876543210fedcba9876543210"
 
     def test_valid_secrets_pass_validation(self, monkeypatch):
-        """Startup validation succeeds when all secrets are present and meet minimum length."""
-        monkeypatch.setenv("APPLICANT_SESSION_SECRET", "a" * 64)
-        monkeypatch.setenv("ASSET_SIGNING_SECRET", "b" * 64)
+        """Startup validation succeeds when all secrets are present, strong, and varied."""
+        monkeypatch.setenv("APPLICANT_SESSION_SECRET", self.VALID_APP_SECRET)
+        monkeypatch.setenv("ASSET_SIGNING_SECRET", self.VALID_ASSET_SECRET)
         monkeypatch.setenv("SUPABASE_URL", "https://valid.supabase.co")
         monkeypatch.setenv("SUPABASE_KEY", "valid-key-at-least-some-chars")
         av.validate_startup_secrets()
@@ -353,7 +356,7 @@ class TestStartupSecretValidation:
     def test_missing_applicant_secret_fails(self, monkeypatch):
         """Startup validation raises RuntimeError when APPLICANT_SESSION_SECRET is empty/missing."""
         monkeypatch.setenv("APPLICANT_SESSION_SECRET", "")
-        monkeypatch.setenv("ASSET_SIGNING_SECRET", "b" * 64)
+        monkeypatch.setenv("ASSET_SIGNING_SECRET", self.VALID_ASSET_SECRET)
         monkeypatch.setenv("SUPABASE_URL", "https://valid.supabase.co")
         monkeypatch.setenv("SUPABASE_KEY", "valid-key")
         with pytest.raises(RuntimeError, match="APPLICANT_SESSION_SECRET is not set"):
@@ -362,7 +365,7 @@ class TestStartupSecretValidation:
     def test_short_applicant_secret_fails(self, monkeypatch):
         """Startup validation raises RuntimeError when APPLICANT_SESSION_SECRET is < 32 characters."""
         monkeypatch.setenv("APPLICANT_SESSION_SECRET", "short_secret_16c")
-        monkeypatch.setenv("ASSET_SIGNING_SECRET", "b" * 64)
+        monkeypatch.setenv("ASSET_SIGNING_SECRET", self.VALID_ASSET_SECRET)
         monkeypatch.setenv("SUPABASE_URL", "https://valid.supabase.co")
         monkeypatch.setenv("SUPABASE_KEY", "valid-key")
         with pytest.raises(RuntimeError, match="APPLICANT_SESSION_SECRET is too short"):
@@ -370,7 +373,7 @@ class TestStartupSecretValidation:
 
     def test_missing_asset_signing_secret_fails(self, monkeypatch):
         """Startup validation raises RuntimeError when ASSET_SIGNING_SECRET is empty/missing."""
-        monkeypatch.setenv("APPLICANT_SESSION_SECRET", "a" * 64)
+        monkeypatch.setenv("APPLICANT_SESSION_SECRET", self.VALID_APP_SECRET)
         monkeypatch.setenv("ASSET_SIGNING_SECRET", "")
         monkeypatch.setenv("SUPABASE_URL", "https://valid.supabase.co")
         monkeypatch.setenv("SUPABASE_KEY", "valid-key")
@@ -379,7 +382,7 @@ class TestStartupSecretValidation:
 
     def test_short_asset_signing_secret_fails(self, monkeypatch):
         """Startup validation raises RuntimeError when ASSET_SIGNING_SECRET is < 32 characters."""
-        monkeypatch.setenv("APPLICANT_SESSION_SECRET", "a" * 64)
+        monkeypatch.setenv("APPLICANT_SESSION_SECRET", self.VALID_APP_SECRET)
         monkeypatch.setenv("ASSET_SIGNING_SECRET", "short_key_16char")
         monkeypatch.setenv("SUPABASE_URL", "https://valid.supabase.co")
         monkeypatch.setenv("SUPABASE_KEY", "valid-key")
@@ -388,12 +391,86 @@ class TestStartupSecretValidation:
 
     def test_unconfigured_supabase_url_fails(self, monkeypatch):
         """Startup validation raises RuntimeError when SUPABASE_URL is unconfigured."""
-        monkeypatch.setenv("APPLICANT_SESSION_SECRET", "a" * 64)
-        monkeypatch.setenv("ASSET_SIGNING_SECRET", "b" * 64)
+        monkeypatch.setenv("APPLICANT_SESSION_SECRET", self.VALID_APP_SECRET)
+        monkeypatch.setenv("ASSET_SIGNING_SECRET", self.VALID_ASSET_SECRET)
         monkeypatch.setenv("SUPABASE_URL", "https://your-project-ref.supabase.co")
         monkeypatch.setenv("SUPABASE_KEY", "valid-key")
         with pytest.raises(RuntimeError, match="SUPABASE_URL is not configured"):
             av.validate_startup_secrets()
+
+    def test_applicant_secret_with_change_me_fails(self, monkeypatch):
+        """Startup validation raises RuntimeError when APPLICANT_SESSION_SECRET contains CHANGE_ME."""
+        monkeypatch.setenv("APPLICANT_SESSION_SECRET", "CHANGE_ME_1234567890abcdef1234567890")
+        monkeypatch.setenv("ASSET_SIGNING_SECRET", self.VALID_ASSET_SECRET)
+        monkeypatch.setenv("SUPABASE_URL", "https://valid.supabase.co")
+        monkeypatch.setenv("SUPABASE_KEY", "valid-key")
+        with pytest.raises(RuntimeError, match="placeholder|CHANGE_ME"):
+            av.validate_startup_secrets()
+
+    def test_applicant_secret_with_your_dash_fails(self, monkeypatch):
+        """Startup validation raises RuntimeError when APPLICANT_SESSION_SECRET contains your-."""
+        monkeypatch.setenv("APPLICANT_SESSION_SECRET", "your-secret-key-that-is-at-least-32-chars-long")
+        monkeypatch.setenv("ASSET_SIGNING_SECRET", self.VALID_ASSET_SECRET)
+        monkeypatch.setenv("SUPABASE_URL", "https://valid.supabase.co")
+        monkeypatch.setenv("SUPABASE_KEY", "valid-key")
+        with pytest.raises(RuntimeError, match="placeholder|your-"):
+            av.validate_startup_secrets()
+
+    def test_applicant_secret_with_one_repeated_char_fails(self, monkeypatch):
+        """Startup validation raises RuntimeError when APPLICANT_SESSION_SECRET is one repeated char."""
+        monkeypatch.setenv("APPLICANT_SESSION_SECRET", "a" * 64)
+        monkeypatch.setenv("ASSET_SIGNING_SECRET", self.VALID_ASSET_SECRET)
+        monkeypatch.setenv("SUPABASE_URL", "https://valid.supabase.co")
+        monkeypatch.setenv("SUPABASE_KEY", "valid-key")
+        with pytest.raises(RuntimeError, match="placeholder|repeated"):
+            av.validate_startup_secrets()
+
+    def test_asset_secret_with_change_me_fails(self, monkeypatch):
+        """Startup validation raises RuntimeError when ASSET_SIGNING_SECRET contains CHANGE_ME."""
+        monkeypatch.setenv("APPLICANT_SESSION_SECRET", self.VALID_APP_SECRET)
+        monkeypatch.setenv("ASSET_SIGNING_SECRET", "CHANGE_ME_9876543210fedcba9876543210")
+        monkeypatch.setenv("SUPABASE_URL", "https://valid.supabase.co")
+        monkeypatch.setenv("SUPABASE_KEY", "valid-key")
+        with pytest.raises(RuntimeError, match="placeholder|CHANGE_ME"):
+            av.validate_startup_secrets()
+
+    def test_asset_secret_with_one_repeated_char_fails(self, monkeypatch):
+        """Startup validation raises RuntimeError when ASSET_SIGNING_SECRET is one repeated char."""
+        monkeypatch.setenv("APPLICANT_SESSION_SECRET", self.VALID_APP_SECRET)
+        monkeypatch.setenv("ASSET_SIGNING_SECRET", "b" * 64)
+        monkeypatch.setenv("SUPABASE_URL", "https://valid.supabase.co")
+        monkeypatch.setenv("SUPABASE_KEY", "valid-key")
+        with pytest.raises(RuntimeError, match="placeholder|repeated"):
+            av.validate_startup_secrets()
+
+    def test_superadmin_startup_secrets_rejects_placeholder(self, monkeypatch):
+        """Superadmin backend validate_startup_secrets raises RuntimeError on placeholders or repeated chars."""
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "superadmin_av_test_startup",
+            os.path.join(SUPERADMIN_BACKEND_DIR, "auth_validator.py")
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        # 1. Repeated char
+        monkeypatch.setenv("APPLICANT_SESSION_SECRET", "x" * 64)
+        monkeypatch.setenv("SUPABASE_URL", "https://valid.supabase.co")
+        monkeypatch.setenv("SUPABASE_KEY", "valid-key")
+        with pytest.raises(RuntimeError, match="placeholder|repeated"):
+            mod.validate_startup_secrets()
+
+        # 2. CHANGE_ME
+        monkeypatch.setenv("APPLICANT_SESSION_SECRET", "CHANGE_ME_superadmin_secret_key_1234")
+        with pytest.raises(RuntimeError, match="placeholder|CHANGE_ME"):
+            mod.validate_startup_secrets()
+
+        # 3. your-
+        monkeypatch.setenv("APPLICANT_SESSION_SECRET", "your-superadmin-secret-at-least-32-chars")
+        with pytest.raises(RuntimeError, match="placeholder|your-"):
+            mod.validate_startup_secrets()
+
+
 
 
 class TestProductionConfigGuards:
@@ -598,6 +675,32 @@ class TestSuperadminAuthValidatorIsSuperadmin:
             "app_metadata": {"role": "superadmin"}
         }
         assert self.mod.is_superadmin(user_data, []) is True
+
+    def test_unconfirmed_email_in_authorized_registry_returns_false(self, monkeypatch):
+        """Unconfirmed email present in AuthorizedSuperadmin database registry must return False."""
+        monkeypatch.delenv("ALLOWED_SUPERADMIN_DOMAINS", raising=False)
+        monkeypatch.delenv("ALLOWED_SUPERADMIN_EMAILS", raising=False)
+        import sys
+        from unittest.mock import MagicMock
+        mock_admin = MagicMock()
+        mock_admin.email = "registry_admin@example.com"
+        mock_admin.status = "ACTIVE"
+
+        mock_db = MagicMock()
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_admin
+
+        mock_database = MagicMock()
+        mock_database.SessionLocal.return_value = mock_db
+        mock_database.AuthorizedSuperadmin = MagicMock()
+
+        user_data = {
+            "email": "registry_admin@example.com",
+            "email_confirmed_at": None,
+            "app_metadata": {}
+        }
+        monkeypatch.setitem(sys.modules, "database", mock_database)
+        assert self.mod.is_superadmin(user_data, []) is False
+
 
 
 class TestTenantHandlingSecurity:

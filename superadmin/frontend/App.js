@@ -31,10 +31,8 @@ import {
 
 const { width } = Dimensions.get('window');
 
-const isProduction = process.env.NODE_ENV === 'production' || process.env.APP_ENV === 'production';
 const SUPERADMIN_API_URL = (
-  process.env.EXPO_PUBLIC_SUPERADMIN_API_URL ||
-  (isProduction ? '' : 'http://127.0.0.1:8000')
+  process.env.EXPO_PUBLIC_SUPERADMIN_API_URL || 'http://127.0.0.1:8000'
 ).replace(/\/+$/, '');
 
 // Theme Colors for Verifyyy matching Customer Portal

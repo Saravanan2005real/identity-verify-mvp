@@ -8,10 +8,6 @@ import { signOut } from './src/services/auth';
 
 const { width } = Dimensions.get('window');
 
-const isProduction = process.env.NODE_ENV === 'production' || process.env.APP_ENV === 'production';
-if (isProduction && !process.env.EXPO_PUBLIC_API_BASE_URL) {
-  throw new Error("EXPO_PUBLIC_API_BASE_URL environment variable is required in production");
-}
 const API_BASE_URL = (
   process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:5001'
 ).replace(/\/+$/, '');

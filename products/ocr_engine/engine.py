@@ -2907,7 +2907,17 @@ def _cross_verify_uploaded_vs_live(refs, holder_filename, id_filename):
 
 @app.route('/api/v1/live_verify', methods=['POST'])
 def live_verify_api():
-    caller_type, user_info, tenant_id, auth_token = _extract_caller_auth(request)
+    caller_type, user_info, tenant_id, auth_token, auth_error = _extract_caller_auth(request)
+
+    if auth_error == "service_unavailable":
+        return jsonify({"status": "error", "message": "Authentication service temporarily unavailable"}), 503
+    if not caller_type:
+        return jsonify({"status": "error", "message": "Authentication required for live verification"}), 401
+    if not tenant_id:
+        return jsonify({"status": "error", "message": "Tenant identification required"}), 403
+
+    effective_tenant = tenant_id
+
     referer = request.headers.get("Referer", "")
     is_safe_origin = any(referer.startswith(origin) for origin in ALLOWED_ORIGINS)
     raw_token = request.headers.get("X-Applicant-Token") or request.args.get("applicant_token") or (request.json.get("applicant_token") if request.is_json and request.json else None)
@@ -2965,7 +2975,12 @@ def live_verify_api():
         supabase_sync_res = {"status": "skipped"}
         try:
             from supabase_client import upsert_verification_record
-            session_id = data.get("session_id") or filename_id
+            if caller_type == "applicant":
+                session_id = user_info.get("pid") or filename_id
+                external_ref = (user_info or {}).get("external_ref") if isinstance(user_info, dict) else None
+            else:
+                session_id = filename_id
+                external_ref = ((data or {}).get("external_ref") or "").strip() or None
             
             fm_step3 = match_info.get("step3_face_matches", []) if isinstance(match_info, dict) else []
             fm_first = fm_step3[0] if (isinstance(fm_step3, list) and len(fm_step3) > 0) else {}
@@ -2974,7 +2989,6 @@ def live_verify_api():
             if not verified and isinstance(fm_first, dict):
                 verified = bool(fm_first.get("verified"))
 
-            effective_tenant = tenant_id or "default-org"
             signed_holder_url = auth_validator.generate_signed_asset_url(holder_filename, effective_tenant, ttl_seconds=900) if holder_filename else None
 
             sb_payload = {
@@ -2986,14 +3000,29 @@ def live_verify_api():
                 "liveness_verified": step41_complete,
                 "liveness_score": float(quality.get("sharpness", 0.0)) if isinstance(quality, dict) else 0.0,
                 "overall_status": "SUCCESS" if (verified and step41_complete) else "COMPLETED",
-                "live_holder_face_url": signed_holder_url,
+                "live_holder_face_url": holder_filename,
             }
+            if external_ref:
+                sb_payload["external_ref"] = external_ref
             supabase_sync_res = upsert_verification_record(sb_payload, auth_token=auth_token)
         except Exception as sb_err:
             print(f"[Supabase Sync Error in live_verify]: {sb_err}")
+            supabase_sync_res = {"status": "error", "message": str(sb_err)}
+
+        sync_status = (supabase_sync_res or {}).get("status")
+        if sync_status not in ("success", "unconfigured"):
+            if caller_type == "applicant" and raw_token:
+                auth_validator.rollback_applicant_attempt(raw_token)
+            return jsonify({
+                "status": "error",
+                "message": "Verification record synchronization failed. Please retry your request."
+            }), 502
 
         if caller_type == "applicant" and raw_token and step41_complete:
             auth_validator.record_applicant_step_completion(raw_token, "LIVE_VERIFY")
+            if auth_validator.is_workflow_complete(raw_token):
+                if not auth_validator.revoke_applicant_token(raw_token):
+                    return jsonify({"status": "error", "message": "Failed to persist session revocation"}), 503
 
         return jsonify(_json_safe({
             "status": "success" if step41_complete else "incomplete",
@@ -3017,80 +3046,10 @@ def live_verify_api():
         }))
 
     except Exception as e:
+        if caller_type == "applicant" and raw_token:
+            auth_validator.rollback_applicant_attempt(raw_token)
         return jsonify({"status": "failed", "error": "An error occurred during live face verification"}), 500
 
-
-        id_face, id_meta, holder_face, holder_meta = extract_holder_and_id_card_faces(
-            img, best_img, warped_ok
-        )
-
-        holder_filename = None
-        if holder_face is not None:
-            holder_filename = f"live_holder_{filename_id}.jpg"
-            holder_path = os.path.join(app.config['UPLOAD_FOLDER'], holder_filename)
-            if not _save_jpg(holder_path, holder_face):
-                holder_filename = None
-
-        id_filename = None
-        if id_face is not None:
-            id_filename = f"live_idface_{filename_id}.jpg"
-            id_path = os.path.join(app.config['UPLOAD_FOLDER'], id_filename)
-            if not _save_jpg(id_path, id_face):
-                id_filename = None
-
-        refs = _collect_reference_faces(data)
-        match_info = _cross_verify_uploaded_vs_live(refs, holder_filename, id_filename)
-        live_vs_id = None
-        if holder_filename and id_filename:
-            live_vs_id = _verify_face_pair(
-                _resolve_upload_face_path(holder_filename),
-                _resolve_upload_face_path(id_filename),
-            )
-
-        from quality import assess_live_frame, ocr_fields_usable
-        quality = assess_live_frame(img)
-        missing = []
-        if not warped_ok and not ocr_fields_usable(parsed_fields):
-            missing.append("id_card_region")
-        if not ocr_fields_usable(parsed_fields):
-            missing.append("ocr_fields")
-        if not quality.get("ok"):
-            if not quality.get("sharp_ok"):
-                missing.append("blurry")
-            if not quality.get("lighting_ok"):
-                missing.append("lighting")
-        seen = set()
-        missing = [m for m in missing if not (m in seen or seen.add(m))]
-        step41_complete = len(missing) == 0
-
-        return jsonify(_json_safe({
-            "status": "success" if step41_complete else "incomplete",
-            "step41_complete": step41_complete,
-            "step41_missing": missing,
-            "quality": quality,
-            "document_detected": bool(warped_ok),
-            "face_image_url": f"/ocr_uploads/{holder_filename}" if holder_filename else None,
-            "id_card_face_image_url": f"/ocr_uploads/{id_filename}" if id_filename else None,
-            "holder_face_image_url": f"/ocr_uploads/{holder_filename}" if holder_filename else None,
-            "face_source": holder_meta.get("source"),
-            "face_debug": id_meta,
-            "holder_face_debug": holder_meta,
-            "processed_image_url": f"/ocr_uploads/{doc_filename}",
-            "parsed_fields": parsed_fields,
-            "raw_text": extracted_lines,
-            "face_match": match_info.get("face_match"),
-            "face_match_vs_holder": match_info.get("face_match_vs_holder"),
-            "face_match_vs_id_card": match_info.get("face_match_vs_id_card"),
-            "face_match_live_vs_id": live_vs_id,
-            "face_match_details": match_info.get("face_match_details") or [],
-            "step3_face_matches": match_info.get("step3_face_matches") or [],
-            "reference_faces_used": [r.get("filename") for r in refs],
-        }))
-        
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({"status": "failed", "error": str(e)}), 500
 
 @app.route('/api/v1/live_face_check', methods=['POST'])
 def live_face_check_api():
@@ -3131,15 +3090,19 @@ def live_face_check_api():
         from quality import assess_live_frame
         quality = assess_live_frame(img)
 
+        caller_type, user_info, tenant_id, auth_token, auth_error = _extract_caller_auth(request)
+        person_face_url = auth_validator.generate_signed_asset_url(holder_filename, tenant_id, ttl_seconds=900) if (holder_filename and tenant_id) else None
+        id_card_face_url = auth_validator.generate_signed_asset_url(id_filename, tenant_id, ttl_seconds=900) if (id_filename and tenant_id) else None
+
         person_detected = holder_face is not None
         return jsonify(_json_safe({
             "status": "success" if person_detected else "no_face",
             "person_detected": person_detected,
             "person_confidence": holder_meta.get("confidence"),
-            "person_face_image_url": f"/ocr_uploads/{holder_filename}" if holder_filename else None,
+            "person_face_image_url": person_face_url,
             "id_card_photo_detected": id_face is not None,
             "id_card_photo_confidence": id_meta.get("confidence"),
-            "id_card_face_image_url": f"/ocr_uploads/{id_filename}" if id_filename else None,
+            "id_card_face_image_url": id_card_face_url,
             "faces_found": (1 if holder_face is not None else 0) + (1 if id_face is not None else 0),
             "quality": quality,
             "detector": holder_meta.get("source") or id_meta.get("source") or "none",
@@ -3149,6 +3112,40 @@ def live_face_check_api():
         import traceback
         traceback.print_exc()
         return jsonify({"status": "failed", "error": str(e)}), 500
+
+
+def _is_doc_detected_and_fields_parsed(detected_doc_type: str, fields: dict, quality_report: dict = None) -> bool:
+    """Check that document was successfully detected and required identity fields parsed."""
+    if not detected_doc_type or detected_doc_type.lower() == "unknown":
+        return False
+    if quality_report and quality_report.get("blur_status") == "BLURRY":
+        return False
+    doc_type = detected_doc_type.lower()
+    fields = fields or {}
+    if doc_type == "pan":
+        pan = (fields.get("pan_number") or "").strip()
+        is_valid = bool(
+            fields.get("pan_number_validated")
+            or validate_pan_format(pan)
+            or re.match(r'^[A-Z]{5}[0-9]{4}[A-Z]$', pan)
+        )
+        return bool(pan and is_valid)
+    elif doc_type == "aadhaar":
+        aadhaar = (fields.get("aadhaar_number") or "").strip()
+        digits = _digits_only(aadhaar)
+        is_valid = bool(
+            fields.get("aadhaar_number_validated")
+            or validate_verhoeff(digits)
+            or len(digits) == 12
+        )
+        return bool(aadhaar and is_valid)
+    elif doc_type in ("dl", "driving_license", "driving_licence"):
+        dl = (fields.get("dl_number") or "").strip()
+        return bool(dl)
+    elif doc_type in ("voter_id", "voter", "epic"):
+        voter = (fields.get("id_number") or fields.get("voter_id") or "").strip()
+        return bool(voter)
+    return False
 
 
 ALLOWED_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.pdf'}
@@ -3165,12 +3162,24 @@ def run_ocr():
     if not caller_type:
         return jsonify({"status": "error",
                         "message": "Authentication required to perform OCR"}), 401
+    if not tenant_id:
+        return jsonify({"status": "error",
+                        "message": "Tenant identification required"}), 403
+
+    effective_tenant = tenant_id
 
     hinted_type = (request.form.get("document_type") or "").strip().upper() or None
     raw_token = request.headers.get("X-Applicant-Token") or request.args.get("applicant_token")
 
-    # Workflow Step Enforcement: If caller is applicant, enforce step is in allowed workflow
+    # Workflow Step Enforcement and Attempt Cap (max 5 attempts per token)
     if caller_type == "applicant":
+        if raw_token:
+            attempts = auth_validator.record_applicant_attempt(raw_token)
+            if attempts > 5:
+                return jsonify({
+                    "status": "error",
+                    "message": "Too many attempts. Maximum of 5 attempts exceeded for this session."
+                }), 429
         target_step = hinted_type or "PAN"
         if not auth_validator.check_step_allowed(user_info, target_step):
             return jsonify({"status": "error", "message": f"Step '{target_step}' is not permitted in this verification pipeline."}), 403
@@ -3247,22 +3256,35 @@ def run_ocr():
 
         # Mask sensitive identity numbers in responses & database records
         fields = dict(parsed_fields or {})
-        detected_doc_type = (fields.get("document_type") or ("pan" if fields.get("pan_number") else ("aadhaar" if fields.get("aadhaar_number") else "unknown"))).lower()
+        detected_doc_type = (
+            fields.get("document_type")
+            or ("pan" if fields.get("pan_number")
+                else ("aadhaar" if fields.get("aadhaar_number")
+                      else ("dl" if fields.get("dl_number")
+                            else ("voter_id" if fields.get("id_number") or fields.get("voter_id")
+                                  else "unknown"))))
+        ).lower()
         raw_id_num = fields.get("aadhaar_number") or fields.get("pan_number") or fields.get("id_number") or fields.get("dl_number")
         masked_id_num = auth_validator.mask_identity_number(raw_id_num, detected_doc_type)
 
         # Generate temporary signed URLs for temporary asset access (15 min TTL)
-        effective_tenant = tenant_id or "default-org"
         signed_pipeline_url = auth_validator.generate_signed_asset_url(pipeline_filename, effective_tenant, ttl_seconds=900)
         signed_face_url = auth_validator.generate_signed_asset_url(face_filename, effective_tenant, ttl_seconds=900) if face_filename else None
 
         # Sync OCR Extracted Results to Supabase (storing masked ID and signed asset URL)
         supabase_sync_res = {"status": "skipped"}
+        if caller_type == "applicant":
+            session_id = (user_info or {}).get("pid") or str(uuid.uuid4())
+            external_ref = (user_info or {}).get("external_ref") if isinstance(user_info, dict) else None
+        else:
+            session_id = str(uuid.uuid4())
+            external_ref = (request.form.get("external_ref") or request.args.get("external_ref") or "").strip() or None
+
         try:
             from supabase_client import upsert_verification_record
             
             sb_payload = {
-                "session_id": stem,
+                "session_id": session_id,
                 "tenant_id": effective_tenant,
                 "document_type": detected_doc_type,
                 "id_number": masked_id_num,
@@ -3270,16 +3292,32 @@ def run_ocr():
                 "dob": fields.get("dob"),
                 "ocr_confidence": round(float(avg_confidence) * 100, 2),
                 "overall_status": "OCR_COMPLETED",
-                "extracted_face_url": signed_face_url,
+                "extracted_face_url": face_filename,
             }
+            if external_ref:
+                sb_payload["external_ref"] = external_ref
             supabase_sync_res = upsert_verification_record(sb_payload, auth_token=auth_token)
         except Exception as sb_err:
             print(f"[Supabase Sync Error in run_ocr]: {sb_err}")
+            supabase_sync_res = {"status": "error", "message": str(sb_err)}
 
-        # Record step completion in applicant session state
+        sync_status = (supabase_sync_res or {}).get("status")
+        if sync_status not in ("success", "unconfigured"):
+            if caller_type == "applicant" and raw_token:
+                auth_validator.rollback_applicant_attempt(raw_token)
+            return jsonify({
+                "status": "error",
+                "message": "Verification record synchronization failed. Please retry your request."
+            }), 502
+
+        # Record step completion in applicant session state only when document detected and fields parsed
         if caller_type == "applicant" and raw_token:
-            auth_validator.record_applicant_step_completion(raw_token, detected_doc_type.upper())
-            auth_validator.record_applicant_step_completion(raw_token, "OCR")
+            if _is_doc_detected_and_fields_parsed(detected_doc_type, fields, quality_report):
+                auth_validator.record_applicant_step_completion(raw_token, detected_doc_type.upper())
+                auth_validator.record_applicant_step_completion(raw_token, "OCR")
+                if auth_validator.is_workflow_complete(raw_token):
+                    if not auth_validator.revoke_applicant_token(raw_token):
+                        return jsonify({"status": "error", "message": "Failed to persist session revocation"}), 503
 
         # Mask ID in returned response
         if "aadhaar_number" in fields:
@@ -3291,7 +3329,7 @@ def run_ocr():
 
         return jsonify(_json_safe({
             "status": "success",
-            "session_id": stem,
+            "session_id": session_id,
             "quality_check": quality_report,
             "perspective_corrected": warped_ok,
             "ocr_pass": ocr_pass,
@@ -3306,6 +3344,8 @@ def run_ocr():
         }))
 
     except Exception as e:
+        if caller_type == "applicant" and raw_token:
+            auth_validator.rollback_applicant_attempt(raw_token)
         # Cleanup temporary uploaded file on error
         try:
             if os.path.exists(file_path):
@@ -3343,8 +3383,6 @@ def _extract_caller_auth(req):
             tenant_id = None
             if memberships:
                 tenant_id = memberships[0].get("organization_id")
-            elif not is_super:
-                tenant_id = user_data.get("user_metadata", {}).get("tenant_id", "default-org")
             return ("authenticated", {
                 "user": user_data,
                 "is_superadmin": is_super,
@@ -3371,7 +3409,7 @@ def _extract_caller_auth(req):
     if applicant_token:
         try:
             payload = auth_validator.verify_applicant_token(applicant_token)
-            return ("applicant", payload, payload.get("tenant_id", "default-org"), None, None)
+            return ("applicant", payload, payload.get("tenant_id"), None, None)
         except ValueError:
             return (None, None, None, None, "invalid_token")
         except Exception:
@@ -3396,24 +3434,22 @@ def uploaded_file(filename):
     # Check short-lived HMAC signed URL parameters (?expires=...&tid=...&op=...&sig=...)
     exp_param = request.args.get("expires")
     sig_param = request.args.get("sig")
-    tid_param = request.args.get("tid") or (tenant_id or "")
+    tid_param = request.args.get("tid")
     op_param  = request.args.get("op", "read")
 
-    is_signed_url_valid = False
-    if exp_param and sig_param and tid_param:
-        is_signed_url_valid = auth_validator.verify_signed_asset_url(
-            safe_name, exp_param, sig_param, tid_param, op_str=op_param
-        )
+    # A valid signed URL is REQUIRED for everyone, including logged-in users and superadmins.
+    # tid must come from the query string only (no fallback to caller's tenant).
+    if not (exp_param and sig_param and tid_param):
+        return jsonify({"status": "error", "message": "Unauthorized: valid signed URL required"}), 401
 
-    # SECURITY: Referer headers are attacker-controlled and are NOT a form of authentication.
-    # Access is granted ONLY via a valid HMAC-signed URL or a server-verified auth token.
-    if not is_signed_url_valid and not caller_type:
-        return jsonify({"status": "error", "message": "Unauthorized: valid signed URL or authorization token required"}), 401
+    if not auth_validator.verify_signed_asset_url(
+        safe_name, exp_param, sig_param, tid_param, op_str=op_param
+    ):
+        return jsonify({"status": "error", "message": "Unauthorized: valid signed URL required"}), 401
 
-    # Scope check: authenticated (non-superadmin) users may only access their own tenant assets
-    if is_signed_url_valid and caller_type and not (user_info or {}).get("is_superadmin"):
-        # Verify the tid in the signed URL matches the caller's tenant
-        if tid_param and tenant_id and tid_param != tenant_id:
+    # Scope check: authenticated (non-superadmin) callers with a tenant must match tid, else 403
+    if caller_type and not (user_info or {}).get("is_superadmin"):
+        if tenant_id and tid_param != tenant_id:
             return jsonify({"status": "error", "message": "Signed URL tenant does not match your session"}), 403
 
     return send_from_directory(app.config['UPLOAD_FOLDER'], safe_name)
@@ -3430,18 +3466,18 @@ def get_supabase_record_api(identifier):
     if not caller_type:
         return jsonify({"status": "error", "message": "Authentication required"}), 401
 
+    is_super = bool(caller_type == "authenticated" and user_info.get("is_superadmin"))
+    if not is_super and not tenant_id:
+        return jsonify({"status": "error", "message": "Tenant identification required"}), 403
+
     try:
         from supabase_client import get_verification_record
-        
-        # Superadmins can inspect any record; tenant admins/reviewers/applicants are scoped to their tenant
-        effective_tenant = None if (caller_type == "authenticated" and user_info.get("is_superadmin")) else tenant_id
-        
-        res = get_verification_record(identifier, tenant_id=effective_tenant, auth_token=auth_token)
+        res = get_verification_record(identifier, tenant_id=tenant_id, auth_token=auth_token, all_tenants=is_super)
         
         # IDOR protection: if record exists but belongs to a different tenant, return 403 Forbidden
         if res.get("status") == "success" and res.get("data"):
             rec_tenant = res["data"].get("tenant_id")
-            if effective_tenant and rec_tenant and rec_tenant != effective_tenant:
+            if not is_super and rec_tenant and rec_tenant != tenant_id:
                 return jsonify({"status": "error", "message": "Access denied to cross-tenant record"}), 403
                 
         return jsonify(_json_safe(res))
@@ -3460,15 +3496,82 @@ def get_supabase_list_api():
     if caller_type != "authenticated":
         return jsonify({"status": "error", "message": "Authentication required. Public listing is forbidden.", "data": []}), 401
 
+    is_super = bool(user_info.get("is_superadmin"))
+    if not is_super and not tenant_id:
+        return jsonify({"status": "error", "message": "Tenant identification required", "data": []}), 403
+
     try:
         from supabase_client import list_verification_records
-        effective_tenant = None if user_info.get("is_superadmin") else tenant_id
         limit = min(int(request.args.get("limit", 50)), 100)
-        
-        res = list_verification_records(limit=limit, tenant_id=effective_tenant, auth_token=auth_token)
+        res = list_verification_records(limit=limit, tenant_id=tenant_id, auth_token=auth_token, all_tenants=is_super)
         return jsonify(_json_safe(res))
     except Exception as e:
         return jsonify({"status": "error", "message": "Failed to list verification records", "data": []}), 500
+
+@app.route('/api/v1/assets/sign', methods=['GET'])
+def sign_asset_url_api():
+    """
+    Generate a fresh 15-minute signed URL for an asset.
+    SECURITY:
+    - Caller must be authenticated.
+    - Resolves owning verification record.
+    - Requires record.tenant_id == caller's tenant (or superadmin with all_tenants).
+    """
+    caller_type, user_info, tenant_id, auth_token, auth_error = _extract_caller_auth(request)
+
+    if auth_error == "service_unavailable":
+        return jsonify({"status": "error", "message": "Authentication service temporarily unavailable"}), 503
+
+    if not caller_type or caller_type == "anonymous":
+        return jsonify({"status": "error", "message": "Unauthorized"}), 401
+
+    filename = request.args.get("file", "").strip()
+    if not filename:
+        return jsonify({"status": "error", "message": "Missing required 'file' query parameter"}), 400
+
+    safe_filename = secure_filename(filename)
+    if not safe_filename or safe_filename != filename:
+        return jsonify({"status": "error", "message": "Invalid filename"}), 400
+
+    is_super = (user_info or {}).get("is_superadmin", False)
+    if not is_super and not tenant_id:
+        return jsonify({"status": "error", "message": "Forbidden: Tenant context required"}), 403
+
+    import supabase_client
+    try:
+        rec_res = supabase_client.get_verification_record_by_asset(
+            safe_filename,
+            tenant_id=tenant_id if not is_super else None,
+            auth_token=auth_token,
+            all_tenants=True
+        )
+    except Exception as e:
+        rec_res = {"status": "error", "message": str(e), "data": None}
+
+    record = rec_res.get("data") if isinstance(rec_res, dict) else None
+    if not record:
+        return jsonify({"status": "error", "message": "Asset not found"}), 404
+
+    record_tenant = record.get("tenant_id")
+    if not is_super and record_tenant != tenant_id:
+        return jsonify({"status": "error", "message": "Forbidden: Asset belongs to another tenant"}), 403
+
+    target_tenant = record_tenant or tenant_id
+    signed_url = auth_validator.generate_signed_asset_url(
+        safe_filename,
+        target_tenant,
+        ttl_seconds=900,
+        operation="read"
+    )
+
+    return jsonify({
+        "status": "success",
+        "url": signed_url,
+        "signed_url": signed_url,
+        "filename": safe_filename,
+        "tenant_id": target_tenant,
+        "expires_in": 900
+    })
 
 @app.route('/api/v1/auth/applicant_session', methods=['POST'])
 def create_applicant_session_api():
@@ -3501,31 +3604,105 @@ def create_applicant_session_api():
             "message": "Forbidden: tenant admins may only issue tokens for their own tenant."
         }), 403
 
-    effective_tenant = requested_tenant or tenant_id or "default-org"
-    pid = data.get("pid") or f"FLOW-{uuid.uuid4().hex[:6].upper()}"
+    effective_tenant = requested_tenant or tenant_id
+    if not effective_tenant:
+        return jsonify({
+            "status": "error",
+            "message": "Tenant identification required to issue applicant session tokens."
+        }), 403
+    pid = str(uuid.uuid4())
     flow = data.get("flow") or "PAN_FACE"
     ttl = min(int(data.get("ttl_seconds", 7200)), 86400)  # max 24h
+    external_ref = (data.get("external_ref") or "").strip() or None
+    if external_ref and len(external_ref) > 255:
+        return jsonify({
+            "status": "error",
+            "message": "external_ref exceeds maximum allowed length of 255 characters"
+        }), 400
 
-    token = auth_validator.create_applicant_token(pid, flow, effective_tenant, ttl_seconds=ttl)
-    return jsonify({
+    token = auth_validator.create_applicant_token(pid, flow, effective_tenant, ttl_seconds=ttl, external_ref=external_ref)
+    resp_payload = {
         "status": "success",
         "applicant_token": token,
         "pid": pid,
         "flow": flow,
         "tenant_id": effective_tenant,
         "expires_in": ttl
-    })
+    }
+    if external_ref:
+        resp_payload["external_ref"] = external_ref
+    return jsonify(resp_payload)
 
-def cleanup_expired_assets(retention_hours: int = 24):
+@app.route('/api/v1/auth/applicant_session/revoke', methods=['POST'])
+def revoke_applicant_session_api():
+    """
+    Revoke an active applicant session token.
+    SECURITY:
+    - Only authenticated tenant admins (for their own tenant) or superadmins may revoke tokens.
+    - If revocation persistence fails (returns False), returns 503.
+    """
+    caller_type, user_info, tenant_id, auth_token, auth_error = _extract_caller_auth(request)
+
+    if auth_error == "service_unavailable":
+        return jsonify({"status": "error", "message": "Authentication service temporarily unavailable"}), 503
+
+    if not caller_type or caller_type == "anonymous":
+        return jsonify({"status": "error", "message": "Authentication required"}), 401
+
+    if caller_type != "authenticated":
+        return jsonify({"status": "error", "message": "Forbidden: Administrator authentication required"}), 403
+
+    is_super = (user_info or {}).get("is_superadmin", False)
+    if not is_super and not tenant_id:
+        return jsonify({"status": "error", "message": "Forbidden: Tenant context required"}), 403
+
+    data = request.json or {}
+    token_to_revoke = (data.get("token") or data.get("applicant_token") or "").strip()
+    if not token_to_revoke:
+        return jsonify({"status": "error", "message": "Missing required 'token' parameter"}), 400
+
+    token_tenant = None
+    try:
+        parts = token_to_revoke.split(".", 1)
+        if len(parts) == 2:
+            pad = "=" * (-len(parts[0]) % 4)
+            payload_raw = json.loads(base64.urlsafe_b64decode((parts[0] + pad).encode("utf-8")).decode("utf-8"))
+            token_tenant = payload_raw.get("tenant_id")
+    except Exception:
+        return jsonify({"status": "error", "message": "Invalid token format"}), 400
+
+    if not is_super and token_tenant != tenant_id:
+        return jsonify({
+            "status": "error",
+            "message": "Forbidden: Tenant admins may only revoke tokens for their own tenant."
+        }), 403
+
+    success = auth_validator.revoke_applicant_token(token_to_revoke)
+    if not success:
+        return jsonify({"status": "error", "message": "Failed to persist token revocation"}), 503
+
+    return jsonify({
+        "status": "success",
+        "message": "Applicant session token revoked successfully"
+    }), 200
+
+def cleanup_expired_assets(retention_hours: int = None, upload_folder: str = None) -> int:
     """
     Retention Policy Procedure:
-    Purges temporary verification images, face crops, and debug files older than retention_hours (default: 24h).
+    Purges temporary verification images, face crops, and debug files older than RETENTION_HOURS (env var, default: 24h).
     Returns count of removed files.
     """
-    upload_dir = app.config.get('UPLOAD_FOLDER')
+    if retention_hours is None:
+        try:
+            retention_hours = int(os.getenv("RETENTION_HOURS", "24"))
+        except (ValueError, TypeError):
+            retention_hours = 24
+
+    upload_dir = upload_folder or app.config.get('UPLOAD_FOLDER') or os.getenv('UPLOAD_FOLDER')
     if not upload_dir or not os.path.exists(upload_dir):
         return 0
 
+    import time
     now = time.time()
     cutoff = now - (retention_hours * 3600)
     removed_count = 0

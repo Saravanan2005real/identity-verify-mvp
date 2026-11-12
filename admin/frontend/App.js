@@ -1,12 +1,20 @@
 import { StatusBar } from 'expo-status-bar';
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Dimensions, Modal, Image } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Dimensions, Modal, Image, ActivityIndicator } from 'react-native';
 import SignInScreen from './SignInScreen';
 import * as Linking from 'expo-linking';
 import { supabase } from './lib/supabase';
 import { signOut } from './src/services/auth';
 
 const { width } = Dimensions.get('window');
+
+const isProduction = process.env.NODE_ENV === 'production' || process.env.APP_ENV === 'production';
+if (isProduction && !process.env.EXPO_PUBLIC_API_BASE_URL) {
+  throw new Error("EXPO_PUBLIC_API_BASE_URL environment variable is required in production");
+}
+const API_BASE_URL = (
+  process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:5001'
+).replace(/\/+$/, '');
 
 const COLORS = {
   primary: '#0f766e', 
@@ -19,6 +27,93 @@ const COLORS = {
   danger: '#ef4444',
   success: '#10b981',
 };
+
+const PLACEHOLDER_IMAGE = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="140" height="140" viewBox="0 0 140 140"><rect width="140" height="140" fill="%23f1f5f9" rx="8"/><path d="M40 95 L65 65 L80 82 L95 62 L115 95 Z" fill="%23cbd5e1"/><circle cx="55" cy="50" r="8" fill="%23cbd5e1"/><text x="70" y="120" text-anchor="middle" fill="%2394a3b8" font-size="11" font-family="sans-serif">Unavailable</text></svg>';
+
+function SignedAssetImage({ file, style, placeholderText }) {
+  const [signedUrl, setSignedUrl] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    if (!file) {
+      setSignedUrl(null);
+      setLoading(false);
+      return;
+    }
+
+    const fetchSignedUrl = async () => {
+      setLoading(true);
+      setHasError(false);
+      try {
+        const cleanFile = file.split('?')[0].split('/').pop();
+        if (!cleanFile) {
+          if (active) { setHasError(true); setLoading(false); }
+          return;
+        }
+
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData?.session?.access_token;
+        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+        const res = await fetch(`${API_BASE_URL}/api/v1/assets/sign?file=${encodeURIComponent(cleanFile)}`, { headers });
+        if (!active) return;
+
+        if (res.status === 403 || res.status === 404 || !res.ok) {
+          setHasError(true);
+          setSignedUrl(PLACEHOLDER_IMAGE);
+          setLoading(false);
+          return;
+        }
+
+        const data = await res.json();
+        const url = data.signed_url || data.url;
+        if (url) {
+          setSignedUrl(url.startsWith('http') ? url : `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`);
+        } else {
+          setHasError(true);
+          setSignedUrl(PLACEHOLDER_IMAGE);
+        }
+      } catch (err) {
+        if (active) {
+          setHasError(true);
+          setSignedUrl(PLACEHOLDER_IMAGE);
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    fetchSignedUrl();
+    return () => { active = false; };
+  }, [file]);
+
+  if (loading) {
+    return (
+      <View style={[style, { backgroundColor: '#f1f5f9', justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="small" color="#0f766e" />
+      </View>
+    );
+  }
+
+  if (hasError || !signedUrl) {
+    return (
+      <Image
+        source={{ uri: PLACEHOLDER_IMAGE }}
+        style={style}
+      />
+    );
+  }
+
+  return (
+    <Image
+      source={{ uri: signedUrl }}
+      style={style}
+      onError={() => { setHasError(true); setSignedUrl(PLACEHOLDER_IMAGE); }}
+    />
+  );
+}
 
 export default function App() {
   const isWeb = width > 768;
@@ -140,7 +235,7 @@ export default function App() {
         headers['Authorization'] = `Bearer ${sessionData.session.access_token}`;
       }
 
-      const resp = await fetch('http://localhost:5001/api/v1/supabase/list', { headers });
+      const resp = await fetch(`${API_BASE_URL}/api/v1/supabase/list`, { headers });
       const data = await resp.json();
       if (data.status === 'success' && Array.isArray(data.data)) {
         const rows = data.data;
@@ -159,8 +254,8 @@ export default function App() {
             date: r.created_at ? new Date(r.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
             status: isMatched ? 'APPROVED' : (isFailed ? 'REJECTED' : 'APPROVED'),
             matched: isMatched,
-            extracted_face_url: r.extracted_face_url ? `http://localhost:5001${r.extracted_face_url}` : null,
-            live_holder_face_url: r.live_holder_face_url ? `http://localhost:5001${r.live_holder_face_url}` : null,
+            extracted_face_url: r.extracted_face_url || null,
+            live_holder_face_url: r.live_holder_face_url || null,
             rawRow: r
           };
         });
@@ -218,7 +313,7 @@ export default function App() {
       if (sessionData?.session?.access_token) {
         headers['Authorization'] = `Bearer ${sessionData.session.access_token}`;
       }
-      const tokResp = await fetch('http://localhost:5001/api/v1/auth/applicant_session', {
+      const tokResp = await fetch(`${API_BASE_URL}/api/v1/auth/applicant_session`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ pid, flow: flowParams })
@@ -614,7 +709,7 @@ export default function App() {
                       <View style={{flex: 1, borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, padding: 16, alignItems: 'center'}}>
                           <Text style={{fontWeight: '600', marginBottom: 12, color: COLORS.textMuted}}>Extracted ID Photo ({selectedReview?.doc_type || 'ID'})</Text>
                           {selectedReview?.extracted_face_url ? (
-                            <Image source={{ uri: selectedReview.extracted_face_url }} style={{ width: 140, height: 140, borderRadius: 8 }} />
+                            <SignedAssetImage file={selectedReview.extracted_face_url} style={{ width: 140, height: 140, borderRadius: 8 }} placeholderText="Document Face" />
                           ) : (
                             <View style={{width: 140, height: 140, backgroundColor: '#e2e8f0', borderRadius: 8, justifyContent: 'center', alignItems: 'center'}}>
                               <Text style={{color: '#94a3b8'}}>Document Face</Text>
@@ -624,7 +719,7 @@ export default function App() {
                       <View style={{flex: 1, borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, padding: 16, alignItems: 'center'}}>
                           <Text style={{fontWeight: '600', marginBottom: 12, color: COLORS.textMuted}}>Live Captured Selfie</Text>
                           {selectedReview?.live_holder_face_url ? (
-                            <Image source={{ uri: selectedReview.live_holder_face_url }} style={{ width: 140, height: 140, borderRadius: 8 }} />
+                            <SignedAssetImage file={selectedReview.live_holder_face_url} style={{ width: 140, height: 140, borderRadius: 8 }} placeholderText="Webcam Selfie" />
                           ) : (
                             <View style={{width: 140, height: 140, backgroundColor: '#e2e8f0', borderRadius: 8, justifyContent: 'center', alignItems: 'center'}}>
                               <Text style={{color: '#94a3b8'}}>Webcam Selfie</Text>

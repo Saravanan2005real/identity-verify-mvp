@@ -39,6 +39,41 @@ _MIN_SECRET_LEN = 32
 # In-process registries (development/single-instance fallback)
 _ACTIVE_APPLICANT_SESSIONS: dict = {}
 _REVOKED_TOKEN_HASHES: set = set()
+_TOKEN_ATTEMPTS: dict = {}
+
+
+def record_applicant_attempt(token: str) -> int:
+    """Record an attempt for the applicant token. Returns total attempt count."""
+    try:
+        token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        _TOKEN_ATTEMPTS[token_hash] = _TOKEN_ATTEMPTS.get(token_hash, 0) + 1
+        if token_hash in _ACTIVE_APPLICANT_SESSIONS:
+            _ACTIVE_APPLICANT_SESSIONS[token_hash]["attempts"] = _TOKEN_ATTEMPTS[token_hash]
+        return _TOKEN_ATTEMPTS[token_hash]
+    except Exception:
+        return 1
+
+
+def get_applicant_attempts(token: str) -> int:
+    """Get the attempt count for an applicant token."""
+    try:
+        token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        return _TOKEN_ATTEMPTS.get(token_hash, 0)
+    except Exception:
+        return 0
+
+
+def rollback_applicant_attempt(token: str) -> int:
+    """Do not count attempts that end in 5xx / 502. Roll back attempt count."""
+    try:
+        token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        if token_hash in _TOKEN_ATTEMPTS and _TOKEN_ATTEMPTS[token_hash] > 0:
+            _TOKEN_ATTEMPTS[token_hash] -= 1
+        if token_hash in _ACTIVE_APPLICANT_SESSIONS:
+            _ACTIVE_APPLICANT_SESSIONS[token_hash]["attempts"] = _TOKEN_ATTEMPTS.get(token_hash, 0)
+        return _TOKEN_ATTEMPTS.get(token_hash, 0)
+    except Exception:
+        return 0
 
 # Module-level configuration placeholders
 SUPABASE_URL = ""
@@ -307,6 +342,7 @@ def _is_revoked(token_hash: str) -> bool:
 
 
 def _persist_revocation(token_hash: str, pid: str = "", reason: str = "explicit") -> None:
+    _REVOKED_TOKEN_HASHES.add(token_hash)
     if _REVOCATION_BACKEND == "supabase" and SUPABASE_SERVICE_ROLE_KEY:
         try:
             url = f"{SUPABASE_URL}/rest/v1/revoked_applicant_tokens"
@@ -322,7 +358,7 @@ def _persist_revocation(token_hash: str, pid: str = "", reason: str = "explicit"
             urllib.request.urlopen(req, timeout=3)
         except Exception as e:
             logger.error("Supabase revocation write failed: %s", e)
-    _REVOKED_TOKEN_HASHES.add(token_hash)
+            raise RuntimeError(f"Failed to persist token revocation to Supabase: {e}") from e
 
 # ---------------------------------------------------------------------------
 # 5. Applicant token — creation, verification, revocation
@@ -333,11 +369,12 @@ def create_applicant_token(
     flow: str,
     tenant_id: str,
     ttl_seconds: int = 3600,
+    external_ref: str = None,
 ) -> str:
     """
     Generate a cryptographically signed applicant session token.
-    All fields (pid, flow, allowed_steps, tenant_id, nonce, expiry) are
-    included in the HMAC signature.
+    All fields (pid, flow, allowed_steps, tenant_id, nonce, expiry, and optional external_ref)
+    are included in the HMAC signature.
     """
     if not pid or not flow or not tenant_id:
         raise ValueError("pid, flow, and tenant_id are all required.")
@@ -353,6 +390,9 @@ def create_applicant_token(
         "exp": exp,
         "iat": int(time.time()),
     }
+    if external_ref:
+        payload["external_ref"] = str(external_ref).strip()
+
     payload_str = json.dumps(payload, separators=(",", ":"), sort_keys=True)
     payload_b64 = base64.urlsafe_b64encode(payload_str.encode("utf-8")).decode("utf-8").rstrip("=")
     sig = hmac.new(
@@ -369,6 +409,7 @@ def create_applicant_token(
         "completed_steps": set(),
         "exp": exp,
         "nonce": nonce,
+        "external_ref": str(external_ref).strip() if external_ref else None,
     }
     return full_token
 
@@ -446,13 +487,50 @@ def record_applicant_step_completion(token: str, step_name: str) -> bool:
     except Exception:
         return False
 
+def is_workflow_complete(token: str) -> bool:
+    """
+    Check if all allowed / required steps for an applicant token have been completed.
+    Returns True if every required step in the workflow has been completed.
+    """
+    try:
+        token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
+        session = _ACTIVE_APPLICANT_SESSIONS.get(token_hash)
+        if not session:
+            return False
+        completed = session.get("completed_steps", set())
+        allowed = session.get("allowed_steps", [])
+        
+        for step in allowed:
+            s = step.upper()
+            if "_FACE" in s:
+                doc = s.replace("_FACE", "")
+                if not (doc in completed or "OCR" in completed):
+                    return False
+                if "LIVE_VERIFY" not in completed and "FACE_MATCH" not in completed:
+                    return False
+            elif s in ("PAN", "AADHAAR", "DL", "VOTER_ID"):
+                if not (s in completed or "OCR" in completed):
+                    return False
+            elif s in ("LIVE_VERIFY", "FACE_MATCH"):
+                if "LIVE_VERIFY" not in completed and "FACE_MATCH" not in completed:
+                    return False
+            elif s == "EYE_TRACKING":
+                if "EYE_TRACKING" not in completed:
+                    return False
+            else:
+                if s not in completed:
+                    return False
+        return True
+    except Exception:
+        return False
+
 def check_step_allowed(payload: dict, step_name: str) -> bool:
     """Enforce that the requested operation is permitted in this token's workflow."""
     allowed = payload.get("allowed_steps", [])
     step = step_name.upper()
     # If the pipeline includes composite steps like PAN_FACE, it permits PAN and LIVE_VERIFY
     for a in allowed:
-        if step == a or (step in ("PAN", "AADHAAR") and (f"{step}_FACE" in a or step in a)):
+        if step == a or (step in ("PAN", "AADHAAR", "DL", "VOTER_ID") and (f"{step}_FACE" in a or step in a)):
             return True
         if step in ("LIVE_VERIFY", "FACE_MATCH") and ("_FACE" in a):
             return True

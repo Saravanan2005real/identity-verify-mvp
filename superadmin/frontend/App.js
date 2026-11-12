@@ -31,6 +31,12 @@ import {
 
 const { width } = Dimensions.get('window');
 
+const isProduction = process.env.NODE_ENV === 'production' || process.env.APP_ENV === 'production';
+const SUPERADMIN_API_URL = (
+  process.env.EXPO_PUBLIC_SUPERADMIN_API_URL ||
+  (isProduction ? '' : 'http://127.0.0.1:8000')
+).replace(/\/+$/, '');
+
 // Theme Colors for Verifyyy matching Customer Portal
 const COLORS = {
   primary: '#0f766e', // teal-700
@@ -186,7 +192,7 @@ export default function App() {
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
 
-      fetch('http://127.0.0.1:8000/api/v1/b2b/dashboard', { headers })
+      fetch(`${SUPERADMIN_API_URL}/api/v1/b2b/dashboard`, { headers })
         .then((res) => res.json())
         .then((data) => {
           if (data.status === 'success' && data.data) {
@@ -202,7 +208,7 @@ export default function App() {
     });
 
     // Fetch Services (Products)
-    fetch('http://127.0.0.1:8000/api/v1/b2b/verification-services')
+    fetch(`${SUPERADMIN_API_URL}/api/v1/b2b/verification-services`)
       .then((res) => res.json())
       .then((data) => {
         if (data.status === 'success' && data.data) {

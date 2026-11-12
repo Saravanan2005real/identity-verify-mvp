@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import json
 import hmac
@@ -19,7 +20,6 @@ SUPABASE_URL = ""
 SUPABASE_KEY = ""
 SUPABASE_SERVICE_ROLE_KEY = ""
 APPLICANT_SESSION_SECRET = ""
-ASSET_SIGNING_SECRET = ""
 ALLOWED_CORS_ORIGINS: set = set()
 
 
@@ -53,14 +53,13 @@ def reload_secrets() -> None:
     Ensures runtime/test environment changes are reflected immediately.
     """
     global SUPABASE_URL, SUPABASE_KEY, SUPABASE_SERVICE_ROLE_KEY
-    global APPLICANT_SESSION_SECRET, ASSET_SIGNING_SECRET
+    global APPLICANT_SESSION_SECRET
     global ALLOWED_CORS_ORIGINS
 
     SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
     SUPABASE_KEY = os.getenv("SUPABASE_KEY", "") or os.getenv("EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "")
     SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
     APPLICANT_SESSION_SECRET = os.getenv("APPLICANT_SESSION_SECRET", "")
-    ASSET_SIGNING_SECRET = os.getenv("ASSET_SIGNING_SECRET", "")
 
     raw_origins = os.getenv(
         "ALLOWED_CORS_ORIGINS",
@@ -154,13 +153,6 @@ def validate_startup_secrets() -> None:
             f"minimum {_MIN_SECRET_LEN} characters required. "
             "Generate: python -c \"import secrets; print(secrets.token_hex(32))\""
         )
-    if not ASSET_SIGNING_SECRET:
-        errors.append("ASSET_SIGNING_SECRET is not set.")
-    elif len(ASSET_SIGNING_SECRET) < _MIN_SECRET_LEN:
-        errors.append(
-            f"ASSET_SIGNING_SECRET is too short ({len(ASSET_SIGNING_SECRET)} chars); "
-            f"minimum {_MIN_SECRET_LEN} characters required."
-        )
     if errors:
         msg = "SECURITY CONFIGURATION ERROR — application cannot start:\n" + "\n".join(f"  * {e}" for e in errors)
         logger.critical(msg)
@@ -239,16 +231,18 @@ def is_superadmin(user_data: dict, memberships: list) -> bool:
     if not email:
         return False
 
+    is_confirmed = bool(user_data.get("email_confirmed_at"))
+
     # 1. Corporate domain restriction (e.g. zudoc.com)
     allowed_domains = [d.strip().lower().lstrip("@") for d in os.getenv("ALLOWED_SUPERADMIN_DOMAINS", "").split(",") if d.strip()]
-    if allowed_domains:
+    if allowed_domains and is_confirmed:
         email_domain = email.split("@")[-1] if "@" in email else ""
         if email_domain in allowed_domains:
             return True
 
     # 2. Explicit admin email whitelist
     allowed_emails = [e.strip().lower() for e in os.getenv("ALLOWED_SUPERADMIN_EMAILS", "").split(",") if e.strip()]
-    if allowed_emails and email in allowed_emails:
+    if allowed_emails and is_confirmed and email in allowed_emails:
         return True
 
     # 3. Database AuthorizedSuperadmin active registry
@@ -267,10 +261,6 @@ def is_superadmin(user_data: dict, memberships: list) -> bool:
     except Exception:
         pass
 
-    # 4. If no corporate domain or email restrictions configured, permit verified Supabase user
-    if not allowed_domains and not allowed_emails:
-        return True
-            
     return False
 
 import secrets
@@ -280,7 +270,7 @@ import secrets
 _ACTIVE_APPLICANT_SESSIONS = {}
 _REVOKED_TOKEN_HASHES = set()
 
-def create_applicant_token(pid: str, flow: str, tenant_id: str = "default-org", ttl_seconds: int = 3600) -> str:
+def create_applicant_token(pid: str, flow: str, tenant_id: str, ttl_seconds: int = 3600) -> str:
     """
     Generate a cryptographically secure, signed applicant session token.
     Includes:
@@ -289,6 +279,8 @@ def create_applicant_token(pid: str, flow: str, tenant_id: str = "default-org", 
       - expiration timestamp
       - tenant scoping
     """
+    if not pid or not flow or not tenant_id:
+        raise ValueError("pid, flow, and tenant_id are all required.")
     exp = int(time.time()) + ttl_seconds
     nonce = secrets.token_hex(16)
     allowed_steps = [s.strip().upper() for s in (flow or "").split(",") if s.strip()]
@@ -415,36 +407,6 @@ def check_step_allowed(payload: dict, step_name: str) -> bool:
         if step == "EYE_TRACKING" and "EYE_TRACKING" in a:
             return True
     return False
-
-def generate_signed_asset_url(filename: str, tenant_id: str = "default-org", ttl_seconds: int = 900) -> str:
-    """
-    Generate a short-lived signed URL for accessing document or face images.
-    Returns: '/ocr_uploads/{filename}?expires={exp}&sig={sig}'
-    """
-    if not filename:
-        return None
-    basename = os.path.basename(filename)
-    exp = int(time.time()) + ttl_seconds
-    message = f"{basename}:{exp}".encode('utf-8')
-    sig = hmac.new(ASSET_SIGNING_SECRET.encode('utf-8'), message, hashlib.sha256).hexdigest()
-    return f"/ocr_uploads/{basename}?expires={exp}&sig={sig}"
-
-def verify_signed_asset_url(filename: str, exp_str: str, sig: str, tenant_id: str = "default-org") -> bool:
-    """
-    Validate the HMAC signature and expiration timestamp of a signed asset URL.
-    """
-    if not exp_str or not sig:
-        return False
-    try:
-        exp = int(exp_str)
-        if time.time() > exp:
-            return False
-        basename = os.path.basename(filename)
-        expected_msg = f"{basename}:{exp}".encode('utf-8')
-        expected_sig = hmac.new(ASSET_SIGNING_SECRET.encode('utf-8'), expected_msg, hashlib.sha256).hexdigest()
-        return hmac.compare_digest(sig, expected_sig)
-    except Exception:
-        return False
 
 def mask_identity_number(id_num: str, doc_type: str = "ID") -> str:
     """

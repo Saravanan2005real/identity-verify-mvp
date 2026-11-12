@@ -50,12 +50,15 @@ def _get_headers(auth_token: str = None) -> dict:
         "Prefer": "return=representation"
     }
 
-def get_verification_record(identifier: str, tenant_id: str = None, auth_token: str = None) -> dict:
+def get_verification_record(identifier: str, tenant_id: str = None, auth_token: str = None, *, all_tenants: bool = False) -> dict:
     """
     Fetch verification data from Supabase GET endpoint by session_id or id_number.
     Enforces tenant_id isolation to prevent IDOR attacks.
     The tenant_id filter is always applied as an AND clause so it cannot be bypassed.
     """
+    if not all_tenants and not (tenant_id and str(tenant_id).strip()):
+        raise ValueError("Tenant ID is required for verification record access.")
+
     if not is_configured():
         import auth_validator
         if not auth_validator.local_fallback_allowed():
@@ -77,7 +80,7 @@ def get_verification_record(identifier: str, tenant_id: str = None, auth_token: 
         # providing an identifier that satisfies the OR but belongs to another tenant.
         url = f"{SUPABASE_URL}/rest/v1/{SUPABASE_TABLE}?select=*&{identifier_filter}"
         if tenant_id:
-            url += f"&tenant_id=eq.{urllib.parse.quote(tenant_id)}"
+            url += f"&tenant_id=eq.{urllib.parse.quote(str(tenant_id).strip())}"
 
         req = urllib.request.Request(url, headers=_get_headers(auth_token), method="GET")
         with urllib.request.urlopen(req, timeout=5) as response:
@@ -92,11 +95,14 @@ def get_verification_record(identifier: str, tenant_id: str = None, auth_token: 
         logger.warning(f"[Supabase] Failed to fetch verification record: {str(e)}")
         return {"status": "error", "message": str(e)}
 
-def list_verification_records(limit: int = 50, tenant_id: str = None, auth_token: str = None) -> dict:
+def list_verification_records(limit: int = 50, tenant_id: str = None, auth_token: str = None, *, all_tenants: bool = False) -> dict:
     """
     Fetch all recent verification records from Supabase table ordered by timestamp.
     Enforces tenant_id scoping to prevent cross-tenant enumeration.
     """
+    if not all_tenants and not (tenant_id and str(tenant_id).strip()):
+        raise ValueError("Tenant ID is required for verification records listing.")
+
     if not is_configured():
         import auth_validator
         if not auth_validator.local_fallback_allowed():
@@ -109,7 +115,7 @@ def list_verification_records(limit: int = 50, tenant_id: str = None, auth_token
     try:
         url = f"{SUPABASE_URL}/rest/v1/{SUPABASE_TABLE}?select=*&order=created_at.desc&limit={limit}"
         if tenant_id:
-            url += f"&tenant_id=eq.{urllib.parse.quote(tenant_id)}"
+            url += f"&tenant_id=eq.{urllib.parse.quote(str(tenant_id).strip())}"
 
         req = urllib.request.Request(url, headers=_get_headers(auth_token), method="GET")
         with urllib.request.urlopen(req, timeout=5) as response:
@@ -120,6 +126,44 @@ def list_verification_records(limit: int = 50, tenant_id: str = None, auth_token
     except Exception as e:
         logger.warning(f"[Supabase] List failed: {str(e)}")
         return {"status": "error", "message": str(e), "data": []}
+
+def get_verification_record_by_asset(filename: str, tenant_id: str = None, auth_token: str = None, *, all_tenants: bool = False) -> dict:
+    """
+    Look up the verification record that owns the given asset file.
+    Searches both extracted_face_url and live_holder_face_url columns.
+    Matches exact filename or substring (supporting legacy URLs).
+    If all_tenants=False and not tenant_id: raises ValueError.
+    """
+    if not all_tenants and not (tenant_id and str(tenant_id).strip()):
+        raise ValueError("Tenant ID is required for verification record access.")
+
+    if not is_configured():
+        import auth_validator
+        if not auth_validator.local_fallback_allowed():
+            raise RuntimeError(
+                "PRODUCTION CONFIGURATION ERROR: Supabase is unconfigured. "
+                "Local fallback is disallowed in production."
+            )
+        return {"status": "unconfigured", "data": None}
+
+    try:
+        clean_fn = os.path.basename(filename)
+        safe_fn = urllib.parse.quote(clean_fn)
+        asset_filter = f"or=(extracted_face_url.like.*{safe_fn}*,live_holder_face_url.like.*{safe_fn}*)"
+        url = f"{SUPABASE_URL}/rest/v1/{SUPABASE_TABLE}?select=*&{asset_filter}&limit=1"
+        if tenant_id and not all_tenants:
+            url += f"&tenant_id=eq.{urllib.parse.quote(str(tenant_id).strip())}"
+
+        req = urllib.request.Request(url, headers=_get_headers(auth_token), method="GET")
+        with urllib.request.urlopen(req, timeout=5) as response:
+            if response.status == 200:
+                data = json.loads(response.read().decode('utf-8'))
+                return {"status": "success", "data": data[0] if data else None}
+            return {"status": "error", "message": f"HTTP {response.status}", "data": None}
+    except Exception as e:
+        logger.warning(f"[Supabase] Failed to fetch verification record by asset: {str(e)}")
+        return {"status": "error", "message": str(e), "data": None}
+
 
 def upsert_verification_record(payload: dict, auth_token: str = None) -> dict:
     """
@@ -136,7 +180,7 @@ def upsert_verification_record(payload: dict, auth_token: str = None) -> dict:
         return {"status": "unconfigured", "synced": False}
 
     try:
-        url = f"{SUPABASE_URL}/rest/v1/{SUPABASE_TABLE}"
+        url = f"{SUPABASE_URL}/rest/v1/{SUPABASE_TABLE}?on_conflict=tenant_id,session_id"
         headers = _get_headers(auth_token)
         headers["Prefer"] = "return=representation,resolution=merge-duplicates"
         

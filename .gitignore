@@ -4,7 +4,10 @@ venv/
 products/ocr_engine/.venv/
 __pycache__/
 *.pyc
+# Environment files
 .env
+.env.*
+!.env.example
 .claude/
 .expo/
 *.log
@@ -16,3 +19,9 @@ model_cache/
 # OCR test uploads (personal identification cards & selfies)
 products/ocr_uploads/*
 !products/ocr_uploads/.gitkeep
+
+# Ngrok tunnel credentials
+ngrok.yml
+
+
+superadmin.db

@@ -4,12 +4,16 @@ import { createClient } from '@supabase/supabase-js';
 
 import { Platform } from 'react-native';
 
-const supabaseUrl =
-  process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://mhxhttawwpqywedzpybf.supabase.co';
-
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseKey =
   process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-  'sb_publishable_fa7-pjSYD5TS9Z-YxOUMGQ_JrX2jY-E';
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error(
+    'Missing required Supabase environment variables: EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY (or EXPO_PUBLIC_SUPABASE_ANON_KEY) must be defined.'
+  );
+}
 
 export const supabase = createClient(
   supabaseUrl,

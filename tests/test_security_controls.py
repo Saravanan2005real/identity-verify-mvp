@@ -133,6 +133,18 @@ class TestTokenRevocation:
             with pytest.raises(ValueError, match="revoked"):
                 av.verify_applicant_token(token)
 
+    def test_bad_supabase_url_revoke_applicant_token_returns_false(self, monkeypatch):
+        """When Supabase persistence fails, revoke_applicant_token must return False."""
+        token = av.create_applicant_token("PID-FAIL-REV", "PAN", "org-test", ttl_seconds=3600)
+        monkeypatch.setattr(av, "_REVOCATION_BACKEND", "supabase")
+        monkeypatch.setattr(av, "SUPABASE_SERVICE_ROLE_KEY", "dummy-service-role-key-32chars-min")
+        monkeypatch.setattr(av, "SUPABASE_URL", "http://127.0.0.1:9")
+
+        ok = av.revoke_applicant_token(token)
+        assert ok is False
+        token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        assert token_hash in av._REVOKED_TOKEN_HASHES
+
 
 class TestTokenCrossTenantIsolation:
     """UNIT — Tokens are cryptographically bound to their issuing tenant."""
@@ -534,6 +546,91 @@ class TestStartupPaths:
         assert "SECURITY CONFIGURATION ERROR" in proc.stderr or "RuntimeError" in proc.stderr
 
 
+class TestSuperadminAuthValidatorIsSuperadmin:
+    """UNIT — superadmin/backend/auth_validator.py is_superadmin() security checks."""
+
+    @pytest.fixture(autouse=True)
+    def setup_superadmin_module(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "superadmin_av_test",
+            os.path.join(SUPERADMIN_BACKEND_DIR, "auth_validator.py")
+        )
+        self.mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.mod)
+
+    def test_no_allowlists_configured_confirmed_random_user_returns_false(self, monkeypatch):
+        monkeypatch.delenv("ALLOWED_SUPERADMIN_DOMAINS", raising=False)
+        monkeypatch.delenv("ALLOWED_SUPERADMIN_EMAILS", raising=False)
+        user_data = {
+            "email": "random_user@example.com",
+            "email_confirmed_at": "2026-10-01T00:00:00Z",
+            "app_metadata": {}
+        }
+        assert self.mod.is_superadmin(user_data, []) is False
+
+    def test_allowed_domain_unconfirmed_email_returns_false(self, monkeypatch):
+        monkeypatch.setenv("ALLOWED_SUPERADMIN_DOMAINS", "example.com")
+        monkeypatch.delenv("ALLOWED_SUPERADMIN_EMAILS", raising=False)
+        user_data = {
+            "email": "admin@example.com",
+            "email_confirmed_at": None,
+            "app_metadata": {}
+        }
+        assert self.mod.is_superadmin(user_data, []) is False
+
+    def test_allowed_domain_confirmed_email_returns_true(self, monkeypatch):
+        monkeypatch.setenv("ALLOWED_SUPERADMIN_DOMAINS", "example.com")
+        monkeypatch.delenv("ALLOWED_SUPERADMIN_EMAILS", raising=False)
+        user_data = {
+            "email": "admin@example.com",
+            "email_confirmed_at": "2026-10-01T00:00:00Z",
+            "app_metadata": {}
+        }
+        assert self.mod.is_superadmin(user_data, []) is True
+
+    def test_app_metadata_role_superadmin_returns_true(self, monkeypatch):
+        monkeypatch.delenv("ALLOWED_SUPERADMIN_DOMAINS", raising=False)
+        monkeypatch.delenv("ALLOWED_SUPERADMIN_EMAILS", raising=False)
+        user_data = {
+            "email": "attacker@evil.com",
+            "email_confirmed_at": None,
+            "app_metadata": {"role": "superadmin"}
+        }
+        assert self.mod.is_superadmin(user_data, []) is True
+
+
+class TestTenantHandlingSecurity:
+    """UNIT — Strict tenant isolation in supabase_client."""
+
+    @pytest.fixture(autouse=True)
+    def setup_supabase_client(self):
+        sys.path.insert(0, OCR_DIR)
+        import supabase_client
+        self.sc = supabase_client
+
+    def test_get_verification_record_missing_tenant_raises_value_error(self):
+        """Missing tenant_id without all_tenants=True must raise ValueError."""
+        with pytest.raises(ValueError, match="Tenant"):
+            self.sc.get_verification_record("SESSION-1", tenant_id=None)
+
+    def test_get_verification_record_empty_string_tenant_raises_value_error(self):
+        """Empty string tenant_id must raise ValueError."""
+        with pytest.raises(ValueError, match="Tenant"):
+            self.sc.get_verification_record("SESSION-1", tenant_id="")
+
+    def test_list_verification_records_missing_tenant_raises_value_error(self):
+        """Missing tenant_id on list without all_tenants=True must raise ValueError."""
+        with pytest.raises(ValueError, match="Tenant"):
+            self.sc.list_verification_records(tenant_id=None)
+
+    def test_list_verification_records_empty_string_tenant_raises_value_error(self):
+        """Empty string tenant_id on list must raise ValueError."""
+        with pytest.raises(ValueError, match="Tenant"):
+            self.sc.list_verification_records(tenant_id="")
+
+
+
 # ===========================================================================
 # INTEGRATION TESTS — require live server at API_BASE
 # ===========================================================================
@@ -735,10 +832,24 @@ class TestRevokedTokenAfterRestart:
         For now, this test confirms the revocation is persisted to Supabase.
         """
         token = av.create_applicant_token("PID-DURABLE-REV", "PAN", "org-test", ttl_seconds=3600)
-        av.revoke_applicant_token(token)
-        # Confirm revocation is in the store
-        token_hash = hashlib.sha256(token.encode()).hexdigest()
-        assert av._is_revoked(token_hash), "Token should be marked as revoked in the backend"
+        ok = av.revoke_applicant_token(token)
+        assert ok is True
+
+        code = (
+            "import sys, os;"
+            f"sys.path.insert(0, r'{OCR_DIR}');"
+            "import auth_validator as av;"
+            f"token = '{token}';"
+            "try:\n"
+            "    av.verify_applicant_token(token)\n"
+            "    sys.exit(1)\n"
+            "except ValueError as e:\n"
+            "    if 'revoked' in str(e).lower():\n"
+            "        sys.exit(0)\n"
+            "    sys.exit(2)\n"
+        )
+        proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+        assert proc.returncode == 0, f"Fresh process failed to reject revoked token. stderr: {proc.stderr}"
 
 
 @pytest.mark.integ
@@ -797,3 +908,1220 @@ class TestSuperadminRestrictions:
         assert exc_info.value.code in (403, 503), (
             f"Applicant token must not access superadmin endpoints, got {exc_info.value.code}"
         )
+
+
+@pytest.mark.integ
+class TestUploadedFileEndpointSecurity:
+    """INTEG — Security controls on /ocr_uploads/<filename>."""
+
+    @pytest.fixture(autouse=True)
+    def setup_fixture_file(self):
+        sys.path.insert(0, OCR_DIR)
+        from engine import app, UPLOAD_FOLDER
+        self.app = app
+        self.upload_folder = UPLOAD_FOLDER
+        self.filename = "test_uploaded_file_fixture.jpg"
+        self.file_path = os.path.join(self.upload_folder, self.filename)
+        with open(self.file_path, "wb") as f:
+            f.write(b"\xff\xd8\xff\xe0real_test_jpeg_bytes")
+        yield
+        if os.path.exists(self.file_path):
+            try:
+                os.remove(self.file_path)
+            except Exception:
+                pass
+
+    def test_unsigned_with_valid_bearer_returns_401_or_403(self, monkeypatch):
+        """Unsigned URL with a valid Bearer token must be rejected with 401 or 403."""
+        import auth_validator
+        monkeypatch.setattr(
+            auth_validator,
+            "verify_supabase_token",
+            lambda tok: {"id": "user-a", "email": "a@org-a.com", "user_metadata": {"tenant_id": "org-a"}}
+        )
+        monkeypatch.setattr(
+            auth_validator,
+            "get_user_tenant_membership",
+            lambda uid, tok: [{"organization_id": "org-a", "role": "member"}]
+        )
+        client = self.app.test_client()
+        resp = client.get(
+            f"/ocr_uploads/{self.filename}",
+            headers={"Authorization": "Bearer mock-valid-token"}
+        )
+        assert resp.status_code in (401, 403), f"Expected 401 or 403, got {resp.status_code}"
+
+    def test_valid_signed_url_returns_200(self):
+        """Valid HMAC signature returns 200 and file contents."""
+        url = av.generate_signed_asset_url(self.filename, "org-a", ttl_seconds=300)
+        client = self.app.test_client()
+        resp = client.get(url)
+        assert resp.status_code == 200
+
+    def test_signed_url_for_different_tenant_returns_403(self, monkeypatch):
+        """Valid signature for tenant B requested by tenant A caller returns 403."""
+        import auth_validator
+        monkeypatch.setattr(
+            auth_validator,
+            "verify_supabase_token",
+            lambda tok: {"id": "user-a", "email": "a@org-a.com", "user_metadata": {"tenant_id": "org-a"}}
+        )
+        monkeypatch.setattr(
+            auth_validator,
+            "get_user_tenant_membership",
+            lambda uid, tok: [{"organization_id": "org-a", "role": "member"}]
+        )
+        url_org_b = av.generate_signed_asset_url(self.filename, "org-b", ttl_seconds=300)
+        client = self.app.test_client()
+        resp = client.get(
+            url_org_b,
+            headers={"Authorization": "Bearer mock-token-org-a"}
+        )
+        assert resp.status_code == 403
+
+    def test_expired_signed_url_returns_401_or_403(self):
+        """Expired signed URL returns 401 or 403."""
+        url = av.generate_signed_asset_url(self.filename, "org-a", ttl_seconds=-60)
+        client = self.app.test_client()
+        resp = client.get(url)
+        assert resp.status_code in (401, 403)
+
+
+@pytest.mark.integ
+class TestLiveVerifyEndpointSecurity:
+    """INTEG — Security controls on /api/v1/live_verify."""
+
+    @pytest.fixture(autouse=True)
+    def setup_app_client(self):
+        sys.path.insert(0, OCR_DIR)
+        from engine import app
+        import cv2, numpy as np, base64
+        self.app = app
+        self.client = app.test_client()
+        arr = np.zeros((20, 20, 3), dtype=np.uint8)
+        _, buf = cv2.imencode(".jpg", arr)
+        self.tiny_b64 = "data:image/jpeg;base64," + base64.b64encode(buf).decode("utf-8")
+
+    def test_unauthenticated_post_returns_401(self):
+        """Unauthenticated call to live_verify must return 401."""
+        resp = self.client.post(
+            "/api/v1/live_verify",
+            json={"image": self.tiny_b64}
+        )
+        assert resp.status_code == 401, f"Expected 401, got {resp.status_code}"
+
+    def test_applicant_token_with_live_verify_step_succeeds(self, monkeypatch):
+        """Valid applicant token with LIVE_VERIFY step must not 500."""
+        import engine
+        import supabase_client
+        monkeypatch.setattr(engine, "extract_and_align_face", lambda img, orig: (img, {"source": "test"}))
+        monkeypatch.setattr(engine, "_cross_verify_uploaded_vs_live", lambda refs, h, i: {"face_match": True, "step3_face_matches": [{"verified": True}]})
+        monkeypatch.setattr(supabase_client, "upsert_verification_record", lambda p, auth_token=None: {"status": "success", "synced": True})
+
+        token = av.create_applicant_token("PID-APP-123", "LIVE_VERIFY", "org-test", ttl_seconds=3600)
+        resp = self.client.post(
+            "/api/v1/live_verify",
+            json={"image": self.tiny_b64},
+            headers={"X-Applicant-Token": token}
+        )
+        assert resp.status_code in (200, 201), f"Expected 200, got {resp.status_code}"
+
+    def test_client_supplied_session_id_is_ignored(self, monkeypatch):
+        """Client-supplied session_id must never be used."""
+        import engine
+        import supabase_client
+        monkeypatch.setattr(engine, "extract_and_align_face", lambda img, orig: (img, {"source": "test"}))
+        monkeypatch.setattr(engine, "_cross_verify_uploaded_vs_live", lambda refs, h, i: {"face_match": True, "step3_face_matches": [{"verified": True}]})
+        monkeypatch.setattr(supabase_client, "upsert_verification_record", lambda p, auth_token=None: {"status": "success", "synced": True})
+
+        token = av.create_applicant_token("PID-APP-123", "LIVE_VERIFY", "org-test", ttl_seconds=3600)
+        resp = self.client.post(
+            "/api/v1/live_verify",
+            json={
+                "image": self.tiny_b64,
+                "session_id": "malicious-victim-session-id"
+            },
+            headers={"X-Applicant-Token": token}
+        )
+        body = resp.get_json() or {}
+        assert body.get("session_id") != "malicious-victim-session-id", (
+            f"Client-supplied session_id was accepted: {body.get('session_id')}"
+        )
+        assert body.get("session_id") == "PID-APP-123"
+
+
+class TestAssetSigningEndpoint:
+    """UNIT — GET /api/v1/assets/sign looks up owner record and enforces tenant match."""
+
+    @pytest.fixture(autouse=True)
+    def setup_app_client(self):
+        sys.path.insert(0, OCR_DIR)
+        from engine import app
+        self.app = app
+        self.client = app.test_client()
+
+    def test_owner_tenant_receives_signed_url(self, monkeypatch):
+        """Owner tenant caller receives 200 with fresh signed asset URL."""
+        import auth_validator
+        import supabase_client
+
+        monkeypatch.setattr(
+            auth_validator,
+            "verify_supabase_token",
+            lambda tok: {"id": "user-a", "email": "a@org-a.com", "user_metadata": {"tenant_id": "org-a"}}
+        )
+        monkeypatch.setattr(
+            auth_validator,
+            "get_user_tenant_membership",
+            lambda uid, tok: [{"organization_id": "org-a", "role": "admin"}]
+        )
+        # Mock supabase record ownership
+        monkeypatch.setattr(
+            supabase_client,
+            "get_verification_record_by_asset",
+            lambda fn, tenant_id=None, auth_token=None, all_tenants=False: {
+                "status": "success",
+                "data": {"session_id": "sess-1", "tenant_id": "org-a", "extracted_face_url": "target_face.jpg"}
+            }
+        )
+
+        resp = self.client.get(
+            "/api/v1/assets/sign?file=target_face.jpg",
+            headers={"Authorization": "Bearer token-org-a"}
+        )
+        assert resp.status_code == 200
+        data = resp.get_json() or {}
+        signed_url = data.get("signed_url") or data.get("url")
+        assert signed_url is not None
+        assert "target_face.jpg" in signed_url
+        assert "tid=org-a" in signed_url
+        assert "sig=" in signed_url
+
+    def test_other_tenant_is_forbidden(self, monkeypatch):
+        """Caller from different tenant is rejected with 403 or 404."""
+        import auth_validator
+        import supabase_client
+
+        monkeypatch.setattr(
+            auth_validator,
+            "verify_supabase_token",
+            lambda tok: {"id": "user-b", "email": "b@org-b.com", "user_metadata": {"tenant_id": "org-b"}}
+        )
+        monkeypatch.setattr(
+            auth_validator,
+            "get_user_tenant_membership",
+            lambda uid, tok: [{"organization_id": "org-b", "role": "admin"}]
+        )
+        # Mock supabase record owned by org-a
+        monkeypatch.setattr(
+            supabase_client,
+            "get_verification_record_by_asset",
+            lambda fn, tenant_id=None, auth_token=None, all_tenants=False: {
+                "status": "success",
+                "data": {"session_id": "sess-1", "tenant_id": "org-a", "extracted_face_url": "target_face.jpg"}
+            }
+        )
+
+        resp = self.client.get(
+            "/api/v1/assets/sign?file=target_face.jpg",
+            headers={"Authorization": "Bearer token-org-b"}
+        )
+        assert resp.status_code in (403, 404)
+
+
+class TestApplicantSessionPidAndCompositeUnique:
+    """UNIT — Server-generated PID and composite UNIQUE (tenant_id, session_id)."""
+
+    @pytest.fixture(autouse=True)
+    def setup_app_client(self):
+        sys.path.insert(0, OCR_DIR)
+        from engine import app
+        self.app = app
+        self.client = app.test_client()
+
+    def test_client_supplied_pid_is_ignored_and_server_uuid4_generated(self, monkeypatch):
+        """Client-supplied pid in /api/v1/auth/applicant_session must be ignored; server generates uuid4."""
+        import auth_validator
+        import uuid
+
+        monkeypatch.setattr(
+            auth_validator,
+            "verify_supabase_token",
+            lambda tok: {"id": "admin-1", "email": "admin@org-test.com", "user_metadata": {"tenant_id": "org-test"}}
+        )
+        monkeypatch.setattr(
+            auth_validator,
+            "get_user_tenant_membership",
+            lambda uid, tok: [{"organization_id": "org-test", "role": "admin"}]
+        )
+
+        resp = self.client.post(
+            "/api/v1/auth/applicant_session",
+            json={
+                "pid": "attacker-chosen-pid",
+                "flow": "PAN_FACE",
+                "tenant_id": "org-test"
+            },
+            headers={"Authorization": "Bearer admin-token"}
+        )
+        assert resp.status_code == 200
+        data = resp.get_json() or {}
+        # Client pid must be rejected / ignored
+        assert data.get("pid") != "attacker-chosen-pid", "Server accepted client-supplied pid"
+        # Must be valid uuid4
+        val = uuid.UUID(data.get("pid"), version=4)
+        assert str(val) == data.get("pid")
+
+    def test_upsert_verification_record_uses_composite_on_conflict(self, monkeypatch):
+        """upsert_verification_record must include on_conflict=tenant_id,session_id in request URL."""
+        import supabase_client
+        captured_urls = []
+
+        class DummyResponse:
+            status = 200
+            def read(self):
+                return b'{"status": "ok"}'
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                pass
+
+        monkeypatch.setattr(supabase_client, "is_configured", lambda: True)
+        monkeypatch.setattr(
+            urllib.request,
+            "urlopen",
+            lambda req, timeout=5: (captured_urls.append(req.full_url), DummyResponse())[1]
+        )
+
+        supabase_client.upsert_verification_record(
+            {"session_id": "sess-test", "tenant_id": "org-a", "overall_status": "COMPLETED"}
+        )
+        assert len(captured_urls) == 1
+        assert "on_conflict=tenant_id,session_id" in captured_urls[0], (
+            f"Expected on_conflict=tenant_id,session_id in URL, got {captured_urls[0]}"
+        )
+
+    def test_same_session_id_under_two_tenants_creates_two_rows(self, monkeypatch):
+        """Same session_id under two different tenants must create two distinct rows, never overwriting."""
+        import supabase_client
+
+        # Simulate database state with composite key (tenant_id, session_id)
+        mock_db = {}  # key: (tenant_id, session_id), value: dict
+
+        def mock_urlopen(req, timeout=5):
+            url = req.full_url
+            assert "on_conflict=tenant_id,session_id" in url, "Missing on_conflict parameter"
+            payload = json.loads(req.data.decode("utf-8"))
+            key = (payload["tenant_id"], payload["session_id"])
+            mock_db[key] = payload
+            class MockRes:
+                status = 200
+                def read(self):
+                    return json.dumps([payload]).encode("utf-8")
+                def __enter__(self): return self
+                def __exit__(self, *a): pass
+            return MockRes()
+
+        monkeypatch.setattr(supabase_client, "is_configured", lambda: True)
+        monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen)
+
+        # Upsert session under tenant A
+        res1 = supabase_client.upsert_verification_record(
+            {"session_id": "shared-session-123", "tenant_id": "org-a", "extracted_name": "Alice"}
+        )
+        # Upsert same session under tenant B
+        res2 = supabase_client.upsert_verification_record(
+            {"session_id": "shared-session-123", "tenant_id": "org-b", "extracted_name": "Bob"}
+        )
+
+        # Verify both rows exist independently
+        assert len(mock_db) == 2, f"Expected 2 rows in DB, got {len(mock_db)}"
+        assert ("org-a", "shared-session-123") in mock_db
+        assert ("org-b", "shared-session-123") in mock_db
+        assert mock_db[("org-a", "shared-session-123")]["extracted_name"] == "Alice"
+        assert mock_db[("org-b", "shared-session-123")]["extracted_name"] == "Bob"
+
+
+class TestSuperadminSigningRemoved:
+    """UNIT — superadmin auth_validator no longer exposes signing; superadmin images go through engine."""
+
+    def test_superadmin_auth_validator_does_not_have_signing_functions(self):
+        """superadmin/backend/auth_validator.py must NOT expose generate/verify_signed_asset_url."""
+        import sys, os
+        _repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        if _repo_root not in sys.path:
+            sys.path.insert(0, _repo_root)
+        from superadmin.backend import auth_validator as sa_av
+
+        assert not hasattr(sa_av, "generate_signed_asset_url"), (
+            "generate_signed_asset_url must be removed from superadmin"
+        )
+        assert not hasattr(sa_av, "verify_signed_asset_url"), (
+            "verify_signed_asset_url must be removed from superadmin"
+        )
+        assert not hasattr(sa_av, "ASSET_SIGNING_SECRET") or sa_av.ASSET_SIGNING_SECRET == "", (
+            "ASSET_SIGNING_SECRET must be removed from superadmin"
+        )
+
+    def test_superadmin_startup_does_not_require_asset_signing_secret(self, monkeypatch):
+        """Superadmin validate_startup_secrets must pass even if ASSET_SIGNING_SECRET is unset."""
+        import sys, os
+        _repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        if _repo_root not in sys.path:
+            sys.path.insert(0, _repo_root)
+        from superadmin.backend import auth_validator as sa_av
+
+        monkeypatch.setenv("APPLICANT_SESSION_SECRET", "a" * 64)
+        monkeypatch.setenv("ASSET_SIGNING_SECRET", "")
+        monkeypatch.setenv("SUPABASE_URL", "https://mock.supabase.co")
+        monkeypatch.setenv("SUPABASE_KEY", "mock-key")
+        sa_av.reload_secrets()
+        # Must not raise RuntimeError for ASSET_SIGNING_SECRET
+        sa_av.validate_startup_secrets()
+
+
+class TestVerificationSessionIdUnification:
+    """UNIT — Applicant steps (OCR + live verify) share the applicant token's pid as session_id."""
+
+    @pytest.fixture(autouse=True)
+    def setup_app_client(self):
+        sys.path.insert(0, OCR_DIR)
+        from engine import app
+        self.app = app
+        self.client = app.test_client()
+
+    def test_ocr_and_live_verify_with_same_token_write_one_row(self, monkeypatch):
+        """OCR + live_verify with the same applicant token must produce ONE row keyed by (tenant, pid)."""
+        import engine
+        import supabase_client
+        import io
+        import cv2
+        import numpy as np
+
+        # Create valid 20x20 JPEG bytes
+        arr = np.zeros((20, 20, 3), dtype=np.uint8)
+        _, buf = cv2.imencode(".jpg", arr)
+        jpg_bytes = buf.tobytes()
+        tiny_b64 = "data:image/jpeg;base64," + base64.b64encode(jpg_bytes).decode("utf-8")
+
+        # Mock engine operations
+        monkeypatch.setattr(engine, "load_cv_image", lambda path: arr)
+        monkeypatch.setattr(engine, "check_image_quality", lambda img: {"quality_pass": True, "score": 95})
+        monkeypatch.setattr(engine, "detect_and_warp_document", lambda img: (img, True))
+        monkeypatch.setattr(engine, "extract_and_align_face", lambda img, orig: (img, {"source": "test"}))
+        monkeypatch.setattr(
+            engine,
+            "best_ocr_pass",
+            lambda img, folder, stem, hinted_type=None: (
+                img, ["NAME JOHN DOE", "PAN ABCDE1234F"], [0.99], 0.99,
+                {"name": "JOHN DOE", "pan_number": "ABCDE1234F", "document_type": "pan"},
+                True
+            )
+        )
+        monkeypatch.setattr(engine, "_save_jpg", lambda path, img: True)
+        monkeypatch.setattr(
+            engine,
+            "_cross_verify_uploaded_vs_live",
+            lambda refs, h, i: {"face_match": True, "step3_face_matches": [{"verified": True}]}
+        )
+
+        # In-memory mock database keyed by (tenant_id, session_id)
+        mock_db = {}
+
+        def mock_upsert(payload, auth_token=None):
+            key = (payload.get("tenant_id"), payload.get("session_id"))
+            if key not in mock_db:
+                mock_db[key] = {}
+            mock_db[key].update(payload)
+            return {"status": "success", "synced": True, "data": [mock_db[key]]}
+
+        monkeypatch.setattr(supabase_client, "upsert_verification_record", mock_upsert)
+
+        # Create applicant token with PAN_FACE flow and authoritative external_ref
+        token = av.create_applicant_token("PID-UNIFIED-777", "PAN_FACE", "org-test", ttl_seconds=3600, external_ref="REF-EXT-4040")
+
+        # 1. Step 1: Run OCR
+        ocr_resp = self.client.post(
+            "/api/v1/ocr",
+            data={
+                "file": (io.BytesIO(jpg_bytes), "test_pan.jpg"),
+                "document_type": "PAN",
+                "external_ref": "REF-EXT-4040"
+            },
+            headers={"X-Applicant-Token": token},
+            content_type="multipart/form-data"
+        )
+        assert ocr_resp.status_code == 200, f"OCR failed: {ocr_resp.get_data(as_text=True)}"
+
+        # 2. Step 2: Run Live Verify
+        live_resp = self.client.post(
+            "/api/v1/live_verify",
+            json={
+                "image": tiny_b64,
+                "external_ref": "REF-EXT-4040"
+            },
+            headers={"X-Applicant-Token": token}
+        )
+        assert live_resp.status_code == 200, f"Live verify failed: {live_resp.get_data(as_text=True)}"
+
+        # 3. Assertions: Exactly ONE row in database keyed by (tenant_id, pid)
+        assert len(mock_db) == 1, (
+            f"Expected exactly 1 row for multi-step applicant verification, got {len(mock_db)} rows: {list(mock_db.keys())}"
+        )
+        assert ("org-test", "PID-UNIFIED-777") in mock_db
+        stored_row = mock_db[("org-test", "PID-UNIFIED-777")]
+        assert stored_row["session_id"] == "PID-UNIFIED-777"
+        assert stored_row.get("external_ref") == "REF-EXT-4040"
+        assert stored_row["document_type"] == "pan"
+        assert stored_row["face_match_verified"] is True
+
+
+class TestApplicantSessionRevocationEnforcement:
+    """UNIT — Applicant token revocation upon final step completion and via admin revoke API."""
+
+    @pytest.fixture(autouse=True)
+    def setup_app_client(self):
+        sys.path.insert(0, OCR_DIR)
+        from engine import app
+        self.app = app
+        self.client = app.test_client()
+
+    def test_token_revoked_on_final_step_and_reused_returns_401(self, monkeypatch):
+        """Token must be revoked upon completing final step; subsequent reuse must return 401."""
+        import engine
+        import supabase_client
+        import io, cv2, numpy as np
+
+        arr = np.zeros((20, 20, 3), dtype=np.uint8)
+        _, buf = cv2.imencode(".jpg", arr)
+        jpg_bytes = buf.tobytes()
+        tiny_b64 = "data:image/jpeg;base64," + base64.b64encode(jpg_bytes).decode("utf-8")
+
+        monkeypatch.setattr(engine, "load_cv_image", lambda path: arr)
+        monkeypatch.setattr(engine, "check_image_quality", lambda img: {"quality_pass": True, "score": 95})
+        monkeypatch.setattr(engine, "detect_and_warp_document", lambda img: (img, True))
+        monkeypatch.setattr(engine, "extract_and_align_face", lambda img, orig: (img, {"source": "test"}))
+        monkeypatch.setattr(
+            engine,
+            "best_ocr_pass",
+            lambda img, folder, stem, hinted_type=None: (
+                img, ["NAME JOHN DOE", "PAN ABCDE1234F"], [0.99], 0.99,
+                {"name": "JOHN DOE", "pan_number": "ABCDE1234F", "document_type": "pan"},
+                True
+            )
+        )
+        monkeypatch.setattr(engine, "_save_jpg", lambda path, img: True)
+        monkeypatch.setattr(
+            engine,
+            "_cross_verify_uploaded_vs_live",
+            lambda refs, h, i: {"face_match": True, "step3_face_matches": [{"verified": True}]}
+        )
+        monkeypatch.setattr(supabase_client, "upsert_verification_record", lambda p, auth_token=None: {"status": "success", "synced": True})
+
+        token = av.create_applicant_token("PID-REVOKE-AUTO", "PAN_FACE", "org-test", ttl_seconds=3600)
+
+        # Step 1: Run OCR (intermediate step)
+        resp1 = self.client.post(
+            "/api/v1/ocr",
+            data={"file": (io.BytesIO(jpg_bytes), "pan.jpg"), "document_type": "PAN"},
+            headers={"X-Applicant-Token": token},
+            content_type="multipart/form-data"
+        )
+        assert resp1.status_code == 200
+
+        # Step 2: Run Live Verify (final allowed step in PAN_FACE)
+        resp2 = self.client.post(
+            "/api/v1/live_verify",
+            json={"image": tiny_b64},
+            headers={"X-Applicant-Token": token}
+        )
+        assert resp2.status_code == 200
+
+        # Step 3: Reuse token after completion -> 401
+        resp3 = self.client.post(
+            "/api/v1/live_verify",
+            json={"image": tiny_b64},
+            headers={"X-Applicant-Token": token}
+        )
+        assert resp3.status_code == 401, f"Expected 401 on token reuse after completion, got {resp3.status_code}"
+
+    def test_single_step_ocr_revoked_on_completion_reuse_returns_401(self, monkeypatch):
+        """Single-step flow (e.g. PAN) must revoke token immediately upon OCR completion."""
+        import engine
+        import supabase_client
+        import io, cv2, numpy as np
+
+        arr = np.zeros((20, 20, 3), dtype=np.uint8)
+        _, buf = cv2.imencode(".jpg", arr)
+        jpg_bytes = buf.tobytes()
+
+        monkeypatch.setattr(engine, "load_cv_image", lambda path: arr)
+        monkeypatch.setattr(engine, "check_image_quality", lambda img: {"quality_pass": True, "score": 95})
+        monkeypatch.setattr(engine, "detect_and_warp_document", lambda img: (img, True))
+        monkeypatch.setattr(engine, "extract_and_align_face", lambda img, orig: (img, {"source": "test"}))
+        monkeypatch.setattr(
+            engine,
+            "best_ocr_pass",
+            lambda img, folder, stem, hinted_type=None: (
+                img, ["NAME JOHN DOE", "PAN ABCDE1234F"], [0.99], 0.99,
+                {"name": "JOHN DOE", "pan_number": "ABCDE1234F", "document_type": "pan"},
+                True
+            )
+        )
+        monkeypatch.setattr(engine, "_save_jpg", lambda path, img: True)
+        monkeypatch.setattr(supabase_client, "upsert_verification_record", lambda p, auth_token=None: {"status": "success", "synced": True})
+
+        token = av.create_applicant_token("PID-SINGLE-STEP", "PAN", "org-test", ttl_seconds=3600)
+
+        # Run OCR
+        resp1 = self.client.post(
+            "/api/v1/ocr",
+            data={"file": (io.BytesIO(jpg_bytes), "pan.jpg"), "document_type": "PAN"},
+            headers={"X-Applicant-Token": token},
+            content_type="multipart/form-data"
+        )
+        assert resp1.status_code == 200
+
+        # Reuse token -> 401
+        resp2 = self.client.post(
+            "/api/v1/ocr",
+            data={"file": (io.BytesIO(jpg_bytes), "pan.jpg"), "document_type": "PAN"},
+            headers={"X-Applicant-Token": token},
+            content_type="multipart/form-data"
+        )
+        assert resp2.status_code == 401, f"Expected 401 on token reuse after single step completion, got {resp2.status_code}"
+
+    def test_revocation_persistence_failure_on_final_step_returns_503(self, monkeypatch):
+        """If revocation persistence returns False upon final step completion, endpoint returns 503."""
+        import engine
+        import supabase_client
+        import auth_validator
+        import io, cv2, numpy as np
+
+        arr = np.zeros((20, 20, 3), dtype=np.uint8)
+        _, buf = cv2.imencode(".jpg", arr)
+        jpg_bytes = buf.tobytes()
+
+        monkeypatch.setattr(engine, "load_cv_image", lambda path: arr)
+        monkeypatch.setattr(engine, "check_image_quality", lambda img: {"quality_pass": True, "score": 95})
+        monkeypatch.setattr(engine, "detect_and_warp_document", lambda img: (img, True))
+        monkeypatch.setattr(engine, "extract_and_align_face", lambda img, orig: (img, {"source": "test"}))
+        monkeypatch.setattr(
+            engine,
+            "best_ocr_pass",
+            lambda img, folder, stem, hinted_type=None: (
+                img, ["NAME JOHN DOE", "PAN ABCDE1234F"], [0.99], 0.99,
+                {"name": "JOHN DOE", "pan_number": "ABCDE1234F", "document_type": "pan"},
+                True
+            )
+        )
+        monkeypatch.setattr(engine, "_save_jpg", lambda path, img: True)
+        monkeypatch.setattr(supabase_client, "upsert_verification_record", lambda p, auth_token=None: {"status": "success", "synced": True})
+        # Simulate revocation persistence failure
+        monkeypatch.setattr(auth_validator, "revoke_applicant_token", lambda tok: False)
+
+        token = av.create_applicant_token("PID-FAIL-REV", "PAN", "org-test", ttl_seconds=3600)
+
+        resp = self.client.post(
+            "/api/v1/ocr",
+            data={"file": (io.BytesIO(jpg_bytes), "pan.jpg"), "document_type": "PAN"},
+            headers={"X-Applicant-Token": token},
+            content_type="multipart/form-data"
+        )
+        assert resp.status_code == 503, f"Expected 503 on revocation persistence failure, got {resp.status_code}"
+
+    def test_admin_revoke_endpoint_own_tenant_succeeds(self, monkeypatch):
+        """Tenant admin can revoke applicant token belonging to their own tenant."""
+        import auth_validator
+
+        monkeypatch.setattr(
+            auth_validator,
+            "verify_supabase_token",
+            lambda tok: {"id": "admin-a", "email": "admin@org-a.com", "user_metadata": {"tenant_id": "org-a"}}
+        )
+        monkeypatch.setattr(
+            auth_validator,
+            "get_user_tenant_membership",
+            lambda uid, tok: [{"organization_id": "org-a", "role": "admin"}]
+        )
+
+        token = av.create_applicant_token("PID-REV-ME", "PAN_FACE", "org-a", ttl_seconds=3600)
+        resp = self.client.post(
+            "/api/v1/auth/applicant_session/revoke",
+            json={"token": token},
+            headers={"Authorization": "Bearer admin-token-org-a"}
+        )
+        assert resp.status_code == 200
+        # Reusing the token must fail with ValueError/revoked
+        with pytest.raises(ValueError, match="revoked"):
+            av.verify_applicant_token(token)
+
+    def test_admin_revoke_endpoint_cross_tenant_forbidden_403(self, monkeypatch):
+        """Tenant admin cannot revoke applicant token belonging to a different tenant."""
+        import auth_validator
+
+        monkeypatch.setattr(
+            auth_validator,
+            "verify_supabase_token",
+            lambda tok: {"id": "admin-b", "email": "admin@org-b.com", "user_metadata": {"tenant_id": "org-b"}}
+        )
+        monkeypatch.setattr(
+            auth_validator,
+            "get_user_tenant_membership",
+            lambda uid, tok: [{"organization_id": "org-b", "role": "admin"}]
+        )
+
+        token_org_a = av.create_applicant_token("PID-ORG-A", "PAN_FACE", "org-a", ttl_seconds=3600)
+        resp = self.client.post(
+            "/api/v1/auth/applicant_session/revoke",
+            json={"token": token_org_a},
+            headers={"Authorization": "Bearer admin-token-org-b"}
+        )
+        assert resp.status_code == 403
+
+    def test_admin_revoke_endpoint_persistence_failure_returns_503(self, monkeypatch):
+        """If revoke_applicant_token returns False, revoke endpoint must return 503."""
+        import auth_validator
+
+        monkeypatch.setattr(
+            auth_validator,
+            "verify_supabase_token",
+            lambda tok: {"id": "admin-a", "email": "admin@org-a.com", "user_metadata": {"tenant_id": "org-a"}}
+        )
+        monkeypatch.setattr(
+            auth_validator,
+            "get_user_tenant_membership",
+            lambda uid, tok: [{"organization_id": "org-a", "role": "admin"}]
+        )
+        monkeypatch.setattr(auth_validator, "revoke_applicant_token", lambda tok: False)
+
+        token = av.create_applicant_token("PID-REV-FAIL", "PAN_FACE", "org-a", ttl_seconds=3600)
+        resp = self.client.post(
+            "/api/v1/auth/applicant_session/revoke",
+            json={"token": token},
+            headers={"Authorization": "Bearer admin-token-org-a"}
+        )
+        assert resp.status_code == 503
+
+
+class TestApplicantExternalRefSecurity:
+    """Tests ensuring external_ref is controlled by tenant admins only and immutable by applicants."""
+
+    @pytest.fixture(autouse=True)
+    def setup_client(self):
+        import engine
+        engine.app.config["TESTING"] = True
+        self.client = engine.app.test_client()
+
+    def test_external_ref_accepted_in_session_and_embedded_in_token(self, monkeypatch):
+        import auth_validator
+        monkeypatch.setattr(
+            auth_validator,
+            "verify_supabase_token",
+            lambda tok: {"id": "admin-1", "email": "admin@org-1.com", "user_metadata": {"tenant_id": "org-1"}}
+        )
+        monkeypatch.setattr(
+            auth_validator,
+            "get_user_tenant_membership",
+            lambda uid, tok: [{"organization_id": "org-1", "role": "admin"}]
+        )
+
+        resp = self.client.post(
+            "/api/v1/auth/applicant_session",
+            json={
+                "flow": "PAN",
+                "external_ref": "ext-admin-ref-12345"
+            },
+            headers={"Authorization": "Bearer admin-token"}
+        )
+        assert resp.status_code == 200
+        data = resp.get_json()
+        token = data.get("applicant_token")
+        assert token is not None
+
+        decoded = auth_validator.verify_applicant_token(token)
+        assert decoded.get("external_ref") == "ext-admin-ref-12345"
+
+    def test_applicant_supplied_external_ref_ignored_in_verification(self, monkeypatch):
+        import engine
+        import supabase_client
+
+        upserted_rows = []
+        monkeypatch.setattr(
+            supabase_client,
+            "upsert_verification_record",
+            lambda payload, auth_token=None: upserted_rows.append(payload) or {"status": "success", "synced": True}
+        )
+        monkeypatch.setattr(engine, "extract_and_align_face", lambda img, orig: (img, {"source": "test"}))
+        monkeypatch.setattr(engine, "_cross_verify_uploaded_vs_live", lambda refs, h, i: {"face_match": True, "step3_face_matches": [{"verified": True}]})
+
+        # Token created with admin-supplied external_ref
+        token = av.create_applicant_token("PID-EXT-REF", "LIVE_VERIFY", "org-test", ttl_seconds=3600, external_ref="token-authoritative-ref")
+
+        import base64
+        tiny_png = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")
+        tiny_b64 = "data:image/png;base64," + base64.b64encode(tiny_png).decode("utf-8")
+
+        resp = self.client.post(
+            "/api/v1/live_verify",
+            json={
+                "image": tiny_b64,
+                "external_ref": "attacker-spoofed-ref"
+            },
+            headers={"X-Applicant-Token": token}
+        )
+        assert resp.status_code == 200
+        assert len(upserted_rows) >= 1
+        assert upserted_rows[-1].get("external_ref") == "token-authoritative-ref"
+
+
+class TestApplicantOcrStepCompletionAndAttemptCap:
+    """Test applicant OCR step completion requires detection + parsed fields, and attempt cap of 5."""
+
+    @pytest.fixture(autouse=True)
+    def setup_client(self):
+        import engine
+        engine.app.config["TESTING"] = True
+        self.client = engine.app.test_client()
+
+    def test_blurry_or_unreadable_upload_does_not_complete_step_or_revoke_token(self, monkeypatch):
+        import engine
+        import supabase_client
+        import io
+        from PIL import Image
+
+        img = Image.new("RGB", (200, 200), color=(100, 100, 100))
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG")
+        jpg_bytes = buf.getvalue()
+
+        monkeypatch.setattr(
+            engine,
+            "check_image_quality",
+            lambda img_np: {"blur_status": "BLURRY", "passed": False}
+        )
+        monkeypatch.setattr(
+            engine,
+            "best_ocr_pass",
+            lambda warped_img, upload_folder, stem, hinted_type=None: (
+                warped_img, [], [], 0.0, {"document_type": "UNKNOWN"}, "mild"
+            )
+        )
+        monkeypatch.setattr(
+            supabase_client,
+            "upsert_verification_record",
+            lambda payload, auth_token=None: {"status": "success", "synced": True}
+        )
+
+        token = av.create_applicant_token("PID-BLURRY-TEST", "PAN", "org-test", ttl_seconds=3600)
+
+        resp = self.client.post(
+            "/api/v1/ocr",
+            data={"file": (io.BytesIO(jpg_bytes), "blurry.jpg"), "document_type": "PAN"},
+            headers={"X-Applicant-Token": token},
+            content_type="multipart/form-data"
+        )
+        assert resp.status_code == 200
+
+        token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
+        session_state = av._ACTIVE_APPLICANT_SESSIONS.get(token_hash, {})
+        assert "PAN" not in session_state.get("completed_steps", set())
+        assert "OCR" not in session_state.get("completed_steps", set())
+
+        verified = av.verify_applicant_token(token)
+        assert verified["pid"] == "PID-BLURRY-TEST"
+
+    def test_applicant_token_attempt_cap_exceeded_returns_429(self, monkeypatch):
+        import engine
+        import supabase_client
+        import io
+        from PIL import Image
+
+        img = Image.new("RGB", (200, 200), color=(100, 100, 100))
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG")
+        jpg_bytes = buf.getvalue()
+
+        monkeypatch.setattr(
+            engine,
+            "check_image_quality",
+            lambda img_np: {"blur_status": "BLURRY", "passed": False}
+        )
+        monkeypatch.setattr(
+            engine,
+            "best_ocr_pass",
+            lambda warped_img, upload_folder, stem, hinted_type=None: (
+                warped_img, [], [], 0.0, {"document_type": "UNKNOWN"}, "mild"
+            )
+        )
+        monkeypatch.setattr(
+            supabase_client,
+            "upsert_verification_record",
+            lambda payload, auth_token=None: {"status": "success", "synced": True}
+        )
+
+        token = av.create_applicant_token("PID-ATTEMPT-CAP", "PAN", "org-test", ttl_seconds=3600)
+
+        for attempt in range(1, 6):
+            resp = self.client.post(
+                "/api/v1/ocr",
+                data={"file": (io.BytesIO(jpg_bytes), f"attempt_{attempt}.jpg")},
+                headers={"X-Applicant-Token": token},
+                content_type="multipart/form-data"
+            )
+            assert resp.status_code == 200, f"Attempt {attempt} should succeed, got {resp.status_code}"
+
+        resp6 = self.client.post(
+            "/api/v1/ocr",
+            data={"file": (io.BytesIO(jpg_bytes), "attempt_6.jpg")},
+            headers={"X-Applicant-Token": token},
+            content_type="multipart/form-data"
+        )
+        assert resp6.status_code == 429, f"Expected 429 after 5 attempts, got {resp6.status_code}"
+
+
+class TestVerificationRecordUpsertFailureHandling:
+    """Test that non-success status from upsert_verification_record returns HTTP 502 with retry-safe message."""
+
+    @pytest.fixture(autouse=True)
+    def setup_client(self):
+        import engine
+        engine.app.config["TESTING"] = True
+        self.client = engine.app.test_client()
+
+    def test_run_ocr_upsert_failure_returns_502(self, monkeypatch):
+        import engine
+        import supabase_client
+        import io
+        from PIL import Image
+
+        img = Image.new("RGB", (200, 200), color=(100, 100, 100))
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG")
+        jpg_bytes = buf.getvalue()
+
+        monkeypatch.setattr(
+            supabase_client,
+            "upsert_verification_record",
+            lambda payload, auth_token=None: {"status": "error", "message": "Database sync failed"}
+        )
+
+        token = av.create_applicant_token("PID-502-OCR", "PAN", "org-test", ttl_seconds=3600)
+
+        resp = self.client.post(
+            "/api/v1/ocr",
+            data={"file": (io.BytesIO(jpg_bytes), "pan.jpg"), "document_type": "PAN"},
+            headers={"X-Applicant-Token": token},
+            content_type="multipart/form-data"
+        )
+        assert resp.status_code == 502, f"Expected 502, got {resp.status_code}"
+        data = resp.get_json()
+        assert data["status"] == "error"
+        assert "retry" in data["message"].lower()
+
+    def test_live_verify_upsert_failure_returns_502(self, monkeypatch):
+        import engine
+        import supabase_client
+        import base64
+
+        monkeypatch.setattr(engine, "extract_and_align_face", lambda img, orig: (img, {"source": "test"}))
+        monkeypatch.setattr(engine, "_cross_verify_uploaded_vs_live", lambda refs, h, i: {"face_match": True, "step3_face_matches": [{"verified": True}]})
+        monkeypatch.setattr(
+            supabase_client,
+            "upsert_verification_record",
+            lambda payload, auth_token=None: {"status": "error", "message": "Database sync failed"}
+        )
+
+        token = av.create_applicant_token("PID-502-LIVE", "LIVE_VERIFY", "org-test", ttl_seconds=3600)
+
+        tiny_png = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")
+        tiny_b64 = "data:image/png;base64," + base64.b64encode(tiny_png).decode("utf-8")
+
+        resp = self.client.post(
+            "/api/v1/live_verify",
+            json={"image": tiny_b64},
+            headers={"X-Applicant-Token": token}
+        )
+        assert resp.status_code == 502, f"Expected 502, got {resp.status_code}"
+        data = resp.get_json()
+        assert data["status"] == "error"
+        assert "retry" in data["message"].lower()
+
+
+class TestDocumentTypeFieldEnforcement:
+    """Test _is_doc_detected_and_fields_parsed requires specific fields per doc type:
+    pan_number for PAN, aadhaar_number for Aadhaar, dl_number for DL, and id_number for Voter ID."""
+
+    @pytest.fixture(autouse=True)
+    def setup_client(self):
+        import engine
+        engine.app.config["TESTING"] = True
+        self.client = engine.app.test_client()
+
+    def test_parsed_dl_completes_step(self, monkeypatch):
+        import engine
+        import supabase_client
+        import io, cv2, numpy as np
+
+        arr = np.zeros((20, 20, 3), dtype=np.uint8)
+        _, buf = cv2.imencode(".jpg", arr)
+        jpg_bytes = buf.tobytes()
+
+        monkeypatch.setattr(engine, "load_cv_image", lambda path: arr)
+        monkeypatch.setattr(engine, "check_image_quality", lambda img: {"blur_status": "OK", "passed": True})
+        monkeypatch.setattr(engine, "detect_and_warp_document", lambda img: (img, True))
+        monkeypatch.setattr(engine, "extract_and_align_face", lambda img, orig: (img, {"source": "test"}))
+        monkeypatch.setattr(
+            engine,
+            "best_ocr_pass",
+            lambda img, folder, stem, hinted_type=None: (
+                img, ["DRIVING LICENCE", "DL DL-1420110012345", "ALICE"], [0.99], 0.99,
+                {"name": "ALICE", "dl_number": "DL-1420110012345", "document_type": "DL"},
+                True
+            )
+        )
+        monkeypatch.setattr(engine, "_save_jpg", lambda path, img: True)
+        monkeypatch.setattr(supabase_client, "upsert_verification_record", lambda p, auth_token=None: {"status": "success", "synced": True})
+
+        token = av.create_applicant_token("PID-DL-STEP", "DL_FACE", "org-test", ttl_seconds=3600)
+
+        resp = self.client.post(
+            "/api/v1/ocr",
+            data={"file": (io.BytesIO(jpg_bytes), "dl.jpg"), "document_type": "DL"},
+            headers={"X-Applicant-Token": token},
+            content_type="multipart/form-data"
+        )
+        assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.get_data(as_text=True)}"
+
+        token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
+        session_state = av._ACTIVE_APPLICANT_SESSIONS.get(token_hash, {})
+        assert "DL" in session_state.get("completed_steps", set())
+        assert "OCR" in session_state.get("completed_steps", set())
+
+    def test_parsed_voter_id_completes_step(self, monkeypatch):
+        import engine
+        import supabase_client
+        import io, cv2, numpy as np
+
+        arr = np.zeros((20, 20, 3), dtype=np.uint8)
+        _, buf = cv2.imencode(".jpg", arr)
+        jpg_bytes = buf.tobytes()
+
+        monkeypatch.setattr(engine, "load_cv_image", lambda path: arr)
+        monkeypatch.setattr(engine, "check_image_quality", lambda img: {"blur_status": "OK", "passed": True})
+        monkeypatch.setattr(engine, "detect_and_warp_document", lambda img: (img, True))
+        monkeypatch.setattr(engine, "extract_and_align_face", lambda img, orig: (img, {"source": "test"}))
+        monkeypatch.setattr(
+            engine,
+            "best_ocr_pass",
+            lambda img, folder, stem, hinted_type=None: (
+                img, ["ELECTION COMMISSION OF INDIA", "XYZ1234567", "BOB"], [0.99], 0.99,
+                {"name": "BOB", "id_number": "XYZ1234567", "document_type": "VOTER_ID"},
+                True
+            )
+        )
+        monkeypatch.setattr(engine, "_save_jpg", lambda path, img: True)
+        monkeypatch.setattr(supabase_client, "upsert_verification_record", lambda p, auth_token=None: {"status": "success", "synced": True})
+
+        token = av.create_applicant_token("PID-VOTER-STEP", "VOTER_ID_FACE", "org-test", ttl_seconds=3600)
+
+        resp = self.client.post(
+            "/api/v1/ocr",
+            data={"file": (io.BytesIO(jpg_bytes), "voter.jpg"), "document_type": "VOTER_ID"},
+            headers={"X-Applicant-Token": token},
+            content_type="multipart/form-data"
+        )
+        assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.get_data(as_text=True)}"
+
+        token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
+        session_state = av._ACTIVE_APPLICANT_SESSIONS.get(token_hash, {})
+        assert "VOTER_ID" in session_state.get("completed_steps", set())
+        assert "OCR" in session_state.get("completed_steps", set())
+
+
+class TestAttemptExclusionOn5xx:
+    """Test that attempts ending in 5xx/502 are not counted towards the attempt cap."""
+
+    @pytest.fixture(autouse=True)
+    def setup_client(self):
+        import engine
+        engine.app.config["TESTING"] = True
+        self.client = engine.app.test_client()
+
+    def test_after_502_retry_succeeds_and_token_still_valid(self, monkeypatch):
+        import engine
+        import supabase_client
+        import io, cv2, numpy as np
+
+        arr = np.zeros((20, 20, 3), dtype=np.uint8)
+        _, buf = cv2.imencode(".jpg", arr)
+        jpg_bytes = buf.tobytes()
+
+        monkeypatch.setattr(engine, "load_cv_image", lambda path: arr)
+        # Use blur status to avoid auto-revoking token on success so we can verify token validity
+        monkeypatch.setattr(engine, "check_image_quality", lambda img: {"blur_status": "BLURRY", "passed": False})
+        monkeypatch.setattr(engine, "detect_and_warp_document", lambda img: (img, True))
+        monkeypatch.setattr(engine, "extract_and_align_face", lambda img, orig: (img, {"source": "test"}))
+        monkeypatch.setattr(
+            engine,
+            "best_ocr_pass",
+            lambda img, folder, stem, hinted_type=None: (
+                img, ["PAN ABCDE1234F"], [0.99], 0.99,
+                {"pan_number": "ABCDE1234F", "document_type": "pan"},
+                True
+            )
+        )
+        monkeypatch.setattr(engine, "_save_jpg", lambda path, img: True)
+
+        token = av.create_applicant_token("PID-502-RETRY", "PAN", "org-test", ttl_seconds=3600)
+
+        # 1. Simulate 5 failed calls that return 502 (e.g. database sync failure)
+        monkeypatch.setattr(
+            supabase_client,
+            "upsert_verification_record",
+            lambda payload, auth_token=None: {"status": "error", "message": "Supabase temporary timeout"}
+        )
+
+        for i in range(5):
+            res_502 = self.client.post(
+                "/api/v1/ocr",
+                data={"file": (io.BytesIO(jpg_bytes), f"doc_{i}.jpg"), "document_type": "PAN"},
+                headers={"X-Applicant-Token": token},
+                content_type="multipart/form-data"
+            )
+            assert res_502.status_code == 502
+
+        # 2. Now database recovers and sync succeeds
+        monkeypatch.setattr(
+            supabase_client,
+            "upsert_verification_record",
+            lambda payload, auth_token=None: {"status": "success", "synced": True}
+        )
+
+        # 3. Retry must succeed and NOT return 429
+        retry_res = self.client.post(
+            "/api/v1/ocr",
+            data={"file": (io.BytesIO(jpg_bytes), "doc_retry.jpg"), "document_type": "PAN"},
+            headers={"X-Applicant-Token": token},
+            content_type="multipart/form-data"
+        )
+        assert retry_res.status_code == 200, f"Expected 200 on retry after 502, got {retry_res.status_code}"
+
+        # Token must still be valid
+        verified = av.verify_applicant_token(token)
+        assert verified["pid"] == "PID-502-RETRY"
+
+
+class TestApplicantExternalRefLengthCap:
+    """Test create_applicant_session_api caps external_ref at 255 chars (400 above it)."""
+
+    @pytest.fixture(autouse=True)
+    def setup_client(self):
+        import engine
+        engine.app.config["TESTING"] = True
+        self.client = engine.app.test_client()
+
+    def test_external_ref_over_255_chars_returns_400(self, monkeypatch):
+        import auth_validator
+        monkeypatch.setattr(
+            auth_validator,
+            "verify_supabase_token",
+            lambda tok: {"id": "admin-len", "email": "admin@org-len.com", "user_metadata": {"tenant_id": "org-len"}}
+        )
+        monkeypatch.setattr(
+            auth_validator,
+            "get_user_tenant_membership",
+            lambda uid, tok: [{"organization_id": "org-len", "role": "admin"}]
+        )
+
+        # 256 characters -> must return 400
+        long_ref = "x" * 256
+        resp_400 = self.client.post(
+            "/api/v1/auth/applicant_session",
+            json={"flow": "PAN", "external_ref": long_ref},
+            headers={"Authorization": "Bearer admin-token"}
+        )
+        assert resp_400.status_code == 400, f"Expected 400 for 256-char external_ref, got {resp_400.status_code}"
+        assert resp_400.get_json()["status"] == "error"
+
+        # 255 characters -> must succeed with 200
+        valid_ref = "y" * 255
+        resp_200 = self.client.post(
+            "/api/v1/auth/applicant_session",
+            json={"flow": "PAN", "external_ref": valid_ref},
+            headers={"Authorization": "Bearer admin-token"}
+        )
+        assert resp_200.status_code == 200, f"Expected 200 for 255-char external_ref, got {resp_200.status_code}"
+
+
+class TestUploadFolderRetentionCleanup:
+    """Test cleanup function deletes files in UPLOAD_FOLDER older than RETENTION_HOURS (env var, default 24)."""
+
+    def test_cleanup_expired_assets_with_fake_old_files(self, monkeypatch, tmp_path):
+        import engine
+        import time
+
+        upload_dir = str(tmp_path / "uploads")
+        os.makedirs(upload_dir, exist_ok=True)
+
+        old_file1 = os.path.join(upload_dir, "old_id_1.jpg")
+        old_file2 = os.path.join(upload_dir, "old_id_2.jpg")
+        fresh_file = os.path.join(upload_dir, "recent_id.jpg")
+
+        for f in (old_file1, old_file2, fresh_file):
+            with open(f, "wb") as fp:
+                fp.write(b"fake image data")
+
+        now = time.time()
+        # Set old files to 26 hours ago and 48 hours ago
+        os.utime(old_file1, (now - 26 * 3600, now - 26 * 3600))
+        os.utime(old_file2, (now - 48 * 3600, now - 48 * 3600))
+        # Set fresh file to 1 hour ago
+        os.utime(fresh_file, (now - 1 * 3600, now - 1 * 3600))
+
+        # Test env var RETENTION_HOURS default 24
+        monkeypatch.setenv("RETENTION_HOURS", "24")
+        purged = engine.cleanup_expired_assets(upload_folder=upload_dir)
+
+        assert purged == 2, f"Expected 2 purged files, got {purged}"
+        assert not os.path.exists(old_file1)
+        assert not os.path.exists(old_file2)
+        assert os.path.exists(fresh_file)
+
+    def test_cleanup_script_execution(self, tmp_path):
+        import subprocess
+        import time
+
+        upload_dir = str(tmp_path / "script_uploads")
+        os.makedirs(upload_dir, exist_ok=True)
+
+        old_file = os.path.join(upload_dir, "expired.jpg")
+        with open(old_file, "wb") as fp:
+            fp.write(b"fake data")
+
+        now = time.time()
+        os.utime(old_file, (now - 30 * 3600, now - 30 * 3600))
+
+        script_path = os.path.join("products", "ocr_engine", "cleanup_assets.py")
+        res = subprocess.run(
+            [sys.executable, script_path, "--upload-folder", upload_dir, "--retention-hours", "24"],
+            capture_output=True,
+            text=True
+        )
+        assert res.returncode == 0, f"Script failed: {res.stderr}"
+        assert "removed 1 file" in res.stdout.lower() or "purged 1 file" in res.stdout.lower()
+        assert not os.path.exists(old_file)
+
+
+
+
+
+
+
+
+
+
+
+
+
+

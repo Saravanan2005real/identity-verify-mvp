@@ -3720,5 +3720,6 @@ def purge_expired_assets_api():
 if __name__ == '__main__':
     port = int(os.getenv("PORT", "5001"))
     print(f"* Starting Verifyyy AI OCR Engine on http://127.0.0.1:{port}...")
-    app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
+    if os.getenv("OCR_STANDALONE", "1").strip() in ("1", "true", "yes"):
+        app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
 

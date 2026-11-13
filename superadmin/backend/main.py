@@ -278,4 +278,8 @@ def revoke_superadmin_endpoint(req: RevokeAdminRequest, db: Session = Depends(ge
     db.commit()
     return {"status": "success", "message": f"Superadmin access for {clean_email} revoked."}
 
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8000)
+
 

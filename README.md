@@ -42,6 +42,7 @@
   - [4. Dual-Mode Token Revocation Engine](#4-dual-mode-token-revocation-engine)
   - [5. PII Masking & Data Sanitization](#5-pii-masking--data-sanitization)
   - [6. Multi-Tenant Isolation & Row-Level Security](#6-multi-tenant-isolation--row-level-security)
+- [Vercel & Cloud Deployment](#vercel--cloud-deployment)
 - [Port & Service Routing Matrix](#port--service-routing-matrix)
 - [Database & Cloud Sync (Supabase)](#database--cloud-sync-supabase)
   - [1. Database Schema DDL & Hardened RLS Migrations](#1-database-schema-ddl--hardened-rls-migrations)
@@ -1231,11 +1232,27 @@ pytest tests/test_security_controls.py -m "integ" -v
 
 ---
 
+## Vercel & Cloud Deployment
+
+Verifyyy includes native configuration for one-click deployment on **Vercel** or other modern cloud hosts.
+
+### 1. Unified Routing Configuration (ercel.json)
+The included ercel.json configures zero-config static hosting with seamless URL rewrites:
+- Routes root / and static assets to index.html and the products/ directory.
+- Rewrites /verify to /products/verify.html for clean applicant links.
+- Rewrites /admin to the Client Admin portal and /superadmin to the Superadmin portal.
+
+### 2. Root Navigation Dashboard (index.html)
+The root index.html serves as a responsive portal dashboard providing direct, single-click access to:
+- **Client Admin Portal** (http://localhost:8082)
+- **Superadmin Portal** (http://localhost:8081)
+- **Dynamic Flow Runner** (/products/verify.html)
+- **Interactive Demos** (OCR & Face Match, WebGazer Eye Tracking, Audio Liveness)
+- **Architecture Documentation & System Telemetry**
+
+---
+
 ## License & Compliance
 
 ### License
-Distributed under the **MIT License**. See `LICENSE` for complete details.
-
-### Regulatory Compliance Notice
-- **UIDAI Compliance (India):** Built-in masking ensures that the first 8 digits of 12-digit Aadhaar numbers are never stored in plain text or rendered in audit tables (`XXXX-XXXX-1234`).
-- **GDPR & DPDP Act:** Ephemeral asset retention policies and cryptographic HMAC URL expiry ensure compliance with data minimization and the right to erasure principles.
+Distributed under the **MIT License**. See LICENSE for complete details.

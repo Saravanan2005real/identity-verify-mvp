@@ -1,4 +1,10 @@
-﻿import os
+# ==============================================================================
+# DEV-ONLY: products/serve_5174.py
+# This reverse-proxy script is for local development and offline testing only.
+# In production, use products/nginx.conf (Nginx container gateway).
+# ==============================================================================
+
+import os
 import sys
 import urllib.request
 import urllib.error

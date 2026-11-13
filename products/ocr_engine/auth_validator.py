@@ -22,6 +22,7 @@ import os
 import sys
 import time
 import json
+import re
 import hmac
 import hashlib
 import base64
@@ -40,6 +41,26 @@ _MIN_SECRET_LEN = 32
 _ACTIVE_APPLICANT_SESSIONS: dict = {}
 _REVOKED_TOKEN_HASHES: set = set()
 _TOKEN_ATTEMPTS: dict = {}
+_TOKEN_REQUESTS: dict = {}
+
+
+def record_applicant_request(token: str) -> int:
+    """Record an incoming request for the applicant token (never rolled back). Returns total request count."""
+    try:
+        token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        _TOKEN_REQUESTS[token_hash] = _TOKEN_REQUESTS.get(token_hash, 0) + 1
+        return _TOKEN_REQUESTS[token_hash]
+    except Exception:
+        return 1
+
+
+def get_applicant_total_requests(token: str) -> int:
+    """Get total request count for an applicant token."""
+    try:
+        token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        return _TOKEN_REQUESTS.get(token_hash, 0)
+    except Exception:
+        return 0
 
 
 def record_applicant_attempt(token: str) -> int:
@@ -64,7 +85,7 @@ def get_applicant_attempts(token: str) -> int:
 
 
 def rollback_applicant_attempt(token: str) -> int:
-    """Do not count attempts that end in 5xx / 502. Roll back attempt count."""
+    """Do not count attempts that end in Supabase-sync 502. Roll back attempt count."""
     try:
         token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
         if token_hash in _TOKEN_ATTEMPTS and _TOKEN_ATTEMPTS[token_hash] > 0:
@@ -197,12 +218,17 @@ def validate_production_config() -> None:
 # ---------------------------------------------------------------------------
 
 def _is_placeholder_secret(val: str) -> bool:
+    """
+    Validates cryptographic secrets.
+    Must be a hexadecimal string of at least 64 characters (^[0-9a-fA-F]{64,}$).
+    Rejects placeholders, non-hex strings, and single repeated characters.
+    """
     if not val:
         return True
     s = str(val).strip()
-    if "CHANGE_ME" in s or "your-" in s:
+    if not re.fullmatch(r"^[0-9a-fA-F]{64,}$", s):
         return True
-    if len(s) > 1 and len(set(s)) == 1:
+    if len(set(s)) <= 1:
         return True
     return False
 
@@ -218,7 +244,7 @@ def validate_startup_secrets() -> None:
     errors = []
     if not SUPABASE_URL or SUPABASE_URL.startswith("https://your-project-ref") or "your-" in SUPABASE_URL or "CHANGE_ME" in SUPABASE_URL:
         errors.append("SUPABASE_URL is not configured or contains placeholder.")
-    if not SUPABASE_KEY or _is_placeholder_secret(SUPABASE_KEY):
+    if not SUPABASE_KEY or SUPABASE_KEY.startswith("your-") or "CHANGE_ME" in SUPABASE_KEY or (len(SUPABASE_KEY.strip()) > 1 and len(set(SUPABASE_KEY.strip())) == 1):
         errors.append("SUPABASE_KEY (publishable/anon key) is not configured or contains placeholder.")
     if not APPLICANT_SESSION_SECRET:
         errors.append("APPLICANT_SESSION_SECRET is not set.")

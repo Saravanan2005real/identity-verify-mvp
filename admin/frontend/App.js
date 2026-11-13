@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Dimensions, Modal, Image, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Dimensions, Modal, Image, ActivityIndicator, Platform } from 'react-native';
 import SignInScreen from './SignInScreen';
 import * as Linking from 'expo-linking';
 import { supabase } from './lib/supabase';
@@ -8,8 +8,14 @@ import { signOut } from './src/services/auth';
 
 const { width } = Dimensions.get('window');
 
+const isDev = process.env.NODE_ENV === 'development' || process.env.APP_ENV === 'development';
+
 const API_BASE_URL = (
-  process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:5001'
+  process.env.EXPO_PUBLIC_API_BASE_URL || (isDev ? 'http://localhost:5001' : '')
+).replace(/\/+$/, '');
+
+const VERIFY_BASE_URL = (
+  process.env.EXPO_PUBLIC_VERIFY_BASE_URL || (isDev ? 'http://localhost:5174' : '')
 ).replace(/\/+$/, '');
 
 const COLORS = {
@@ -125,12 +131,27 @@ export default function App() {
   // --- Pipeline Builder & Manage Links State ---
   const [availableModules, setAvailableModules] = useState([]);
   const [pipeline, setPipeline] = useState([]);
+  const [draggedIndex, setDraggedIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
+  // Refs: keep sync copies so drop handler never reads stale closure values
+  const draggedIndexRef = useRef(null);
+  const dragOverIndexRef = useRef(null);
   const [savedPipelines, setSavedPipelines] = useState([]);
   const [selectedPipeline, setSelectedPipeline] = useState(null);
   const [pipelineDetailVisible, setPipelineDetailVisible] = useState(false);
   
   const [generatedLink, setGeneratedLink] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  const copyToClipboard = (text) => {
+    if (!text) return;
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2500);
+    }
+  };
 
   // --- Manual Review State ---
   const [reviewQueue, setReviewQueue] = useState([]);
@@ -292,15 +313,84 @@ export default function App() {
     setPipeline(pipeline.filter(m => m.uniqueId !== uniqueId));
   };
 
+  const moveModule = (fromIndex, toIndex) => {
+    if (fromIndex === null || toIndex === null || fromIndex === toIndex) return;
+    setPipeline(prev => {
+      if (fromIndex < 0 || fromIndex >= prev.length || toIndex < 0 || toIndex >= prev.length) return prev;
+      const updated = [...prev];
+      const [moved] = updated.splice(fromIndex, 1);
+      updated.splice(toIndex, 0, moved);
+      return updated;
+    });
+  };
+
+  // ── Drag & Drop (real DOM events via <div> so browser fires them correctly) ──
+  //
+  // dragOverIndex = insertion point (0..pipeline.length), not "hovered card index"
+  //   inserting at 0 → before first card
+  //   inserting at n → after last card
+  //   top half of card i → insertAt = i  (before card i)
+  //   bottom half of card i → insertAt = i+1 (after card i)
+
+  const _onDragStart = (e, index) => {
+    draggedIndexRef.current = index;
+    dragOverIndexRef.current = null;
+    setDraggedIndex(index);
+    setDragOverIndex(null);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(index));
+  };
+
+  const _onDragOver = (e, index) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    // Use currentTarget (the card div) for a stable bounding rect
+    const rect = e.currentTarget.getBoundingClientRect();
+    const insertAt = e.clientY < rect.top + rect.height / 2 ? index : index + 1;
+    if (dragOverIndexRef.current !== insertAt) {
+      dragOverIndexRef.current = insertAt;
+      setDragOverIndex(insertAt);
+    }
+  };
+
+  const _onDrop = (e, _index) => {
+    e.preventDefault();
+    const src = draggedIndexRef.current;
+    const insertAt = dragOverIndexRef.current;
+    draggedIndexRef.current = null;
+    dragOverIndexRef.current = null;
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+    if (src !== null && insertAt !== null) {
+      // Adjust destination: after removal of src, indices after src shift down by 1
+      const dest = insertAt > src ? insertAt - 1 : insertAt;
+      if (dest !== src) moveModule(src, dest);
+    }
+  };
+
+  const _onDragEnd = () => {
+    draggedIndexRef.current = null;
+    dragOverIndexRef.current = null;
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  // Helper: should we render the drop indicator before card at `index`?
+  const _showDropBefore = (index) =>
+    draggedIndex !== null &&
+    dragOverIndex === index &&
+    dragOverIndex !== draggedIndex &&
+    dragOverIndex !== draggedIndex + 1;
+
   const generateLink = async () => {
     if (pipeline.length === 0) return;
 
     const flowParams = pipeline.map(m => m.id).join(',');
     const pid = `FLOW-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
 
-    const origin = (typeof window !== 'undefined' && window.location && window.location.hostname)
+    const origin = VERIFY_BASE_URL || ((typeof window !== 'undefined' && window.location && window.location.hostname && isDev)
       ? `${window.location.protocol}//${window.location.hostname}:5174`
-      : 'http://localhost:5174';
+      : (isDev ? 'http://localhost:5174' : ''));
 
     let applicantToken = '';
     try {
@@ -324,6 +414,7 @@ export default function App() {
 
     const tokenQuery = applicantToken ? `&applicant_token=${encodeURIComponent(applicantToken)}` : '';
     const link = `${origin}/verify.html?flow=${encodeURIComponent(flowParams)}&pid=${pid}${tokenQuery}`;
+    setLinkCopied(false);
     setGeneratedLink(link);
     setModalVisible(true);
 
@@ -448,28 +539,230 @@ export default function App() {
         </View>
 
         <View style={[styles.card, { flex: 2 }]}>
-            <Text style={styles.cardTitle}>Your Pipeline Canvas</Text>
-            
-            <View style={styles.pipelineCanvas}>
+            {/* Header */}
+            <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16}}>
+                <Text style={styles.cardTitle}>Your Pipeline Canvas</Text>
+                {pipeline.length > 1 && (
+                    <View style={{flexDirection: 'row', alignItems: 'center', gap: 6,
+                        backgroundColor: 'rgba(45,212,191,0.1)', paddingHorizontal: 10,
+                        paddingVertical: 4, borderRadius: 20}}>
+                        <Text style={{fontSize: 12}}>✋</Text>
+                        <Text style={{fontSize: 11, color: COLORS.primary, fontWeight: '600'}}>
+                            Drag to reorder
+                        </Text>
+                    </View>
+                )}
+            </View>
+
+            {/* Canvas area */}
+            <View style={[
+                styles.pipelineCanvas,
+                draggedIndex !== null && {
+                    borderColor: 'rgba(45,212,191,0.6)',
+                    backgroundColor: 'rgba(240,253,250,0.9)',
+                }
+            ]}>
                 {pipeline.length === 0 ? (
                     <View style={styles.canvasEmpty}>
-                        <Text style={{color: COLORS.textMuted, textAlign: 'center'}}>Your pipeline is empty.</Text>
-                        <Text style={{color: COLORS.textMuted, textAlign: 'center', fontSize: 12, marginTop: 4}}>Add modules from the left panel.</Text>
+                        <Text style={{fontSize: 32, marginBottom: 8}}>📋</Text>
+                        <Text style={{color: COLORS.textMuted, textAlign: 'center', fontWeight: '600'}}>
+                            Your pipeline is empty
+                        </Text>
+                        <Text style={{color: COLORS.textMuted, textAlign: 'center', fontSize: 12, marginTop: 4}}>
+                            Click modules on the left to add them
+                        </Text>
                     </View>
                 ) : (
-                    pipeline.map((mod, index) => (
-                        <View key={mod.uniqueId} style={{alignItems: 'center'}}>
-                            <View style={styles.pipelineNode}>
-                                <Text style={styles.pipelineNodeText}>{mod.name}</Text>
-                                <TouchableOpacity onPress={() => removeModuleFromPipeline(mod.uniqueId)}>
-                                    <Text style={{color: COLORS.danger, fontSize: 18, fontWeight: 'bold'}}>×</Text>
-                                </TouchableOpacity>
-                            </View>
-                            {index < pipeline.length - 1 && (
-                                <View style={styles.pipelineConnector} />
-                            )}
-                        </View>
-                    ))
+                    <div style={{ width: '100%' }}>
+                        {/* Inject hover CSS once */}
+                        <style>{`
+                            .pipe-card { transition: box-shadow 0.15s ease, transform 0.1s ease, opacity 0.15s ease; }
+                            .pipe-card:hover:not(.pipe-dragging) { box-shadow: 0 6px 20px rgba(15,118,110,0.15) !important; transform: translateY(-1px); }
+                            .pipe-remove:hover { background: rgba(239,68,68,0.2) !important; transform: scale(1.1); }
+                            .pipe-remove { transition: background 0.15s ease, transform 0.15s ease; }
+                        `}</style>
+
+                        {pipeline.map((mod, index) => (
+                            <React.Fragment key={mod.uniqueId}>
+
+                                {/* ── Drop indicator line before this card ── */}
+                                {_showDropBefore(index) && (
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 6,
+                                        margin: '4px 0',
+                                    }}>
+                                        <div style={{ width: 8, height: 8, borderRadius: 4, background: '#0f766e', flexShrink: 0 }} />
+                                        <div style={{ flex: 1, height: 2, background: 'linear-gradient(90deg, #0f766e, #2dd4bf)', borderRadius: 1, boxShadow: '0 0 6px rgba(15,118,110,0.4)' }} />
+                                        <div style={{ width: 8, height: 8, borderRadius: 4, background: '#2dd4bf', flexShrink: 0 }} />
+                                    </div>
+                                )}
+
+                                {/* ── Draggable card ── */}
+                                <div
+                                    className={`pipe-card${draggedIndex === index ? ' pipe-dragging' : ''}`}
+                                    draggable={true}
+                                    onDragStart={(e) => _onDragStart(e, index)}
+                                    onDragOver={(e) => _onDragOver(e, index)}
+                                    onDrop={(e) => _onDrop(e, index)}
+                                    onDragEnd={_onDragEnd}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 12,
+                                        background: draggedIndex === index
+                                            ? 'rgba(240,253,250,0.6)'
+                                            : '#fff',
+                                        opacity: draggedIndex === index ? 0.3 : 1,
+                                        border: draggedIndex === index
+                                            ? '2px dashed #2dd4bf'
+                                            : '1.5px solid rgba(45,212,191,0.3)',
+                                        borderLeft: draggedIndex === index
+                                            ? '2px dashed #2dd4bf'
+                                            : '4px solid #0f766e',
+                                        borderRadius: 12,
+                                        padding: '14px 16px 14px 12px',
+                                        cursor: draggedIndex !== null ? 'grabbing' : 'grab',
+                                        userSelect: 'none',
+                                        boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                                        boxSizing: 'border-box',
+                                        width: '100%',
+                                        marginBottom: 0,
+                                    }}
+                                >
+                                    {/* ── 2×3 dot grip handle ── */}
+                                    <div style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: '4px 4px',
+                                        gridTemplateRows: '4px 4px 4px',
+                                        gap: 3,
+                                        cursor: 'grab',
+                                        flexShrink: 0,
+                                        padding: '2px 4px',
+                                        opacity: 0.35,
+                                    }}>
+                                        {[0,1,2,3,4,5].map(i => (
+                                            <div key={i} style={{ width: 4, height: 4, borderRadius: 2, background: '#475569' }} />
+                                        ))}
+                                    </div>
+
+                                    {/* ── Step badge (gradient circle) ── */}
+                                    <div style={{
+                                        minWidth: 30,
+                                        height: 30,
+                                        borderRadius: 15,
+                                        background: 'linear-gradient(135deg, #0f766e 0%, #2dd4bf 100%)',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        flexShrink: 0,
+                                        boxShadow: '0 2px 6px rgba(15,118,110,0.3)',
+                                    }}>
+                                        <span style={{
+                                            color: '#fff',
+                                            fontSize: 12,
+                                            fontWeight: 800,
+                                            lineHeight: 1,
+                                            fontFamily: 'system-ui, sans-serif',
+                                        }}>{index + 1}</span>
+                                    </div>
+
+                                    {/* ── Module name + description ── */}
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{
+                                            fontWeight: 700,
+                                            color: '#0f172a',
+                                            fontSize: 14,
+                                            lineHeight: '20px',
+                                            fontFamily: 'system-ui, -apple-system, sans-serif',
+                                            whiteSpace: 'nowrap',
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                        }}>{mod.name}</div>
+                                        {mod.desc && (
+                                            <div style={{
+                                                color: '#94a3b8',
+                                                fontSize: 11,
+                                                marginTop: 2,
+                                                lineHeight: '16px',
+                                                fontFamily: 'system-ui, -apple-system, sans-serif',
+                                                whiteSpace: 'nowrap',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                            }}>{mod.desc}</div>
+                                        )}
+                                    </div>
+
+                                    {/* ── Remove button ── */}
+                                    <button
+                                        className="pipe-remove"
+                                        onClick={(e) => { e.stopPropagation(); removeModuleFromPipeline(mod.uniqueId); }}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        style={{
+                                            width: 30,
+                                            height: 30,
+                                            borderRadius: 15,
+                                            border: 'none',
+                                            background: 'rgba(239,68,68,0.08)',
+                                            color: '#ef4444',
+                                            fontSize: 20,
+                                            fontWeight: 700,
+                                            cursor: 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            flexShrink: 0,
+                                            lineHeight: 1,
+                                            paddingBottom: 1,
+                                        }}
+                                    >×</button>
+                                </div>
+
+                                {/* ── Flow arrow connector (only while NOT dragging) ── */}
+                                {index < pipeline.length - 1 && draggedIndex === null && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '2px auto' }}>
+                                        <div style={{ width: 2, height: 14, background: 'linear-gradient(to bottom, rgba(45,212,191,0.4), #0f766e)' }} />
+                                        <div style={{
+                                            width: 0, height: 0,
+                                            borderLeft: '5px solid transparent',
+                                            borderRight: '5px solid transparent',
+                                            borderTop: '7px solid #0f766e',
+                                        }} />
+                                    </div>
+                                )}
+
+                            </React.Fragment>
+                        ))}
+
+                        {/* ── Drop indicator after the last card ── */}
+                        {draggedIndex !== null &&
+                         dragOverIndex === pipeline.length &&
+                         dragOverIndex !== draggedIndex &&
+                         dragOverIndex !== draggedIndex + 1 && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '4px 0' }}>
+                                <div style={{ width: 8, height: 8, borderRadius: 4, background: '#0f766e', flexShrink: 0 }} />
+                                <div style={{ flex: 1, height: 2, background: 'linear-gradient(90deg, #0f766e, #2dd4bf)', borderRadius: 1, boxShadow: '0 0 6px rgba(15,118,110,0.4)' }} />
+                                <div style={{ width: 8, height: 8, borderRadius: 4, background: '#2dd4bf', flexShrink: 0 }} />
+                            </div>
+                        )}
+
+                        {/* ── Invisible bottom drop zone (drop onto empty space below cards) ── */}
+                        {draggedIndex !== null && (
+                            <div
+                                style={{ height: 32, width: '100%' }}
+                                onDragOver={(e) => {
+                                    e.preventDefault();
+                                    const dest = pipeline.length;
+                                    if (dragOverIndexRef.current !== dest) {
+                                        dragOverIndexRef.current = dest;
+                                        setDragOverIndex(dest);
+                                    }
+                                }}
+                                onDrop={(e) => _onDrop(e, pipeline.length - 1)}
+                            />
+                        )}
+                    </div>
                 )}
             </View>
 
@@ -639,13 +932,30 @@ export default function App() {
                   <Text style={{color: COLORS.textMuted, textAlign: 'center', marginBottom: 20}}>
                       Your custom verification flow link has been generated. Anyone opening this link will execute your configured pipeline steps in sequence.
                   </Text>
-                  <TouchableOpacity onPress={() => openGeneratedLink()} style={styles.linkBox}>
-                      <Text style={{color: COLORS.primary, fontFamily: 'monospace', textAlign: 'center', textDecorationLine: 'underline'}}>{generatedLink}</Text>
-                  </TouchableOpacity>
+                  <View style={styles.linkBox}>
+                      <Text
+                        selectable={true}
+                        style={styles.linkText}
+                        onPress={() => copyToClipboard(generatedLink)}
+                      >
+                        {generatedLink}
+                      </Text>
+                  </View>
                   
-                  <TouchableOpacity style={[styles.btn, {marginBottom: 12, backgroundColor: '#0f766e'}]} onPress={() => openGeneratedLink()}>
-                      <Text style={styles.btnText}>Open & Test Verification Flow 🚀</Text>
-                  </TouchableOpacity>
+                  <View style={{flexDirection: 'row', gap: 10, width: '100%', marginBottom: 12}}>
+                      <TouchableOpacity
+                        style={[styles.btn, {flex: 1, backgroundColor: linkCopied ? '#059669' : '#0f766e', marginBottom: 0}]}
+                        onPress={() => copyToClipboard(generatedLink)}
+                      >
+                          <Text style={styles.btnText}>{linkCopied ? 'Copied! ✓' : '📋 Copy Link'}</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.btn, {flex: 1, backgroundColor: '#0f766e', marginBottom: 0}]}
+                        onPress={() => openGeneratedLink()}
+                      >
+                          <Text style={styles.btnText}>Open Flow 🚀</Text>
+                      </TouchableOpacity>
+                  </View>
 
                   <TouchableOpacity style={styles.btnOutline} onPress={() => setModalVisible(false)}>
                       <Text style={styles.btnOutlineText}>Close</Text>
@@ -660,7 +970,7 @@ export default function App() {
               <View style={[styles.modalContent, { maxWidth: 900 }]}>
                   <Text style={styles.modalTitle}>Pipeline Analytics: {selectedPipeline?.pid}</Text>
                   <Text style={{color: COLORS.textMuted, textAlign: 'center', marginBottom: 20}}>
-                      Detailed applicant tracking for link: <Text style={{fontFamily: 'monospace', color: COLORS.primary}}>{selectedPipeline?.link}</Text>
+                      Detailed applicant tracking for link: <Text style={{fontFamily: 'monospace', color: COLORS.primary, ...(Platform.OS === 'web' ? { wordBreak: 'break-all', overflowWrap: 'anywhere' } : {})}}>{selectedPipeline?.link}</Text>
                   </Text>
 
                   <View style={{width: '100%', marginBottom: 20}}>
@@ -894,31 +1204,68 @@ const styles = StyleSheet.create({
       color: COLORS.textMuted,
   },
   pipelineCanvas: {
-      minHeight: 320,
+      minHeight: 300,
       borderWidth: 2,
       borderStyle: 'dashed',
       borderColor: COLORS.border,
       borderRadius: 16,
-      padding: 32,
+      padding: 20,
       backgroundColor: 'rgba(248, 250, 252, 0.5)',
+      alignItems: 'stretch',
+      justifyContent: 'flex-start',
+  },
+  canvasEmpty: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: 260,
+  },
+  pipelineNodeDragging: {
+      opacity: 0.3,
+  },
+  dropIndicator: {
+      width: '100%',
+      height: 3,
+      borderRadius: 2,
+      backgroundColor: COLORS.primary,
+      marginVertical: 2,
+  },
+  dragGrip: {
+      paddingHorizontal: 4,
+      paddingVertical: 4,
+  },
+  dragGripDots: {
+      fontSize: 16,
+      color: '#c0ccd8',
+  },
+  stepBadge: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: COLORS.primaryLight,
       alignItems: 'center',
       justifyContent: 'center',
   },
-  canvasEmpty: {
+  stepBadgeText: {
+      fontSize: 11,
+      fontWeight: '800',
+      color: COLORS.primary,
+  },
+  removeBtn: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
       alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(239,68,68,0.08)',
+  },
+  removeBtnText: {
+      color: COLORS.danger,
+      fontSize: 18,
+      fontWeight: 'bold',
   },
   pipelineNode: {
       backgroundColor: '#fff',
-      borderWidth: 1,
-      borderColor: COLORS.primaryLight,
-      paddingHorizontal: 24,
-      paddingVertical: 16,
-      borderRadius: 12,
-      minWidth: 250,
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      elevation: 2,
   },
   pipelineNodeText: {
       fontWeight: '700',
@@ -982,10 +1329,11 @@ const styles = StyleSheet.create({
   modalContent: {
       backgroundColor: '#fff',
       borderRadius: 24,
-      padding: 40,
+      padding: 32,
       width: '90%',
-      maxWidth: 500,
+      maxWidth: 520,
       alignItems: 'center',
+      overflow: 'hidden',
   },
   modalTitle: {
       fontSize: 24,
@@ -997,11 +1345,28 @@ const styles = StyleSheet.create({
       backgroundColor: COLORS.background,
       borderWidth: 1,
       borderColor: COLORS.border,
-      padding: 16,
+      padding: 14,
       borderRadius: 12,
       width: '100%',
-      marginBottom: 24,
-      alignItems: 'center',
+      maxWidth: '100%',
+      marginBottom: 20,
+      overflow: 'hidden',
+  },
+  linkText: {
+      color: COLORS.primary,
+      fontFamily: 'monospace',
+      fontSize: 12,
+      textAlign: 'left',
+      lineHeight: 18,
+      width: '100%',
+      maxWidth: '100%',
+      ...(Platform.OS === 'web' ? {
+          wordBreak: 'break-all',
+          overflowWrap: 'anywhere',
+          whiteSpace: 'pre-wrap',
+          userSelect: 'all',
+          cursor: 'pointer',
+      } : {}),
   },
   signOutBtn: {
       backgroundColor: 'rgba(239, 68, 68, 0.2)',

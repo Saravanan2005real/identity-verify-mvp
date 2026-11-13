@@ -2924,6 +2924,13 @@ def live_verify_api():
 
     # Workflow Step Enforcement: Check if live verification is allowed for this applicant token
     if caller_type == "applicant":
+        if raw_token:
+            total_reqs = auth_validator.record_applicant_request(raw_token)
+            if total_reqs > 20:
+                return jsonify({
+                    "status": "error",
+                    "message": "Too many requests. Hard cap of 20 requests exceeded for this session."
+                }), 429
         if not auth_validator.check_step_allowed(user_info, "LIVE_VERIFY"):
             return jsonify({"status": "error", "message": "Live face verification is not permitted in this pipeline."}), 403
 
@@ -3046,8 +3053,6 @@ def live_verify_api():
         }))
 
     except Exception as e:
-        if caller_type == "applicant" and raw_token:
-            auth_validator.rollback_applicant_attempt(raw_token)
         return jsonify({"status": "failed", "error": "An error occurred during live face verification"}), 500
 
 
@@ -3171,9 +3176,15 @@ def run_ocr():
     hinted_type = (request.form.get("document_type") or "").strip().upper() or None
     raw_token = request.headers.get("X-Applicant-Token") or request.args.get("applicant_token")
 
-    # Workflow Step Enforcement and Attempt Cap (max 5 attempts per token)
+    # Workflow Step Enforcement and Attempt Cap (max 5 attempts per token, hard cap of 20 total requests)
     if caller_type == "applicant":
         if raw_token:
+            total_reqs = auth_validator.record_applicant_request(raw_token)
+            if total_reqs > 20:
+                return jsonify({
+                    "status": "error",
+                    "message": "Too many requests. Hard cap of 20 requests exceeded for this session."
+                }), 429
             attempts = auth_validator.record_applicant_attempt(raw_token)
             if attempts > 5:
                 return jsonify({
@@ -3344,8 +3355,6 @@ def run_ocr():
         }))
 
     except Exception as e:
-        if caller_type == "applicant" and raw_token:
-            auth_validator.rollback_applicant_attempt(raw_token)
         # Cleanup temporary uploaded file on error
         try:
             if os.path.exists(file_path):
@@ -3686,44 +3695,7 @@ def revoke_applicant_session_api():
         "message": "Applicant session token revoked successfully"
     }), 200
 
-def cleanup_expired_assets(retention_hours: int = None, upload_folder: str = None) -> int:
-    """
-    Retention Policy Procedure:
-    Purges temporary verification images, face crops, and debug files older than RETENTION_HOURS (env var, default: 24h).
-    Returns count of removed files.
-    """
-    if retention_hours is None:
-        try:
-            retention_hours = int(os.getenv("RETENTION_HOURS", "24"))
-        except (ValueError, TypeError):
-            retention_hours = 24
-
-    upload_dir = upload_folder or app.config.get('UPLOAD_FOLDER') or os.getenv('UPLOAD_FOLDER')
-    if not upload_dir or not os.path.exists(upload_dir):
-        return 0
-
-    import time
-    now = time.time()
-    cutoff = now - (retention_hours * 3600)
-    removed_count = 0
-
-    try:
-        for fname in os.listdir(upload_dir):
-            fpath = os.path.join(upload_dir, fname)
-            if not os.path.isfile(fpath):
-                continue
-            # Check modification time
-            mtime = os.path.getmtime(fpath)
-            if mtime < cutoff:
-                try:
-                    os.remove(fpath)
-                    removed_count += 1
-                except Exception as del_err:
-                    print(f"[Cleanup Error on {fname}]: {del_err}")
-    except Exception as scan_err:
-        print(f"[Cleanup Scan Error]: {scan_err}")
-
-    return removed_count
+from retention import cleanup_expired_assets
 
 @app.route('/api/v1/admin/purge_expired_assets', methods=['POST'])
 def purge_expired_assets_api():

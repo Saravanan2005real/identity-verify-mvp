@@ -25,8 +25,15 @@ function loadEnvFile(envPath) {
   } catch (_) {}
 }
 
-loadEnvFile(path.resolve(__dirname, '..', '.env'));
-loadEnvFile(path.resolve(__dirname, '..', '..', '..', '.env'));
+// Load environment variables via dotenv if installed, otherwise use built-in parser
+try {
+  const dotenv = require('dotenv');
+  dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
+  dotenv.config({ path: path.resolve(__dirname, '..', '..', '..', '.env') });
+} catch (_) {
+  loadEnvFile(path.resolve(__dirname, '..', '.env'));
+  loadEnvFile(path.resolve(__dirname, '..', '..', '..', '.env'));
+}
 
 const requiredVars = [
   {
@@ -45,6 +52,21 @@ const requiredVars = [
     name: 'EXPO_PUBLIC_SUPERADMIN_API_URL',
     check: () => Boolean(process.env.EXPO_PUBLIC_SUPERADMIN_API_URL?.trim()),
     description: 'Superadmin Backend API URL',
+  },
+  {
+    name: 'EXPO_PUBLIC_VERIFY_BASE_URL',
+    check: () => Boolean(process.env.EXPO_PUBLIC_VERIFY_BASE_URL?.trim()),
+    description: 'Applicant verification web interface URL',
+  },
+  {
+    name: 'EXPO_PUBLIC_ADMIN_PORTAL_URL',
+    check: () => Boolean(process.env.EXPO_PUBLIC_ADMIN_PORTAL_URL?.trim()),
+    description: 'Tenant Admin Portal URL',
+  },
+  {
+    name: 'EXPO_PUBLIC_SUPERADMIN_PORTAL_URL',
+    check: () => Boolean(process.env.EXPO_PUBLIC_SUPERADMIN_PORTAL_URL?.trim()),
+    description: 'Superadmin Management Portal URL',
   },
 ];
 

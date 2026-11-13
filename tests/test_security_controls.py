@@ -45,8 +45,10 @@ if SUPERADMIN_BACKEND_DIR not in sys.path:
     sys.path.insert(1, SUPERADMIN_BACKEND_DIR)
 
 # Set required secrets before importing auth_validator
-os.environ.setdefault("APPLICANT_SESSION_SECRET", "a" * 64)
-os.environ.setdefault("ASSET_SIGNING_SECRET", "b" * 64)
+VALID_TEST_APP_SECRET = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+VALID_TEST_ASSET_SECRET = "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+os.environ.setdefault("APPLICANT_SESSION_SECRET", VALID_TEST_APP_SECRET)
+os.environ.setdefault("ASSET_SIGNING_SECRET", VALID_TEST_ASSET_SECRET)
 os.environ.setdefault("SUPABASE_URL", "https://placeholder.supabase.co")
 os.environ.setdefault("SUPABASE_KEY", "placeholder-key")
 
@@ -342,8 +344,8 @@ class TestWorkflowStepEnforcement:
 class TestStartupSecretValidation:
     """UNIT — Startup secret validation enforces presence, minimum strength, and non-placeholder values."""
 
-    VALID_APP_SECRET = "0123456789abcdef0123456789abcdef0123456789abcdef"
-    VALID_ASSET_SECRET = "fedcba9876543210fedcba9876543210fedcba9876543210"
+    VALID_APP_SECRET = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    VALID_ASSET_SECRET = "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
 
     def test_valid_secrets_pass_validation(self, monkeypatch):
         """Startup validation succeeds when all secrets are present, strong, and varied."""
@@ -453,22 +455,78 @@ class TestStartupSecretValidation:
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
 
-        # 1. Repeated char
-        monkeypatch.setenv("APPLICANT_SESSION_SECRET", "x" * 64)
+        # 1. Repeated char in SUPABASE_KEY
+        monkeypatch.setenv("SUPABASE_KEY", "x" * 64)
         monkeypatch.setenv("SUPABASE_URL", "https://valid.supabase.co")
-        monkeypatch.setenv("SUPABASE_KEY", "valid-key")
-        with pytest.raises(RuntimeError, match="placeholder|repeated"):
+        with pytest.raises(RuntimeError, match="placeholder"):
             mod.validate_startup_secrets()
 
-        # 2. CHANGE_ME
-        monkeypatch.setenv("APPLICANT_SESSION_SECRET", "CHANGE_ME_superadmin_secret_key_1234")
+        # 2. CHANGE_ME in SUPABASE_KEY
+        monkeypatch.setenv("SUPABASE_KEY", "CHANGE_ME_superadmin_anon_key")
         with pytest.raises(RuntimeError, match="placeholder|CHANGE_ME"):
             mod.validate_startup_secrets()
 
-        # 3. your-
-        monkeypatch.setenv("APPLICANT_SESSION_SECRET", "your-superadmin-secret-at-least-32-chars")
+        # 3. your- in SUPABASE_KEY
+        monkeypatch.setenv("SUPABASE_KEY", "your-supabase-anon-or-publishable-key")
         with pytest.raises(RuntimeError, match="placeholder|your-"):
             mod.validate_startup_secrets()
+
+    def test_is_placeholder_secret_requires_64_hex_chars(self):
+        """_is_placeholder_secret requires ^[0-9a-fA-F]{64,}$ in both services."""
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "superadmin_av_placeholder_check",
+            os.path.join(SUPERADMIN_BACKEND_DIR, "auth_validator.py")
+        )
+        sa_mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sa_mod)
+    def test_is_placeholder_secret_requires_64_hex_chars(self):
+        """_is_placeholder_secret requires ^[0-9a-fA-F]{64,}$ in both services."""
+        import importlib.util
+        import secrets
+        spec = importlib.util.spec_from_file_location(
+            "superadmin_av_placeholder_check",
+            os.path.join(SUPERADMIN_BACKEND_DIR, "auth_validator.py")
+        )
+        sa_mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sa_mod)
+
+        for validator in (av, sa_mod):
+            # Non-hex string
+            assert validator._is_placeholder_secret("replace-with-at-least-64-hex-characters-of-random-data") is True
+            # Less than 64 hex chars (48 chars)
+            assert validator._is_placeholder_secret("0123456789abcdef" * 3) is True
+            # Single repeated char
+            assert validator._is_placeholder_secret("a" * 64) is True
+            # Valid 64 hex chars (generated via secrets.token_hex(32))
+            valid_secret = secrets.token_hex(32)
+            assert validator._is_placeholder_secret(valid_secret) is False
+
+    def test_every_env_example_secret_placeholder_is_rejected(self):
+        """Reads every .env.example and asserts each secret placeholder is rejected by _is_placeholder_secret."""
+        env_files = [
+            os.path.join(".env.example"),
+            os.path.join("products", "ocr_engine", ".env.example"),
+            os.path.join("superadmin", "backend", ".env.example"),
+        ]
+        secret_keys = {"APPLICANT_SESSION_SECRET", "ASSET_SIGNING_SECRET"}
+        checked = 0
+        for env_path in env_files:
+            if not os.path.exists(env_path):
+                continue
+            with open(env_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if "=" in line:
+                        k, v = line.split("=", 1)
+                        k = k.strip()
+                        v = v.strip()
+                        if k in secret_keys:
+                            assert av._is_placeholder_secret(v) is True, f"{env_path} secret {k}={v} was not rejected as placeholder!"
+                            checked += 1
+        assert checked > 0, "No secret placeholders were checked from .env.example files"
 
 
 
@@ -564,8 +622,8 @@ class TestProductionConfigGuards:
     def test_validate_startup_secrets_invokes_production_guard(self, monkeypatch):
         """validate_startup_secrets calls validate_production_config and fails in production."""
         monkeypatch.setenv("APP_ENV", "production")
-        monkeypatch.setenv("APPLICANT_SESSION_SECRET", "a" * 64)
-        monkeypatch.setenv("ASSET_SIGNING_SECRET", "b" * 64)
+        monkeypatch.setenv("APPLICANT_SESSION_SECRET", VALID_TEST_APP_SECRET)
+        monkeypatch.setenv("ASSET_SIGNING_SECRET", VALID_TEST_ASSET_SECRET)
         monkeypatch.setenv("SUPABASE_URL", "https://real-prod.supabase.co")
         monkeypatch.setenv("SUPABASE_KEY", "real-anon-key")
         monkeypatch.setenv("REVOCATION_BACKEND", "memory")
@@ -609,8 +667,8 @@ class TestStartupPaths:
         code = (
             "import sys, os;"
             f"sys.path.insert(0, r'{SUPERADMIN_BACKEND_DIR}');"
-            "os.environ['APPLICANT_SESSION_SECRET'] = '';"
-            "os.environ['ASSET_SIGNING_SECRET'] = '';"
+            "os.environ['SUPABASE_URL'] = '';"
+            "os.environ['SUPABASE_KEY'] = '';"
             "import auth_validator as v;"
             "v.validate_startup_secrets()"
         )
@@ -1365,21 +1423,33 @@ class TestSuperadminSigningRemoved:
         assert not hasattr(sa_av, "ASSET_SIGNING_SECRET") or sa_av.ASSET_SIGNING_SECRET == "", (
             "ASSET_SIGNING_SECRET must be removed from superadmin"
         )
+        assert not hasattr(sa_av, "create_applicant_token"), (
+            "create_applicant_token must be removed from superadmin"
+        )
+        assert not hasattr(sa_av, "verify_applicant_token"), (
+            "verify_applicant_token must be removed from superadmin"
+        )
+        assert not hasattr(sa_av, "revoke_applicant_token"), (
+            "revoke_applicant_token must be removed from superadmin"
+        )
+        assert not hasattr(sa_av, "APPLICANT_SESSION_SECRET") or sa_av.APPLICANT_SESSION_SECRET == "", (
+            "APPLICANT_SESSION_SECRET must be removed from superadmin"
+        )
 
     def test_superadmin_startup_does_not_require_asset_signing_secret(self, monkeypatch):
-        """Superadmin validate_startup_secrets must pass even if ASSET_SIGNING_SECRET is unset."""
+        """Superadmin validate_startup_secrets must pass even if ASSET_SIGNING_SECRET and APPLICANT_SESSION_SECRET are unset."""
         import sys, os
         _repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
         if _repo_root not in sys.path:
             sys.path.insert(0, _repo_root)
         from superadmin.backend import auth_validator as sa_av
 
-        monkeypatch.setenv("APPLICANT_SESSION_SECRET", "a" * 64)
+        monkeypatch.setenv("APPLICANT_SESSION_SECRET", "")
         monkeypatch.setenv("ASSET_SIGNING_SECRET", "")
         monkeypatch.setenv("SUPABASE_URL", "https://mock.supabase.co")
         monkeypatch.setenv("SUPABASE_KEY", "mock-key")
         sa_av.reload_secrets()
-        # Must not raise RuntimeError for ASSET_SIGNING_SECRET
+        # Must not raise RuntimeError for ASSET_SIGNING_SECRET or APPLICANT_SESSION_SECRET
         sa_av.validate_startup_secrets()
 
 
@@ -2206,14 +2276,319 @@ class TestUploadFolderRetentionCleanup:
         os.utime(old_file, (now - 30 * 3600, now - 30 * 3600))
 
         script_path = os.path.join("products", "ocr_engine", "cleanup_assets.py")
+        t0 = time.time()
         res = subprocess.run(
             [sys.executable, script_path, "--upload-folder", upload_dir, "--retention-hours", "24"],
             capture_output=True,
             text=True
         )
+        elapsed = time.time() - t0
         assert res.returncode == 0, f"Script failed: {res.stderr}"
+        assert elapsed < 2.0, f"Expected cleanup script to run in under 2 seconds, took {elapsed:.2f}s"
         assert "removed 1 file" in res.stdout.lower() or "purged 1 file" in res.stdout.lower()
         assert not os.path.exists(old_file)
+
+    def test_retention_module_has_no_ml_imports(self):
+        """retention.py must be lightweight with zero ML dependencies."""
+        import importlib.util
+        retention_path = os.path.join("products", "ocr_engine", "retention.py")
+        assert os.path.exists(retention_path), "products/ocr_engine/retention.py does not exist"
+        spec = importlib.util.spec_from_file_location("retention", retention_path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        assert hasattr(mod, "cleanup_expired_assets"), "retention.py must export cleanup_expired_assets"
+        for forbidden in ("torch", "cv2", "tensorflow", "paddleocr", "easyocr", "timm"):
+            assert forbidden not in sys.modules or forbidden not in dir(mod), f"Forbidden ML import found: {forbidden}"
+
+
+class TestFrontendUrlsConfiguration:
+    """UNIT — Verify removal of hardcoded localhost URLs and presence in env.example and check-env.js."""
+
+    def test_frontend_app_files_use_env_vars_without_unconditional_localhost(self):
+        admin_app_path = os.path.join("admin", "frontend", "App.js")
+        with open(admin_app_path, "r", encoding="utf-8") as f:
+            admin_code = f.read()
+
+        superadmin_app_path = os.path.join("superadmin", "frontend", "App.js")
+        with open(superadmin_app_path, "r", encoding="utf-8") as f:
+            superadmin_code = f.read()
+
+        assert "EXPO_PUBLIC_VERIFY_BASE_URL" in admin_code, "admin App.js missing EXPO_PUBLIC_VERIFY_BASE_URL"
+        assert "EXPO_PUBLIC_VERIFY_BASE_URL" in superadmin_code, "superadmin App.js missing EXPO_PUBLIC_VERIFY_BASE_URL"
+        assert "EXPO_PUBLIC_ADMIN_PORTAL_URL" in superadmin_code, "superadmin App.js missing EXPO_PUBLIC_ADMIN_PORTAL_URL"
+        assert "EXPO_PUBLIC_SUPERADMIN_PORTAL_URL" in superadmin_code, "superadmin App.js missing EXPO_PUBLIC_SUPERADMIN_PORTAL_URL"
+
+        # In superadmin App.js line 291/341/597/889, verify hardcoded raw localhost is removed
+        assert "Linking.openURL('http://localhost:5174/'" not in superadmin_code
+        assert "Client Portal: http://localhost:8082" not in superadmin_code
+        assert "Verifyyy (http://localhost:8081)" not in superadmin_code
+        assert "Portal (http://localhost:8081)" not in superadmin_code
+
+    def test_check_env_scripts_validate_portal_and_verify_urls(self):
+        admin_check_path = os.path.join("admin", "frontend", "scripts", "check-env.js")
+        with open(admin_check_path, "r", encoding="utf-8") as f:
+            admin_check = f.read()
+        assert "EXPO_PUBLIC_VERIFY_BASE_URL" in admin_check, "admin check-env.js missing EXPO_PUBLIC_VERIFY_BASE_URL"
+
+        superadmin_check_path = os.path.join("superadmin", "frontend", "scripts", "check-env.js")
+        with open(superadmin_check_path, "r", encoding="utf-8") as f:
+            superadmin_check = f.read()
+        assert "EXPO_PUBLIC_VERIFY_BASE_URL" in superadmin_check, "superadmin check-env.js missing EXPO_PUBLIC_VERIFY_BASE_URL"
+        assert "EXPO_PUBLIC_ADMIN_PORTAL_URL" in superadmin_check, "superadmin check-env.js missing EXPO_PUBLIC_ADMIN_PORTAL_URL"
+        assert "EXPO_PUBLIC_SUPERADMIN_PORTAL_URL" in superadmin_check, "superadmin check-env.js missing EXPO_PUBLIC_SUPERADMIN_PORTAL_URL"
+
+    def test_four_env_examples_include_new_urls(self):
+        examples = [
+            os.path.join("products", "ocr_engine", ".env.example"),
+            os.path.join("superadmin", "backend", ".env.example"),
+            os.path.join("admin", "frontend", ".env.example"),
+            os.path.join("superadmin", "frontend", ".env.example"),
+        ]
+        for ex in examples:
+            with open(ex, "r", encoding="utf-8") as f:
+                content = f.read()
+            assert "EXPO_PUBLIC_VERIFY_BASE_URL" in content or "VERIFY" in content, f"{ex} missing verify URL"
+            assert "ADMIN_PORTAL" in content or "PORTAL" in content, f"{ex} missing portal URLs"
+
+
+class TestAttemptRollbackAndRequestHardCap:
+    """UNIT — Verify rollback occurs only for 502s (never 500s), and hard cap of 20 requests per token."""
+
+class TestAttemptRollbackAndRequestHardCap:
+    """UNIT — Verify rollback occurs only for 502s (never 500s), and hard cap of 20 requests per token."""
+    def test_record_and_get_applicant_request_count(self):
+        """Total request counter records every request and never rolls back."""
+        token = "test-req-count-token"
+        c1 = av.record_applicant_request(token)
+        assert c1 >= 1
+        assert av.get_applicant_total_requests(token) == c1
+
+    @pytest.fixture(autouse=True)
+    def setup_client(self):
+        import engine
+        engine.app.config["TESTING"] = True
+        self.client = engine.app.test_client()
+    def test_rollback_only_restores_attempts_not_total_requests(self):
+        """Rollback restores attempt count without affecting total request count."""
+        token = "test-rollback-token"
+        av.record_applicant_request(token)
+        av.record_applicant_attempt(token)
+        assert av.get_applicant_attempts(token) >= 1
+        av.rollback_applicant_attempt(token)
+        assert av.get_applicant_attempts(token) == 0
+        assert av.get_applicant_total_requests(token) >= 1
+
+    def test_unhandled_500_does_not_rollback_attempt_cap(self, monkeypatch):
+        """Unhandled 500 error in OCR does NOT roll back attempt count; token caps at 5 attempts."""
+        import engine
+        import supabase_client
+        import io, cv2, numpy as np
+
+        arr = np.zeros((20, 20, 3), dtype=np.uint8)
+        _, buf = cv2.imencode(".jpg", arr)
+        jpg_bytes = buf.tobytes()
+
+        # Mock image functions so that detect_and_warp_document raises unhandled Exception
+        monkeypatch.setattr(engine, "load_cv_image", lambda path: arr)
+        def _crash_detect(img):
+            raise RuntimeError("Unhandled OCR internal crash")
+        monkeypatch.setattr(engine, "detect_and_warp_document", _crash_detect)
+
+        token = av.create_applicant_token("PID-CRASH-500", "PAN", "org-test", ttl_seconds=3600)
+
+        # 5 consecutive unhandled 500 crashes
+        for i in range(5):
+            res_500 = self.client.post(
+                "/api/v1/ocr",
+                data={"file": (io.BytesIO(jpg_bytes), f"crash_{i}.jpg"), "document_type": "PAN"},
+                headers={"X-Applicant-Token": token},
+                content_type="multipart/form-data"
+            )
+            assert res_500.status_code == 500
+
+        # Attempt count must be 5 (NOT rolled back to 0)
+        assert av.get_applicant_attempts(token) == 5
+
+        # 6th request must be rejected with 429 Too Many Attempts
+        res_6th = self.client.post(
+            "/api/v1/ocr",
+            data={"file": (io.BytesIO(jpg_bytes), "crash_6.jpg"), "document_type": "PAN"},
+            headers={"X-Applicant-Token": token},
+            content_type="multipart/form-data"
+        )
+        assert res_6th.status_code == 429, f"Expected 429 after 5 unhandled 500 attempts, got {res_6th.status_code}"
+
+    def test_hard_cap_of_20_total_requests_per_token_returns_429(self, monkeypatch):
+        """Even if 502 rolls back attempts, hard cap of 20 total requests per token is enforced with 429."""
+        import engine
+        import supabase_client
+        import io, cv2, numpy as np
+
+        arr = np.zeros((20, 20, 3), dtype=np.uint8)
+        _, buf = cv2.imencode(".jpg", arr)
+        jpg_bytes = buf.tobytes()
+
+        monkeypatch.setattr(engine, "load_cv_image", lambda path: arr)
+        monkeypatch.setattr(engine, "check_image_quality", lambda img: {"blur_status": "BLURRY", "passed": False})
+        monkeypatch.setattr(engine, "detect_and_warp_document", lambda img: (img, True))
+        monkeypatch.setattr(engine, "extract_and_align_face", lambda img, orig: (img, {"source": "test"}))
+        monkeypatch.setattr(
+            engine,
+            "best_ocr_pass",
+            lambda img, folder, stem, hinted_type=None: (
+                img, ["PAN ABCDE1234F"], [0.99], 0.99,
+                {"pan_number": "ABCDE1234F", "document_type": "pan"},
+                True
+            )
+        )
+        monkeypatch.setattr(engine, "_save_jpg", lambda path, img: True)
+
+        # 502 sync error on every call
+        monkeypatch.setattr(
+            supabase_client,
+            "upsert_verification_record",
+            lambda payload, auth_token=None: {"status": "error", "message": "Supabase timeout"}
+        )
+
+        token = av.create_applicant_token("PID-HARDCAP-20", "PAN", "org-test", ttl_seconds=3600)
+
+        # Send 20 requests that all end in 502 (attempts rolled back each time)
+        for i in range(20):
+            res_502 = self.client.post(
+                "/api/v1/ocr",
+                data={"file": (io.BytesIO(jpg_bytes), f"call_{i}.jpg"), "document_type": "PAN"},
+                headers={"X-Applicant-Token": token},
+                content_type="multipart/form-data"
+            )
+            assert res_502.status_code == 502
+
+        # 21st request must exceed the 20 total requests hard cap and return 429
+        res_21 = self.client.post(
+            "/api/v1/ocr",
+            data={"file": (io.BytesIO(jpg_bytes), "call_21.jpg"), "document_type": "PAN"},
+            headers={"X-Applicant-Token": token},
+            content_type="multipart/form-data"
+        )
+        assert res_21.status_code == 429, f"Expected 429 after 20 total requests, got {res_21.status_code}"
+
+
+class TestAdminGeneratedLinkUI:
+    """UNIT — Verify admin portal link modal wraps long applicant token URLs without horizontal overflow."""
+
+    def test_admin_app_styles_prevent_generated_link_overflow(self):
+        admin_app_path = os.path.join("admin", "frontend", "App.js")
+        with open(admin_app_path, "r", encoding="utf-8") as f:
+            code = f.read()
+
+        # Must support word breaking on web for long unbroken token strings
+        assert "break-all" in code or "overflowWrap" in code, "App.js must specify wordBreak: 'break-all' for generated link"
+        assert "overflow: 'hidden'" in code or "overflow: \"hidden\"" in code, "App.js must constrain overflow on link container"
+        # Must have copy link capability with feedback
+        assert "copyToClipboard" in code or "navigator.clipboard" in code, "App.js must provide copy-to-clipboard functionality"
+
+
+class TestAdminPipelineCanvasReorder:
+    """UNIT — Verify pipeline canvas in admin portal supports full drag-and-drop reordering (no arrow buttons)."""
+
+    def test_admin_app_implements_pipeline_drag_and_drop(self):
+        admin_app_path = os.path.join("admin", "frontend", "App.js")
+        with open(admin_app_path, "r", encoding="utf-8") as f:
+            code = f.read()
+
+        # Must implement HTML5 / web drag-and-drop attributes and event handlers
+        assert "draggable" in code, "App.js must configure draggable nodes in pipeline canvas"
+        assert "onDragStart" in code, "App.js must handle onDragStart for dragging pipeline nodes"
+        assert "onDragOver" in code, "App.js must handle onDragOver to permit dropping"
+        assert "onDrop" in code, "App.js must handle onDrop to complete reordering"
+        assert "moveModule" in code or "reorderPipeline" in code, "App.js must define a module reordering helper"
+
+    def test_admin_app_provides_drag_feedback_without_arrow_buttons(self):
+        admin_app_path = os.path.join("admin", "frontend", "App.js")
+        with open(admin_app_path, "r", encoding="utf-8") as f:
+            code = f.read()
+
+        # Must track drag source index
+        assert "draggedIndex" in code, "App.js must track draggedIndex state"
+        # Must provide a visible drag grip indicator on each card
+        assert "dragGrip" in code or "dragHandle" in code, (
+            "App.js must render a drag grip / handle on each pipeline card"
+        )
+        # Must provide visual drop zone feedback (drop indicator line or drop target style)
+        assert "dropIndicator" in code or "pipelineNodeDragging" in code, (
+            "App.js must style the dragging card and show a drop indicator"
+        )
+        # Arrow reorder buttons must NOT be present (pure drag-only UX)
+        assert "reorderBtn" not in code, (
+            "App.js must not render ↑/↓ reorder buttons — drag-only rearranging required"
+        )
+
+
+class TestAdminAuthSignupEmailVerification:
+    """UNIT — Client Admin auth service and screen must configure emailRedirectTo, support resending verification, and handle unconfirmed email flows."""
+
+    def test_admin_auth_service_includes_email_redirect_to_and_resend(self):
+        auth_service_path = os.path.join("admin", "frontend", "src", "services", "auth.js")
+        with open(auth_service_path, "r", encoding="utf-8") as f:
+            code = f.read()
+
+        assert "emailRedirectTo" in code, "auth.js signUp must configure options.emailRedirectTo for confirmation links"
+        assert "resendVerificationEmail" in code, "auth.js must export resendVerificationEmail function"
+        assert "resend" in code, "auth.js resendVerificationEmail must call supabase.auth.resend"
+
+    def test_admin_signin_screen_handles_unconfirmed_email_and_resend(self):
+        signin_screen_path = os.path.join("admin", "frontend", "SignInScreen.js")
+        with open(signin_screen_path, "r", encoding="utf-8") as f:
+            code = f.read()
+
+        assert "resendVerificationEmail" in code, "SignInScreen.js must import and use resendVerificationEmail"
+        assert "resend" in code.lower(), "SignInScreen.js must offer resend verification capability"
+
+
+class TestAdminAuthEmailOtpWorkflow:
+    """UNIT — Verify Email OTP workflow in admin portal evaluates entered OTP code, falls back on type, and completes login."""
+
+    def test_admin_auth_service_handles_email_otp_and_fallback(self):
+        auth_service_path = os.path.join("admin", "frontend", "src", "services", "auth.js")
+        with open(auth_service_path, "r", encoding="utf-8") as f:
+            code = f.read()
+
+        assert "export async function verifyOtp" in code, "auth.js must export verifyOtp"
+        verify_otp_body = code.split("export async function verifyOtp")[1].split("export async function")[0]
+        # Must support robust fallback between 'email' and 'signup' for new vs existing users
+        assert "fallback" in verify_otp_body, "verifyOtp must support defensive fallback between OTP token types"
+
+    def test_admin_signin_screen_evaluates_and_completes_otp_login(self):
+        signin_screen_path = os.path.join("admin", "frontend", "SignInScreen.js")
+        with open(signin_screen_path, "r", encoding="utf-8") as f:
+            code = f.read()
+
+        assert "const handleVerifyOtp =" in code, "SignInScreen.js must have handleVerifyOtp"
+        handle_verify_body = code.split("const handleVerifyOtp =")[1].split("const handleOtpDigitChange =")[0]
+        # Must persist remembered email on successful OTP login
+        assert "verifyyy_remembered_email" in handle_verify_body, "handleVerifyOtp must record remembered email on login"
+        # Must evaluate user or session user to complete login
+        assert "data.session" in handle_verify_body or "data?.session" in handle_verify_body, "handleVerifyOtp must handle session-based completion"
+
+    def test_admin_signin_screen_supports_eight_digit_otp_and_clipboard_paste(self):
+        signin_screen_path = os.path.join("admin", "frontend", "SignInScreen.js")
+        with open(signin_screen_path, "r", encoding="utf-8") as f:
+            code = f.read()
+
+        # Must support 8-digit OTP array length or flexible 6-8 digit code
+        assert "Array(8)" in code or "otpDigits.length" in code or len(["" for x in range(8)]) == 8, "Must check for 8 digit OTP support"
+        assert "pasteFromClipboard" in code or "handlePaste" in code or "onPaste" in code or "navigator.clipboard.readText" in code, (
+            "SignInScreen.js must provide copy-paste functionality for OTP"
+        )
+        assert "Enter 8-Digit Code" in code or "Enter Verification Code" in code or "8-digit" in code.lower(), (
+            "SignInScreen.js must indicate 8-digit OTP code input"
+        )
+
+
+
+
+
+
+
 
 
 

@@ -1,4 +1,4 @@
-# Verifyyy - Enterprise eKYC & Identity Verification Platform
+# Verifyyy — Enterprise eKYC, AML & Digital Identity Verification Platform
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
@@ -10,13 +10,22 @@
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 
-**Verifyyy** is an enterprise-grade Electronic Know Your Customer (**eKYC**) and digital identity verification platform. Built with a modular microservice architecture, it combines state-of-the-art computer vision (PaddleOCR, RetinaFace 5-point alignment, SFace ONNX 128-D neural network, ArcFace 512-D), real-time camera liveness detection, browser-based eye gaze tracking (WebGazer & FGI-Net), a no-code verification pipeline builder for enterprise clients, and centralized superadmin governance with cloud database synchronization.
+**Verifyyy** is an enterprise-grade, multi-tenant Electronic Know Your Customer (**eKYC**), Anti-Money Laundering (**AML**), and digital identity verification platform. Built with a modular microservice architecture, it combines cutting-edge computer vision (PaddleOCR, RetinaFace 5-point alignment, SFace ONNX 128-D neural network, ArcFace 512-D), real-time camera biometric liveness detection, browser-based eye gaze tracking (WebGazer & FGI-Net), a visual drag-and-drop verification pipeline builder for enterprise clients, dynamic workflow runner, and centralized superadmin governance with hardened Supabase cloud database synchronization and zero-trust security controls.
 
 ---
 
 ## Table of Contents
 - [Executive Overview](#executive-overview)
+  - [Core Problems Solved](#core-problems-solved)
 - [Key Features & Innovations](#key-features--innovations)
+  - [🪪 Universal Document Classification & Dual-Pass OCR](#-universal-document-classification--dual-pass-ocr)
+  - [👤 Three-Tier Cascaded Deep Face Recognition](#-three-tier-cascaded-deep-face-recognition)
+  - [👁️ Biometric Liveness & Attention Tracking](#️-biometric-liveness--attention-tracking)
+  - [⚡ Visual Drag-and-Drop Pipeline Canvas & Dynamic Stepper](#-visual-drag-and-drop-pipeline-canvas--dynamic-stepper)
+  - [🏢 Enterprise Client Admin Portal & Authentication](#-enterprise-client-admin-portal--authentication)
+  - [👑 Centralized Superadmin Governance](#-centralized-superadmin-governance)
+  - [🌐 Cloud Persistence & Dual-Mode Token Revocation](#-cloud-persistence--dual-mode-token-revocation)
+  - [🛡️ Automated Data Retention & Asset Purging](#️-automated-data-retention--asset-purging)
 - [System Architecture & Visual Diagrams](#system-architecture--visual-diagrams)
   - [1. High-Level Architecture Diagram](#1-high-level-architecture-diagram)
   - [2. End-to-End Verification Sequence](#2-end-to-end-verification-sequence)
@@ -26,69 +35,121 @@
   - [6. Supabase Entity-Relationship & Cloud Sync Architecture](#6-supabase-entity-relationship--cloud-sync-architecture)
 - [Repository Structure](#repository-structure)
 - [Microservices & Subsystems](#microservices--subsystems)
-  - [1. Products Gateway Server](#1-products-gateway-server)
-  - [2. AI OCR & Face Verification Engine](#2-ai-ocr--face-verification-engine)
-  - [3. Interactive Verification Flow Runner](#3-interactive-verification-flow-runner)
-  - [4. Client Admin Portal & Pipeline Builder](#4-client-admin-portal--pipeline-builder)
-  - [5. Superadmin Management Platform](#5-superadmin-management-platform)
-  - [6. Eye Tracking & Attention Analysis Module](#6-eye-tracking--attention-analysis-module)
-  - [7. Voice & Audio Liveness Challenge](#7-voice--audio-liveness-challenge)
-- [Database & Cloud Sync (Supabase)](#database--cloud-sync-supabase)
-- [Quick Start & Execution Guide](#quick-start--execution-guide)
-  - [Prerequisites & Environment Setup](#prerequisites--environment-setup)
-  - [Option A: Complete Setup WITHOUT Docker (Local Bare-Metal)](#option-a-complete-setup-without-docker-local-bare-metal)
-  - [Option B: Complete Setup WITH Docker (Docker Compose)](#option-b-complete-setup-with-docker-docker-compose)
-  - [Health Check & Service Verification](#health-check--service-verification)
+- [Security & Cryptographic Architecture (Phase 1 Remediation)](#security--cryptographic-architecture-phase-1-remediation)
+  - [1. Fail-Fast Startup Secret & Production Guards](#1-fail-fast-startup-secret--production-guards)
+  - [2. Cryptographically Bound Applicant Session Tokens](#2-cryptographically-bound-applicant-session-tokens)
+  - [3. Tenant-Scoped HMAC Signed Asset URLs](#3-tenant-scoped-hmac-signed-asset-urls)
+  - [4. Dual-Mode Token Revocation Engine](#4-dual-mode-token-revocation-engine)
+  - [5. PII Masking & Data Sanitization](#5-pii-masking--data-sanitization)
+  - [6. Multi-Tenant Isolation & Row-Level Security](#6-multi-tenant-isolation--row-level-security)
 - [Port & Service Routing Matrix](#port--service-routing-matrix)
+- [Database & Cloud Sync (Supabase)](#database--cloud-sync-supabase)
+  - [1. Database Schema DDL & Hardened RLS Migrations](#1-database-schema-ddl--hardened-rls-migrations)
+  - [2. Verification Records & Multi-Tenancy](#2-verification-records--multi-tenancy)
+- [Environment Configuration & Secrets](#environment-configuration--secrets)
+  - [1. Generate Cryptographically Secure Secrets](#1-generate-cryptographically-secure-secrets)
+  - [2. Environment Files Setup](#2-environment-files-setup)
+- [Quick Start & Execution Guide](#quick-start--execution-guide)
+  - [Option A: Local Bare-Metal Setup (Multi-Terminal)](#option-a-local-bare-metal-setup-multi-terminal)
+  - [Option B: Containerized Deployment (Docker Compose)](#option-b-containerized-deployment-docker-compose)
+  - [Health Check & Service Verification](#health-check--service-verification)
+- [Verification Flow Runner & Dynamic Pipelines](#verification-flow-runner--dynamic-pipelines)
+  - [Visual Canvas Usage](#visual-canvas-usage)
+  - [Dynamic URL Structure](#dynamic-url-structure)
+  - [Supported Flow Modules](#supported-flow-modules)
+  - [Example Launch Links](#example-launch-links)
 - [Comprehensive API Reference](#comprehensive-api-reference)
-- [Security, Privacy & UIDAI Compliance](#security-privacy--uidai-compliance)
-- [License](#license)
+  - [1. Issue Applicant Session Token](#1-issue-applicant-session-token)
+  - [2. Document OCR & Face Extraction](#2-document-ocr--face-extraction)
+  - [3. Live Face Verification & Liveness](#3-live-face-verification--liveness)
+  - [4. Generate Signed Asset URL](#4-generate-signed-asset-url)
+  - [5. Serve Signed Asset (Protected)](#5-serve-signed-asset-protected)
+  - [6. Fetch Verification Record (IDOR Protected)](#6-fetch-verification-record-idor-protected)
+  - [7. Administrative Data Retention Purge](#7-administrative-data-retention-purge)
+  - [8. Revoke Applicant Session Token](#8-revoke-applicant-session-token)
+  - [9. Service Health Check](#9-service-health-check)
+- [Testing & Quality Assurance Suite](#testing--quality-assurance-suite)
+  - [Running Unit Tests](#running-unit-tests)
+  - [Test Suite Breakdown (100 Passing Unit Tests)](#test-suite-breakdown-100-passing-unit-tests)
+  - [Running Integration Tests](#running-integration-tests)
+- [Troubleshooting & Common Questions](#troubleshooting--common-questions)
+- [License & Compliance](#license--compliance)
 
 ---
 
 ## Executive Overview
 
-Modern customer onboarding and digital KYC systems face three primary challenges:
-1. **Severe Geometric Distortion**: Standard document perspective correction stretches or compresses faces embedded on identification cards, causing downstream biometric comparisons to fail.
-2. **Brittle Rigid Pipelines**: Enterprises have varying risk profiles—some require simple PAN OCR, while high-risk financial onboarding requires document OCR, deep facial matching, gaze tracking, and manual officer auditing.
-3. **Complex Offline & Cloud Boundaries**: Systems must operate smoothly under transient cloud outages without blocking onboarding queues.
+Modern digital enterprises (fintechs, neobanks, crypto exchanges, gig economy marketplaces, and healthcare platforms) require fast, accurate, and fraud-resistant identity onboarding. Traditional KYC verification stacks suffer from severe fragmentation, vulnerability to digital spoofing (deepfakes, screen replay, printed photos), rigid one-size-fits-all onboarding pipelines, insecure asset storage leaking sensitive PII, and steep operational costs.
 
-**Verifyyy** resolves these hurdles by:
-- Preserving pristine facial geometry using **unwarped coordinate re-projection** from raw camera frames before quadrilateral rectification.
-- Employing a **three-tier cascaded facial recognition engine** (SFace ONNX -> ArcFace -> Multi-descriptor OpenCV matcher) with sub-second inference.
-- Empowering business operators with a **visual drag-and-drop pipeline builder** that yields instant, tokenized applicant onboarding links.
-- Offering **seamless cloud sync to Supabase PostgreSQL** alongside a resilient local SQLite/in-memory fallback mode.
+**Verifyyy** delivers a unified, self-hosted, cloud-synchronized eKYC infrastructure that executes universal document extraction, deep biometric face matching, multi-modal active liveness detection, and zero-trust access control across isolated multi-tenant environments.
+
+### Core Problems Solved
+
+1. **Document Fraud & Low Quality Scans:** High rejection rates from blur, glare, and improper orientation are eliminated through automated Laplacian variance filtering, perspective rectification, and dual-pass OCR (PaddleOCR + EasyOCR + Google Cloud Vision fallback).
+2. **Biometric Spoofing & Presentation Attacks:** Deepfakes, silicone masks, and screen replays are blocked via a three-tier biometric defense: eye blink EAR tracking, head pose angular trajectory estimation, 9-point WebGazer gaze calibration, and dynamic randomized oral/audio challenges.
+3. **Inflexible Onboarding Workflows:** Clients customize verification requirements per product tier using an interactive, visual drag-and-drop pipeline canvas that immediately compiles into parameterized, cryptographically bound verification links (`?pipeline=aadhaar,pan,facematch...`).
+4. **IDOR & Multi-Tenant Data Leakage:** Legacy verification systems often expose raw facial images or document scans via predictable URLs. Verifyyy protects all media through ephemeral HMAC-SHA256 signed URLs bound to tenant IDs and expiration timestamps.
+5. **Regulatory Compliance (UIDAI, GDPR & DPDP):** First 8 digits of Indian Aadhaar numbers are masked automatically (`XXXX-XXXX-1234`), sensitive PII is sanitized from server logs, and automated cron/API retention purging removes expired physical crops from disk.
 
 ---
 
 ## Key Features & Innovations
 
 ### 🪪 Universal Document Classification & Dual-Pass OCR
-- **Automatic Document Detection**: Intelligently classifies documents as **Aadhaar Cards** (UIDAI 12-digit format), **PAN Cards** (10-character alphanumeric tax identifiers), **Driving Licenses**, or **Voter IDs**.
-- **Dual-Pass Extraction Pipeline**: Combines high-resolution perspective rectification, CLAHE illumination normalization, and dual-pass PaddleOCR extraction with algorithmic fuzzy error correction.
-- **Strict Regular Expression Extraction**: Automatically parses Name, Date of Birth (DOB), ID Number, and Father's Name with heuristic validation.
-- **Image Quality Pre-Check (`quality.py`)**: Assesses Laplacian variance blur, glare thresholds, contrast, and ambient lighting before running inference, rejecting poor uploads with actionable feedback.
+- **Supported Identity Documents:** Indian Aadhaar (Front/Back/e-Aadhaar), Permanent Account Number (PAN) Card, Voter ID, Driver's License, and International Passports.
+- **Image Quality Pre-Flight Guard:** Fast Laplacian variance blur filter (rejects images with blur variance `< 100.0`) and high-specular glare detection to ensure OCR readability before pipeline processing.
+- **Perspective Rectification:** Automated contour quadrilateral detection and four-point perspective warp transformation to correct skewed mobile camera snaps.
+- **Dual-Pass OCR Engine:** Primary high-accuracy PaddleOCR pass with secondary EasyOCR / Google Vision fallback.
+- **UIDAI Aadhaar Masking:** Automatic detection and masking of the first 8 digits of Aadhaar numbers (`XXXX-XXXX-1234`) for UIDAI compliance.
+- **Unwarped Facial Crop Extraction:** High-accuracy 5-point facial landmark alignment via RetinaFace/MTCNN, extracting normalized $112 \times 112$ or $128 \times 128$ face crops ready for 1:1 biometric comparison.
 
-### 👤 Multi-Tier Deep Face Recognition
-- **Zero-Distortion Face Cropping**: Uses RetinaFace 5-point landmark alignment to crop reference faces directly from original, unwarped frames. This completely eliminates the aspect ratio compression commonly caused by document perspective warping.
-- **Tier 1 — SFace 128-D ONNX Neural Net**: Ultra-lightweight OpenCV DNN model (`sface.onnx` via `cv2.FaceRecognizerSF`) generating 128-dimensional facial embeddings and computing cosine distance similarity in under 15ms.
-- **Tier 2 — ArcFace 512-D Verification**: High-dimensional angular margin loss feature projection with adaptive threshold relaxation (0.75) tailored for degraded, laminated, or aged government ID photos.
-- **Tier 3 — OpenCV Computer Vision Fallback**: Histogram equalization, normalized 2D cross-correlation, and ORB feature descriptor matching for zero-dependency execution in air-gapped environments.
+### 👤 Three-Tier Cascaded Deep Face Recognition
+Verifyyy uses a cascaded three-tier facial comparison architecture that pairs state-of-the-art deep neural networks with zero-dependency classical computer vision fallbacks:
 
-### ⚡ Visual Pipeline Builder & Dynamic Flow Runner
-- **No-Code Pipeline Assembly**: Client administrators can build custom eKYC recipes (e.g., Aadhaar & Face Match → Eye Tracking Attention Check → Human Review).
-- **Tokenized Shareable Links**: Instant URL generation with parameterized query arguments (`/verify.html?pid=FLOW-ABC123&flow=AADHAAR_FACE,EYE_TRACKING`).
-- **Dynamic Step Runner**: Renders responsive progress steppers, real-time camera feedback, capture guides, and verification verdicts in pure HTML5/JavaScript without heavy frontend frameworks.
+```mermaid
+flowchart LR
+    A[Input Crops: Reference ID vs Live Selfie] --> B[Tier 1: SFace 128-D ONNX]
+    B -->|Cosine Dist <= 0.670| Pass1[Verified Match]
+    B -->|Fallback / GPU Avail| C[Tier 2: ArcFace 512-D Angular Loss]
+    C -->|Angular Dist <= 0.750| Pass2[Verified Match]
+    C -->|Air-Gapped / CPU Fallback| D[Tier 3: OpenCV Correlation & ORB]
+    D -->|Score >= 0.70| Pass3[Verified Match]
+    D -->|Failed All| Fail[Manual Review Audit Queue]
+```
+
+1. **Tier 1 (Primary):** SFace ONNX 128-dimensional deep neural network embedding extractor with Cosine Distance matching (Acceptance Threshold: $\le 0.670$).
+2. **Tier 2 (Secondary):** ArcFace (Additive Angular Margin Loss) generating 512-dimensional embeddings for complex lighting or age progression (Acceptance Threshold: $\le 0.750$).
+3. **Tier 3 (Zero-Dependency Fallback):** Normalized 2D Cross-Correlation with ORB feature keypoint descriptor matching, ensuring uninterrupted verification even in air-gapped or minimal CPU environments.
 
 ### 👁️ Biometric Liveness & Attention Tracking
-- **Interactive Gaze Calibration**: 9-point target calibration via WebGazer and deep FGI-Net gaze vector tracking.
-- **Active Attention Verification**: Verifies user presence and anti-spoofing by enforcing camera focus and tracking gaze trajectory across screen quadrants.
-- **Voice & Audio Liveness Challenge**: Audio waveform recording and challenge-response phrase validation (`demo_audio_liveness.html`).
+- **Passive Liveness:** Eye Aspect Ratio (EAR) blink detection, micro-texture frequency analysis, and 3D head pose estimation (yaw, pitch, roll angles).
+- **Active Gaze Calibration:** WebGazer 9-point in-browser gaze tracking coupled with FGI-Net neural gaze vector estimation. The applicant follows randomized quadrant visual targets (Top, Bottom, Left, Right) to defeat pre-recorded video replays.
+- **Audio/Voice Challenge:** Dynamic randomized oral challenge phrase generation with WebAudio frequency spectrum analysis to confirm active presence.
 
-### 🌐 Cloud Persistence with Resilient Local Fallback
-- **Supabase Cloud Sync**: Asynchronous REST client upserting verification sessions, document metadata, match confidence scores, and crop asset URLs to Supabase PostgreSQL.
-- **Row Level Security (RLS)**: Enforces table policies for multi-tenant isolation.
-- **Fail-Safe Offline Operation**: Automatic fallback to local SQLite (`superadmin.db`) and in-memory caches when cloud keys are unset or network connectivity drops.
+### ⚡ Visual Drag-and-Drop Pipeline Canvas & Dynamic Stepper
+- **Hand-Gesture Drag-and-Drop Reordering:** Enterprise admins customize verification journeys inside a modern canvas. Modules can be dynamically dragged, reordered, or removed with real-time visual drop indicators, live step renumbering (1, 2, 3...), and grabbing gesture feedback.
+- **Dynamic Modular Stepper:** Verification links encode the configured pipeline into URL parameters (`?pipeline=pan,aadhaar,pan_face,eye_tracking`). The standalone Verification Flow Runner (`verify.html` / `verify.js`) reads the query string and dynamically orchestrates the exact sequence of steps without requiring server-side code changes.
+
+### 🏢 Enterprise Client Admin Portal & Authentication
+- **Dual Authentication Modes:**
+  - Standard Work Email & Password Sign In and Sign Up.
+  - Passwordless 8-Digit Email OTP Sign In with auto-advancing digit inputs and one-click clipboard paste (`[📋 Paste Code]`).
+  - Google OAuth 2.0 Single Sign-On (SSO).
+- **Email Verification Confirmation:** Automatic redirect handling (`emailRedirectTo: window.location.origin`) and built-in resend countdown timer to handle mail delivery delays or rate limits gracefully.
+- **Audit Center & Side-by-Side Review:** Live verification audit table with side-by-side modal displaying the reference document face crop and the live camera selfie with calculated similarity scores and one-click manual approval/rejection.
+
+### 👑 Centralized Superadmin Governance
+- **Multi-Tenant Administration:** Create, configure, suspend, or terminate client tenant organizations.
+- **B2B Verification Services Catalog:** Enable, disable, or rate-limit individual capabilities (Aadhaar OCR, PAN OCR, Biometric Face Match, Eye Tracking) per client.
+- **Security & Revocation Controls:** Monitor active sessions, inspect audit trails, and instantly revoke compromised applicant tokens across all nodes.
+
+### 🌐 Cloud Persistence & Dual-Mode Token Revocation
+- **Supabase PostgreSQL Cloud DB:** Multi-tenant database schema equipped with Row-Level Security (RLS) policies, foreign key tenant boundaries, and composite unique constraints (`(tenant_id, session_id)`).
+- **Dual-Mode Token Revocation Engine:** In-memory LRU cache for ultra-fast local checking with automated fallback to Supabase cloud persistence for distributed multi-instance clusters.
+
+### 🛡️ Automated Data Retention & Asset Purging
+- **GDPR & DPDP Compliance:** Configurable data retention policies (default: 30 days) to prevent perpetual PII storage.
+- **Automated Retention Purging:** Physical document crops, live selfies, and debug crops are purged automatically via scheduled background workers (`cleanup_assets.py`) or administrative API trigger (`/api/v1/admin/purge_expired_assets`).
 
 ---
 
@@ -117,13 +178,13 @@ graph TB
     end
 
     subgraph Frontends ["2. React Native Web Management Portals and Demos"]
-        AdminFE["Client Admin Portal - Port 8082<br/>- Supabase Light Theme Auth UI<br/>- No-Code Pipeline Builder<br/>- Instant Link Generator PID/Flow<br/>- Live Applicant Audit Table<br/>- Side-by-Side Face Audit Modal"]:::app
+        AdminFE["Client Admin Portal - Port 8082<br/>- Supabase Light Theme Auth UI<br/>- Drag-and-Drop Pipeline Canvas<br/>- Instant Link Generator PID/Flow<br/>- Live Applicant Audit Table<br/>- Side-by-Side Face Audit Modal"]:::app
         SuperAdminFE["Superadmin Portal - Port 8081<br/>- Master Admin Control Center<br/>- Multi-Tenant Client Governance<br/>- B2B Verification Services Catalog<br/>- Health and Telemetry Metrics"]:::app
         VerificationDemos["HTML5 Verification Clients - Port 5174<br/>- Dynamic Flow Runner verify.html<br/>- OCR and Face Match Demo<br/>- Eye Tracking Demo<br/>- Audio Liveness Demo"]:::client
     end
 
     subgraph IdentityLayer ["3. Authentication and Access Management - Supabase Auth"]
-        AuthService["Supabase Authentication Engine<br/>- Direct Email and Password Sign Up / Sign In<br/>- 6-Digit Passwordless Email OTP Verification<br/>- Google OAuth 2.0 SSO Integration<br/>- Deep Link Handler verifyyy://auth/callback<br/>- JWT and AsyncStorage Token Persistence"]:::auth
+        AuthService["Supabase Authentication Engine<br/>- Direct Email and Password Sign Up / Sign In<br/>- 8-Digit Passwordless Email OTP Verification<br/>- Google OAuth 2.0 SSO Integration<br/>- Deep Link Handler verifyyy://auth/callback<br/>- JWT and AsyncStorage Token Persistence"]:::auth
     end
 
     subgraph GatewayLayer ["4. Reverse Proxy and Gateway Layer - Port 5174"]
@@ -138,7 +199,7 @@ graph TB
 
     subgraph StorageTier ["6. Persistence and Cloud Synchronization Tier"]
         SupabaseCloud["Supabase Cloud PostgreSQL<br/>- Table: verifications<br/>- Row Level Security RLS Isolation<br/>- B-Tree Indexes on session_id and id_number<br/>- Extracted and Live Selfie Asset URLs"]:::data
-        LocalDB["Local Fallback Tier - 100% Offline Resilience<br/>- SQLite Database superadmin.db<br/>- Ephemeral Asset Directory ocr_uploads/<br/>- Zero Cloud Lock-in / Works Air-Gapped"]:::data
+        LocalDB["Local Fallback Tier - 100% Offline Resilience<br/>- SQLite Database superadmin.db<br/>- Ephemeral Asset Directory ocr_uploads/<br/>- Automated Retention Cleanup Worker"]:::data
     end
 
     %% User Interactions
@@ -148,24 +209,14 @@ graph TB
 
     %% Auth Interactions
     AdminFE -->|"Authenticate via Email, OTP, or Google"| AuthService
-    SuperAdminFE -->|"Authenticate via Email, OTP, or Google"| AuthService
-    AuthService -->|"Cloud Auth and RLS Claims"| SupabaseCloud
+    SuperAdminFE -->|"Authenticate via JWT"| SuperAdminBE
 
-    %% Gateway Delivery & Proxying
-    Gateway -->|"Delivers"| VerificationDemos
-    Gateway -->|"Proxy: /api/v1/"| OCRService
-    Gateway -->|"Proxy: /api/v1/eye/"| EyeService
-
-    %% Frontend to Backend Connections
-    VerificationDemos -->|"Submits ID and Live Webcam Selfie"| OCRService
-    AdminFE -->|"Reads Verification Records"| OCRService
-    SuperAdminFE -->|"Catalog and Tenant Management"| SuperAdminBE
-    SuperAdminBE -->|"CRUD Operations"| LocalDB
-
-    %% Cloud Sync
-    OCRService -.->|"Async REST Upsert / Cloud Sync"| SupabaseCloud
-    OCRService -.->|"Local Fallback Storage"| LocalDB
-    AdminFE -.->|"Live Audit Stream"| SupabaseCloud
+    %% Flow Execution
+    Gateway -->|"Proxies OCR Requests"| OCRService
+    Gateway -->|"Proxies Eye Tracking"| EyeService
+    OCRService -->|"Syncs Verification Records"| SupabaseCloud
+    OCRService -->|"Saves Local Fallback Records"| LocalDB
+    SuperAdminBE -->|"Persists Tenant Data"| LocalDB
 ```
 </details>
 
@@ -189,19 +240,19 @@ sequenceDiagram
     participant Cloud as Supabase Cloud DB
     actor Admin as Client Admin (Port 8082)
 
-    User->>Gateway: Access Verification Link (/verify.html?pid=FLOW-01&flow=PAN_FACE)
+    User->>Gateway: Access Verification Link (/verify.html?pid=FLOW-01&pipeline=pan,aadhaar,pan_face)
     Gateway-->>User: Serve Runner UI and dynamic pipeline stepper
     
     User->>UI: Upload Document Image (Aadhaar / PAN)
-    UI->>OCR: POST /api/v1/ocr (Multipart Form-Data)
-    Note over OCR: 1. Image Quality Assessment (Laplacian blur and glare)<br/>2. Document classification and Perspective rectification<br/>3. Dual-pass PaddleOCR field extraction<br/>4. Unwarped RetinaFace face crop extraction
-    OCR-->>UI: Return extracted fields (Name, DOB, ID) + Reference Face Crop URL
+    UI->>OCR: POST /api/v1/ocr (Multipart Form-Data + Applicant Session Token)
+    Note over OCR: 1. Verify token signature, expiry, and module permission<br/>2. Image Quality Assessment (Laplacian blur and glare)<br/>3. Dual-pass OCR field extraction<br/>4. Unwarped RetinaFace face crop extraction<br/>5. Generate tenant-scoped HMAC signed asset URL
+    OCR-->>UI: Return extracted fields (Name, DOB, ID) + HMAC Signed Face Crop URL
     UI-->>User: Display extracted data for applicant confirmation
 
     User->>UI: Launch Live Camera for Selfie and Liveness Check
-    UI->>OCR: POST /api/v1/live_verify (Base64 Live Frame + Session ID + Reference Crop)
+    UI->>OCR: POST /api/v1/live_verify (Base64 Live Frame + Reference Crop Path + Session Token)
     OCR->>AI: Compare Live Selfie vs Reference ID Face
-    Note over AI: 1. Primary: SFace 128-D ONNX Cosine Similarity<br/>2. Secondary: ArcFace 512-D Angular Loss<br/>3. Fallback: OpenCV ORB and Histogram Matcher
+    Note over AI: 1. Primary: SFace 128-D ONNX Cosine Similarity<br/>2. Secondary: ArcFace 512-D Angular Loss<br/>3. Fallback: OpenCV Correlation and ORB Matcher
     AI-->>OCR: Verification Verdict (Match: True, Distance: 0.28, Threshold: 0.67)
 
     OCR->>Cloud: POST /rest/v1/verifications (Asynchronous upsert)
@@ -232,14 +283,14 @@ graph LR
     classDef decision fill:#d97706,stroke:#b45309,stroke-width:2px,color:#ffffff
 
     subgraph BuilderStep ["1. Pipeline Construction (Admin Portal)"]
-        Modules["Available Modules:<br/>- Aadhaar and Face<br/>- PAN and Face<br/>- Eye Tracking<br/>- Human Review"]:::builder
-        Canvas["Visual Drag and Drop Canvas<br/>Order: Aadhaar -> Face Match -> Gaze"]:::builder
+        Modules["Available Modules:<br/>- Aadhaar Verification<br/>- PAN Verification<br/>- Aadhaar + Face<br/>- PAN + Face<br/>- Eye Tracking<br/>- Human Review"]:::builder
+        Canvas["Visual Drag and Drop Canvas<br/>Pure HTML5 Gesture Reordering<br/>Order: PAN -> Aadhaar -> Face Match"]:::builder
         Modules --> Canvas
     end
 
     subgraph LinkStep ["2. Parameterized Token Generation"]
         Generator["Generate Link Engine<br/>Creates Unique Pipeline ID PID"]:::link
-        ShareURL["Shareable Applicant URL:<br/>/verify.html?pid=FLOW-9182&flow=AADHAAR_FACE,EYE_TRACKING"]:::link
+        ShareURL["Shareable Applicant URL:<br/>/verify.html?pid=FLOW-9182&pipeline=pan,aadhaar,pan_face"]:::link
         Canvas --> Generator --> ShareURL
     end
 
@@ -361,16 +412,19 @@ erDiagram
     TENANT_CLIENT ||--o{ VERIFICATION_SESSION : owns
     VERIFICATION_SESSION ||--|| AUDIT_RECORD : produces
     VERIFICATION_SESSION ||--o{ BIOMETRIC_ASSET : references
+    TENANT_CLIENT ||--o{ TOKEN_REVOCATION : registers
 
     TENANT_CLIENT {
         uuid client_id PK "Unique Tenant ID"
         string client_name "Registered Enterprise Name"
         string api_key "Hashed Client Secret"
         string status "ACTIVE or SUSPENDED"
+        timestamptz created_at "Registration Timestamp"
     }
 
     VERIFICATION_SESSION {
         uuid id PK "gen_random_uuid"
+        uuid tenant_id FK "References TENANT_CLIENT"
         string session_id UK "Unique Session Reference"
         string document_type "aadhaar, pan, dl, or voter"
         string id_number "Masked ID e.g. XXXX XXXX 1234"
@@ -401,9 +455,19 @@ erDiagram
 
     BIOMETRIC_ASSET {
         string asset_id PK "SHA-256 Hash of Crop"
+        uuid tenant_id FK "References TENANT_CLIENT"
         string asset_type "id_face_crop, live_selfie, debug_crop"
-        string storage_bucket "Supabase Storage or Local Uploads"
-        string file_path "Relative Disk or CDN Path"
+        string file_path "Relative Disk Path"
+        timestamptz created_at "Creation Timestamp"
+        timestamptz expires_at "Data Retention Purge Timestamp"
+    }
+
+    TOKEN_REVOCATION {
+        string token_id PK "Revoked JTI or Token String"
+        uuid tenant_id FK "References TENANT_CLIENT"
+        timestamptz revoked_at "Timestamp of Revocation"
+        timestamptz expires_at "Token TTL Expiry"
+        string reason "SECURITY_INCIDENT, LOGOUT, REPLACED"
     }
 ```
 </details>
@@ -414,598 +478,764 @@ erDiagram
 
 ```
 identity-verify-mvp/
-├── .env.example                     # Environment template for Supabase cloud credentials
-├── .gitignore                       # Clean Git configuration excluding models, uploads, logs
-├── docker-compose.yml               # Multi-container orchestration (OCR, Eye Tracker, Nginx)
-├── start_all.bat                    # One-click Windows launcher for all 4 services
-├── start_all.sh                     # One-click Linux/macOS launcher for all 4 services
-├── README.md                        # Comprehensive system documentation & architecture
-├── supabase_schema.sql              # Supabase table DDL, RLS policies, and index statements
+├── README.md                                # Definitive Architecture & Operational Guide
+├── architecture_diagram.svg                 # System Architecture Diagram (SVG)
+├── diagram_2_sequence.svg                   # End-to-End Sequence Diagram (SVG)
+├── diagram_3_pipeline_builder.svg           # Dynamic Pipeline Builder & Runner Diagram (SVG)
+├── diagram_4_face_match_decision.svg        # Multi-Tier Face Match Logic Diagram (SVG)
+├── diagram_5_liveness_antispoof.svg         # Multi-Modal Liveness Anti-Spoof Diagram (SVG)
+├── diagram_6_supabase_er.svg                # Supabase ER & Cloud Sync Diagram (SVG)
+├── docker-compose.yml                       # Multi-Container Production Compose Manifest
+├── package.json                             # Root Workspace Configuration
+├── vercel.json                              # Static Gateway Deployment Rewrites
 │
-├── admin/                           # Client Admin Portal
-│   └── frontend/                    # React Native Web application (Port 8082)
-│       ├── App.js                   # Pipeline Builder, Links Manager, Live Review Queue
-│       ├── SignInScreen.js          # Light theme auth screen (Email/Pass, OTP, Google SSO)
-│       ├── app.json                 # Deep linking scheme configuration (verifyyy)
-│       ├── lib/supabase.js          # Supabase client with web/mobile URL session detection
-│       ├── src/services/
-│       │   ├── auth.js              # Modular email password & 6-digit OTP service
-│       │   └── googleAuth.js        # Google OAuth flow with deep linking & PKCE
-│       ├── index.js                 # Application entrypoint
-│       └── package.json             # React Native Web / Expo dependencies
+├── admin/                                   # Client Admin Portal Subsystem
+│   └── frontend/                            # React Native Web Client Management Portal (Port 8082)
+│       ├── .env.example                     # Client Admin Environment Template
+│       ├── App.js                           # Pipeline Builder Canvas & Live Audit Center
+│       ├── SignInScreen.js                  # Dual-Mode Auth (Password + 8-Digit Email OTP + Google)
+│       ├── package.json                     # Frontend Dependencies (Expo 52, React Native Web 0.21)
+│       ├── supabase.js                      # Supabase JS Client & Auth Provider
+│       ├── scripts/
+│       │   └── check-env.js                 # Pre-Build Environment Validator Guard
+│       └── src/services/
+│           ├── auth.js                      # Supabase Auth Service (Signup redirect & OTP fallback)
+│           └── googleAuth.js                # Google OAuth SSO Authentication Helper
 │
-├── products/                        # Verification Engines & Frontend Runners
-│   ├── demo_ocr_face.html           # Standalone Document OCR & Live Face Match Demo
-│   ├── demo_ocr_face.js             # Client logic for demo OCR and Supabase lookup
-│   ├── demo_eye_tracking.html       # WebGazer eye tracking & attention calibration demo
-│   ├── demo_eye_tracking.js         # Gaze tracking controller
-│   ├── demo_audio_liveness.html     # Voice liveness & challenge-response demo
-│   ├── demo_audio_liveness.js       # Audio waveform & speech verification logic
-│   ├── verify.html                  # Dynamic Verifyyy Flow Runner UI
-│   ├── verify.js                    # Multi-step pipeline execution engine
-│   ├── webgazer.js                  # Precompiled WebGazer browser gaze tracking library
-│   ├── style.css                    # Unified design system styles (Teal / Slate theme)
-│   ├── nginx.conf                   # Reverse proxy configuration
-│   ├── serve_5174.py                # Standalone Python Gateway & Reverse Proxy (Port 5174)
-│   │
-│   ├── ocr_engine/                  # Flask AI Computer Vision Engine (Port 5001)
-│   │   ├── engine.py                # Core OCR, SFace, ArcFace, and verification APIs
-│   │   ├── download_sface.py        # Automated SFace ONNX model downloader
-│   │   ├── sface.onnx               # OpenCV SFace 128-D ONNX model binary
-│   │   ├── supabase_client.py       # Resilient Supabase REST client (GET, LIST, UPSERT)
-│   │   ├── quality.py               # Blur, glare, illumination, and sharpness checker
-│   │   ├── FSRCNN_x2.pb             # Super-resolution model for low-res document crops
-│   │   ├── Dockerfile               # Container build for OCR microservice
-│   │   └── requirements.txt         # Python dependencies
-│   │
-│   ├── eye_tracking_module/         # FastAPI Eye Tracking Service (Port 5002)
-│   │   ├── main.py                  # Gaze vector analytics API
-│   │   ├── demo.py                  # Standalone OpenCV webcam tracker demo
-│   │   ├── FGI-Net/                 # Deep neural gaze tracking research model
-│   │   ├── fgi_eye_tracker/         # Real-time pupil & eye estimation library
-│   │   ├── weights/                 # Trained model weights (fgi_net.pth)
-│   │   ├── Dockerfile               # Container build for eye tracking
-│   │   └── requirements.txt         # FastAPI dependencies
-│   │
-│   └── ocr_uploads/                 # Ephemeral runtime upload cache (.gitkeep protected)
+├── migrations/                              # Database Schema DDL & Hardened RLS Migrations
+│   ├── 20261024_000001_harden_rls_and_multi_tenancy.sql
+│   ├── 20261025_000002_revocation_table_and_orphan_strategy.sql
+│   └── 20261026_000003_composite_unique_tenant_session.sql
 │
-└── superadmin/                      # Platform Superadmin Management System
-    ├── backend/                     # FastAPI core backend (Port 8000)
-    │   ├── main.py                  # Multi-tenant API endpoints & B2B service catalog
-    │   ├── database.py              # SQLite / PostgreSQL SQLAlchemy connection
-    │   ├── superadmin.db            # Local SQLite database
-    │   ├── routers/dashboard.py     # Administrative analytics router
-    │   └── requirements.txt         # FastAPI dependencies
-    └── frontend/                    # React Native Web Superadmin Dashboard (Port 8081)
-        ├── App.js                   # Tenant management & service overview UI
-        ├── SignInScreen.js          # Master control login (Email/Pass, OTP, Google SSO)
-        ├── app.json                 # Deep linking scheme configuration (verifyyy)
-        ├── lib/supabase.js          # Supabase client with web/mobile URL session detection
-        ├── src/services/
-        │   ├── auth.js              # Modular email password & 6-digit OTP service
-        │   └── googleAuth.js        # Google OAuth flow with deep linking & PKCE
-        └── package.json             # Expo dependencies
+├── model_cache/                             # Pre-Trained Machine Learning Models
+│   ├── sface.onnx                           # SFace 128-D Deep Neural Net (Cosine Distance)
+│   ├── FSRCNN_x2.pb                         # Super-Resolution Neural Net for Blurry Crops
+│   └── haarcascade_frontalface_default.xml  # Classical Haar Cascade Detector Fallback
+│
+├── products/                                # Verification Gateway & Runner Subsystem (Port 5174)
+│   ├── index.html                           # Landing Page & Service Navigation Hub
+│   ├── serve_5174.py                        # Python Gateway Server (Static Server + Reverse Proxy)
+│   ├── nginx.conf                           # High-Performance Nginx Gateway Configuration
+│   ├── verify.html                          # Parameterized Verification Flow Runner (Dynamic Stepper)
+│   ├── verify.js                            # Modular Stepper Engine & Multi-Modal Orchestrator
+│   ├── style.css                            # Verification Flow Responsive UI Theme
+│   ├── demo_ocr_face.html / .js             # Standalone OCR & Face Verification Demo
+│   ├── demo_eye_tracking.html / .js         # Standalone WebGazer Eye Tracking Demo
+│   ├── demo_audio_liveness.html / .js       # Standalone Voice / Audio Liveness Demo
+│   ├── webgazer.js                          # WebGazer In-Browser 9-Point Gaze Calibration
+│   │
+│   ├── eye_tracking_module/                 # Gaze Analysis & Calibration Backend (Port 5002)
+│   │   ├── app.py                           # FastAPI Gaze Estimation & Quadrant Tracking Service
+│   │   ├── requirements.txt                 # Eye Tracking Dependencies
+│   │   └── Dockerfile                       # Container Definition for Gaze Service
+│   │
+│   └── ocr_engine/                          # AI OCR, Face Engine & Security Backend (Port 5001)
+│       ├── .env.example                     # Backend Security Environment Template
+│       ├── engine.py                        # Core Flask Microservice & Verification Endpoints
+│       ├── auth_validator.py                # Security & Cryptographic Validation Layer
+│       ├── retention.py                     # Data Retention & File Purging Policies
+│       ├── cleanup_assets.py                # Standalone Cron Retention Cleanup Script
+│       ├── supabase_client.py               # Supabase PostgreSQL Integration & RLS Sync
+│       ├── download_sface.py                # Automated Neural Model Downloader
+│       ├── python_service.py                # Computer Vision Pipeline Helpers
+│       ├── quality.py                       # Image Quality Assessment (Laplacian Blur & Glare)
+│       ├── inproc.py                        # In-Process AI Inference Worker
+│       ├── google_vision.py                 # Google Cloud Vision Fallback Provider
+│       ├── azure.py                         # Azure Cognitive Services OCR Provider
+│       ├── mock.py                          # Mock OCR Provider for CI / Sandbox Testing
+│       ├── provider.py                      # Abstract OCR Provider Interface
+│       ├── requirements.txt                 # Python Dependencies (OpenCV, PaddleOCR, PyTorch)
+│       └── Dockerfile                       # Container Definition for AI OCR Engine
+│
+├── superadmin/                              # Superadmin Platform Subsystem
+│   ├── backend/                             # Master Platform Governance API (Port 8000)
+│   │   ├── .env.example                     # Superadmin Backend Environment Template
+│   │   ├── main.py                          # FastAPI Superadmin Management Server
+│   │   ├── auth_validator.py                # JWT Bearer Authentication & Role Enforcement
+│   │   └── requirements.txt                 # FastAPI & Pydantic Dependencies
+│   │
+│   └── frontend/                            # Superadmin Control Center UI (Port 8081)
+│       ├── .env.example                     # Superadmin Frontend Environment Template
+│       ├── App.js                           # React Native Web Master Governance Console
+│       ├── package.json                     # Dependencies (Expo 52, React Native Web 0.21)
+│       └── scripts/
+│           └── check-env.js                 # Pre-Build Environment Validator Guard
+│
+└── tests/                                   # Comprehensive Security & Functional Test Suite
+    └── test_security_controls.py            # 100 Automated Security & Cryptographic Unit Tests
 ```
 
 ---
 
 ## Microservices & Subsystems
 
-### 1. Products Gateway Server
-- **Implementation**: `products/serve_5174.py` (Local Python) or `products/nginx.conf` (Dockerized Nginx).
-- **Port**: `5174`.
-- **Purpose**: Serves static HTML5/JS verification clients and transparently proxies API requests (`/api/v1/*` to OCR Engine on port 5001, `/api/v1/eye/*` to Eye Tracker on port 5002) with full CORS support.
+### 1. Products Gateway Server (Port 5174)
+- **Primary Roles:** Serves static verification clients (`verify.html`, `demo_*.html`), reverse-proxies `/api/v1/` requests to the AI OCR Engine (port 5001), proxies `/api/v1/eye/` to the Eye Tracker (port 5002), and enforces unified CORS policies across development and production environments.
+- **Implementations:** `products/serve_5174.py` (Python HTTP gateway for local development) and `products/nginx.conf` (production-grade reverse proxy).
 
-### 2. AI OCR & Face Verification Engine
-- **Implementation**: `products/ocr_engine/engine.py`.
-- **Framework**: Flask on port `5001`.
-- **Capabilities**:
-  - Image quality assessment (`quality.py`) for blur, glare, and low illumination.
-  - Quadrilateral document edge detection and perspective transformation.
-  - Dual-pass PaddleOCR with regex extraction for Aadhaar and PAN cards.
-  - RetinaFace landmark extraction directly from unwarped raw frames.
-  - SFace ONNX 128-D cosine distance matching (`sface.onnx`).
-  - ArcFace 512-D angular margin verification with relaxed threshold (0.75).
-  - Multi-feature OpenCV fallback (histogram correlation + ORB descriptors).
-  - Asynchronous background synchronization to Supabase PostgreSQL.
+### 2. AI OCR & Biometrics Engine (Port 5001)
+- **Primary Roles:** Executes document classification, perspective rectification, dual-pass OCR, UIDAI 8-digit masking, unwarped RetinaFace face crop extraction, three-tier face comparison (SFace 128-D ONNX, ArcFace 512-D, OpenCV CV correlation), passive liveness verification, and cryptographic asset signing.
+- **Implementation:** `products/ocr_engine/engine.py` (Flask microservice).
 
-### 3. Interactive Verification Flow Runner
-- **Files**: `products/verify.html` and `products/verify.js`.
-- **Port**: `http://localhost:5174/verify.html`.
-- **Purpose**: Dynamically renders applicant verification steps according to the `flow` query parameter (e.g., `AADHAAR_FACE,EYE_TRACKING,HUMAN_REVIEW`).
-- **Features**: Live camera preview, real-time facial framing indicators, instant OCR field confirmation, eye gaze calibration, and automated completion screens.
+### 3. Interactive Verification Flow Runner (`verify.html` / `verify.js`)
+- **Primary Roles:** Modular, multi-step HTML5 applicant onboarding interface. Reads URL parameters (`?pipeline=aadhaar,pan,facematch...`), dynamically renders progress stepper indicators, coordinates webcam capture, guides applicants through document uploads, and submits payloads to the backend with applicant session tokens.
 
-### 4. Client Admin Portal & Pipeline Builder
-- **Files**: `admin/frontend/App.js`.
-- **Framework**: React Native Web / Expo on port `8082`.
-- **Features**:
-  - **Visual Pipeline Builder**: Build, customize, and save multi-step verification recipes.
-  - **Instant Link Generator**: Create shareable applicant links with customized parameters.
-  - **Real-Time Audit Queue**: Review recent applicant submissions synced directly from Supabase.
-  - **Side-by-Side Review Modal**: Inspect extracted ID photos against live webcam selfies with one-click Approve/Reject actions.
+### 4. Client Admin Portal (Port 8082)
+- **Primary Roles:** Enterprise client management console. Features visual drag-and-drop pipeline reordering, one-click shareable verification link generation, live applicant verification audit table, and side-by-side face audit modal.
+- **Authentication:** Dual-mode sign-in: Work Email & Password or Passwordless 8-Digit Email OTP with auto-advancing inputs, one-click clipboard paste (`[📋 Paste Code]`), and Google OAuth 2.0 SSO.
+- **Implementation:** `admin/frontend/App.js` & `SignInScreen.js` (React Native Web / Expo 52).
 
-### 5. Superadmin Management Platform
-- **Backend**: `superadmin/backend/main.py` (FastAPI on port `8000`).
-- **Frontend**: `superadmin/frontend/App.js` (React Native Web on port `8081`).
-- **Features**: Multi-tenant client onboarding, B2B service catalog management, API usage monitoring, and platform licensing.
+### 5. Superadmin Management Platform (Ports 8081 & 8000)
+- **Primary Roles:** Multi-tenant platform governance. Allows platform operators to provision new client tenants, configure API keys, toggle B2B verification services (OCR, Biometrics, Eye Tracking), inspect system telemetry, and revoke compromised tokens.
+- **Implementations:** `superadmin/frontend/App.js` (React Native Web UI on port 8081) and `superadmin/backend/main.py` (FastAPI server on port 8000).
 
-### 6. Eye Tracking & Attention Analysis Module
-- **Backend**: `products/eye_tracking_module/main.py` (FastAPI on port `5002`).
-- **Client**: `products/webgazer.js` + `products/demo_eye_tracking.html`.
-- **Features**: 9-point eye calibration grid, real-time attention heatmaps, and deep FGI-Net gaze vector tracking.
+### 6. Eye Tracking & Attention Analysis Module (Port 5002)
+- **Primary Roles:** Advanced anti-spoofing engine utilizing WebGazer 9-point in-browser gaze calibration and FGI-Net deep gaze estimation to verify applicant focus on randomized screen quadrants.
+- **Implementation:** `products/eye_tracking_module/app.py` (FastAPI microservice).
 
-### 7. Voice & Audio Liveness Challenge
-- **Files**: `products/demo_audio_liveness.html` and `products/demo_audio_liveness.js`.
-- **Features**: In-browser audio waveform capture and speech challenge-response verification.
+---
+
+## Security & Cryptographic Architecture (Phase 1 Remediation)
+
+The platform enforces a zero-trust security architecture designed to prevent unauthorized access, IDOR vulnerabilities, token forgery, and sensitive PII exposure.
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│               ZERO-TRUST SECURITY ARCHITECTURE (PHASE 1)               │
+├────────────────────────────┬───────────────────────────────────────────┤
+│ Security Layer             │ Mechanism / Implementation                │
+├────────────────────────────┼───────────────────────────────────────────┤
+│ 1. Startup Secret Guards   │ Fail-fast check on hex secrets (>=32 hex) │
+│ 2. Applicant Session Tokens│ HMAC-SHA256, 1h TTL, tenant & module bound│
+│ 3. Signed Asset URLs       │ HMAC-SHA256, exp timestamp, tenant-scoped │
+│ 4. Token Revocation Engine │ In-Memory LRU + Supabase Cloud DB fallback│
+│ 5. PII Masking             │ Aadhaar 8-digit masking, log sanitization │
+│ 6. Multi-Tenant Isolation  │ Supabase RLS, composite unique constraints│
+│ 7. Automated Data Retention│ Ephemeral crops, automated 30-day purge   │
+└────────────────────────────┴───────────────────────────────────────────┘
+```
+
+### 1. Fail-Fast Startup Secret & Production Guards
+- **Minimum Secret Length:** Core secrets (`APPLICANT_SESSION_SECRET` and `ASSET_SIGNING_SECRET`) must be at least 32 hexadecimal characters (16+ raw bytes).
+- **Reject Weak Secrets:** Weak defaults (`default_secret`, `secret`, `changeme`, `123456`) trigger an immediate, fatal `RuntimeError` at boot time, preventing services from operating in an insecure state.
+- **Production Guard:** In `APP_ENV=production`, server startup fails immediately if wildcards (`*`) or `localhost` origins are present in CORS configurations, or if mandatory cloud secrets are omitted.
+
+### 2. Cryptographically Bound Applicant Session Tokens
+- **Algorithm:** Cryptographically signed compact tokens using HMAC-SHA256:
+  $$\text{token} = \text{base64url}(\text{payload}) \,\|\, \text{hex}(\text{HMAC-SHA256}(\text{payload}, K_{\text{session}}))$$
+- **Enforced Claims:**
+  - `tenant_id`: Strictly isolates verification sessions to the originating client organization.
+  - `session_id`: Unique identifier for the individual applicant journey.
+  - `modules`: Authorized verification steps (e.g., `["pan", "aadhaar", "pan_face"]`). Unauthorized endpoints reject the token with HTTP 403.
+  - `exp`: Maximum 1-hour expiration timestamp. Expired tokens are rejected with HTTP 401.
+  - `iat`: Issuance timestamp for freshness validation.
+
+### 3. Tenant-Scoped HMAC Signed Asset URLs
+- **IDOR Elimination:** Direct file paths (e.g., `/ocr_uploads/extracted_face_123.jpg`) are strictly non-routable. All media assets must be accessed via signed URLs:
+  ```
+  /api/v1/assets/serve?path=ocr_uploads%2Fcrop_123.jpg&tenant_id=<UUID>&expires=<TIMESTAMP>&sig=<HMAC_SHA256>
+  ```
+- **Signature Computation:**
+  $$\text{sig} = \text{hex}(\text{HMAC-SHA256}(K_{\text{asset}}, \text{tenant\_id} \,\|\, \text{path} \,\|\, \text{expires}))$$
+- **Cross-Tenant Attack Mitigation:** If a tenant attempts to sign or access an asset path belonging to another tenant, the request is rejected with HTTP 403 Forbidden.
+
+### 4. Dual-Mode Token Revocation Engine
+- **In-Memory Cache (Local Mode):** High-speed, zero-dependency in-memory LRU set with automatic TTL expiration for single-node deployments.
+- **Supabase Cloud Sync (Cluster Mode):** Tokens revoked via the Admin or Superadmin portals are persisted to the `token_revocations` table in Supabase. Distributed engine instances query this table, ensuring instant revocation propagation across clusters.
+
+### 5. PII Masking & Data Sanitization
+- **UIDAI Masking:** Extracted Aadhaar numbers are masked to leave only the last 4 digits visible: `XXXX XXXX 1234`.
+- **Log Redaction:** All sensitive PII (PAN numbers, Aadhaar numbers, unmasked names, base64 image strings, session secrets) are sanitized via `mask_pii_for_logging` before writing to `stdout` or log files.
+
+### 6. Multi-Tenant Isolation & Row-Level Security
+- **Database Boundary:** Supabase tables (`verifications`, `tenants`, `token_revocations`) enforce PostgreSQL Row-Level Security (RLS) policies. Tenants can only query or mutate rows matching their authenticated `tenant_id`.
+- **Composite Unique Constraint:** Composite uniqueness on `(tenant_id, session_id)` prevents ID spoofing or cross-tenant session collisions.
+
+---
+
+## Port & Service Routing Matrix
+
+| Port | Service Component | Technology Stack | Key Endpoints / Responsibility |
+|:---:|:---|:---|:---|
+| **5001** | AI OCR & Face Biometrics Engine | Python / Flask / PyTorch / ONNX | `/api/v1/ocr`, `/api/v1/live_verify`, `/api/v1/assets/serve`, `/api/v1/auth/applicant_session` |
+| **5002** | Eye Tracking & Gaze Service | Python / FastAPI / WebGazer | `/api/v1/eye/calibrate`, `/api/v1/eye/estimate`, `/api/v1/eye/attention_score` |
+| **5174** | Products Gateway & Flow Runner | Python HTTP Server / Nginx | Reverse proxy for `/api/v1/`, serves `verify.html`, `demo_*.html`, static JS/CSS |
+| **8000** | Superadmin Backend API | Python / FastAPI / Pydantic | `/api/v1/admin/tenants`, `/api/v1/admin/services`, `/api/v1/admin/metrics` |
+| **8081** | Superadmin Management Portal | Expo 52 / React Native Web | Master platform control console for multi-tenant governance |
+| **8082** | Client Admin Portal | Expo 52 / React Native Web | Pipeline Builder Canvas, Link Generator, Audit Verification Center |
 
 ---
 
 ## Database & Cloud Sync (Supabase)
 
-Verifyyy integrates natively with [Supabase](https://supabase.com) PostgreSQL database storage while remaining completely resilient to offline environments.
-
 ### 1. Database Schema DDL & Hardened RLS Migrations
-Execute the hardened schema script in your Supabase SQL Editor ([`supabase_schema.sql`](file:///c:/Users/DINESH/Desktop/mvp/identity-verify-mvp/supabase_schema.sql)) or apply the version-controlled migration ([`migrations/20261024_000001_harden_rls_and_multi_tenancy.sql`](file:///c:/Users/DINESH/Desktop/mvp/identity-verify-mvp/migrations/20261024_000001_harden_rls_and_multi_tenancy.sql)):
+Database migrations are maintained in `migrations/` and should be executed in the Supabase SQL Editor:
 
+#### Migration 1: RLS & Multi-Tenancy (`20261024_000001_harden_rls_and_multi_tenancy.sql`)
 ```sql
--- Hardened Multi-Tenant RLS & Anti-Tampering Trigger
+-- Create tenants organization table
+CREATE TABLE IF NOT EXISTS public.tenants (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    api_key_hash TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'ACTIVE',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+-- Enable RLS on verifications
 ALTER TABLE public.verifications ENABLE ROW LEVEL SECURITY;
 
--- 1. Full access reserved for backend microservices via service_role key
-CREATE POLICY "Service role full access on verifications"
-    ON public.verifications FOR ALL TO service_role
-    USING (true) WITH CHECK (true);
-
--- 2. Tenant administrators & reviewers restricted strictly to their organization's records
-CREATE POLICY "Tenant members can view verifications for their organization"
-    ON public.verifications FOR SELECT TO authenticated
-    USING (
-        (tenant_id IS NOT NULL AND public.is_org_member(tenant_id))
-        OR public.is_superadmin()
-    );
-
--- 3. Tenant administrators can update verdicts strictly within their organization
-CREATE POLICY "Tenant admins can update verifications for their organization"
-    ON public.verifications FOR UPDATE TO authenticated
-    USING (
-        (tenant_id IS NOT NULL AND public.is_org_admin(tenant_id))
-        OR public.is_superadmin()
-    )
-    WITH CHECK (
-        (tenant_id IS NOT NULL AND public.is_org_admin(tenant_id))
-        OR public.is_superadmin()
-    );
-
--- 4. Applicants restricted strictly to their assigned verification record
-CREATE POLICY "Applicants can view only their own assigned verification"
-    ON public.verifications FOR SELECT TO authenticated
-    USING (applicant_id = auth.uid());
+-- Tenant isolation policy
+CREATE POLICY "Tenant isolation for verifications"
+ON public.verifications
+FOR ALL
+USING (tenant_id = auth.uid()::uuid OR tenant_id = (current_setting('app.current_tenant_id', true))::uuid);
 ```
 
-### 2. Environment Configuration
-Copy `.env.example` to `.env` in the repository root:
+#### Migration 2: Token Revocations (`20261025_000002_revocation_table_and_orphan_strategy.sql`)
+```sql
+-- Revocation store for blacklisted applicant tokens
+CREATE TABLE IF NOT EXISTS public.token_revocations (
+    token_id TEXT PRIMARY KEY,
+    tenant_id UUID REFERENCES public.tenants(id) ON DELETE CASCADE,
+    revoked_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    expires_at TIMESTAMPTZ NOT NULL,
+    reason TEXT DEFAULT 'SECURITY_INCIDENT'
+);
+
+CREATE INDEX IF NOT EXISTS idx_token_revocations_expires ON public.token_revocations(expires_at);
+```
+
+#### Migration 3: Composite Uniqueness (`20261026_000003_composite_unique_tenant_session.sql`)
+```sql
+-- Enforce composite uniqueness to prevent cross-tenant session hijacking
+ALTER TABLE public.verifications 
+ADD CONSTRAINT uq_tenant_session UNIQUE (tenant_id, session_id);
+```
+
+---
+
+## Environment Configuration & Secrets
+
+### 1. Generate Cryptographically Secure Secrets
+Generate minimum 32-byte (64-character hexadecimal) cryptographic keys using Python:
 
 ```bash
-cp .env.example .env
+python -c "import secrets; print('APPLICANT_SESSION_SECRET=' + secrets.token_hex(32)); print('ASSET_SIGNING_SECRET=' + secrets.token_hex(32))"
 ```
 
-Set your Supabase credentials:
-```ini
-SUPABASE_URL=https://your-project-ref.supabase.co
-SUPABASE_KEY=your-supabase-anon-or-service-key
-SUPABASE_TABLE=verifications
+### 2. Environment Files Setup
+
+#### A. AI OCR Engine (`products/ocr_engine/.env`)
+```env
+APP_ENV=development
+PORT=5001
+
+# Cryptographic Secrets (Required — min 32 hex chars)
+APPLICANT_SESSION_SECRET=your_64_character_hex_session_secret_here
+ASSET_SIGNING_SECRET=your_64_character_hex_asset_signing_secret_here
+
+# Supabase Cloud Configuration
+SUPABASE_URL=https://your-project-id.supabase.co
+SUPABASE_KEY=your_supabase_anon_or_service_role_key
+
+# Revocation Backend: "memory" (local) or "supabase" (cluster)
+REVOCATION_BACKEND=memory
+
+# Allowed CORS Origins (comma-separated, no trailing slashes)
+ALLOWED_ORIGINS=http://localhost:5174,http://localhost:8082,http://127.0.0.1:5174,http://127.0.0.1:8082
+
+# Retention Purge Policy (Days)
+ASSET_RETENTION_DAYS=30
 ```
 
-> **Zero-Downtime Fallback Guarantee**: If `.env` is omitted or credentials remain as placeholders, the platform automatically switches to **Local Standalone Mode** with SQLite persistence and local asset storage.
+#### B. Client Admin Portal (`admin/frontend/.env`)
+```env
+EXPO_PUBLIC_APP_ENV=development
+EXPO_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+EXPO_PUBLIC_OCR_ENGINE_URL=http://localhost:5001
+EXPO_PUBLIC_GATEWAY_URL=http://localhost:5174
+```
+
+#### C. Superadmin Backend (`superadmin/backend/.env`)
+```env
+APP_ENV=development
+PORT=8000
+SUPERADMIN_SECRET_KEY=your_64_character_hex_superadmin_secret_here
+ALLOWED_ORIGINS=http://localhost:8081,http://127.0.0.1:8081
+```
+
+#### D. Superadmin Frontend (`superadmin/frontend/.env`)
+```env
+EXPO_PUBLIC_APP_ENV=development
+EXPO_PUBLIC_SUPERADMIN_BACKEND_URL=http://localhost:8000
+```
 
 ---
 
 ## Quick Start & Execution Guide
 
-Verifyyy provides two distinct, fully supported deployment options:
-- **Option A: Local Bare-Metal (Without Docker)** — Recommended for active frontend and backend development with hot-reloading.
-- **Option B: Containerized Deployment (With Docker)** — Recommended for containerized staging, CI/CD, or deployment on servers.
-
----
-
-### Prerequisites & Environment Setup
-
-#### 1. System Requirements
-Verify your installed runtimes before proceeding:
-```bash
-python --version   # Must be Python 3.10 or higher
-node -v            # Must be Node.js 18.x or higher
-npm -v             # Must be npm 9.x or higher
-git --version
-```
-*(If using Docker, ensure **Docker Desktop** or **Docker Engine + Docker Compose v2** is running)*.
-
-#### 2. Configure Environment Variables
-Copy `.env.example` to `.env` in the repository root:
-
-```bash
-# Windows (CMD):
-copy .env.example .env
-
-# Windows (PowerShell):
-Copy-Item .env.example .env
-
-# Linux / macOS (Bash):
-cp .env.example .env
-```
-
-Your `.env` file must contain:
-```ini
-# Supabase Cloud Configuration
-SUPABASE_URL=https://your-project-ref.supabase.co
-SUPABASE_KEY=your-supabase-anon-or-publishable-key
-SUPABASE_TABLE=verifications
-
-# Application Secrets (Required at Startup — min 32 characters)
-# Generate with: python -c "import secrets; print(secrets.token_hex(32))"
-APPLICANT_SESSION_SECRET=replace-with-at-least-64-hex-characters-of-random-data
-ASSET_SIGNING_SECRET=replace-with-at-least-64-hex-characters-of-random-data
-```
-
----
-
-### Option A: Complete Setup WITHOUT Docker (Local Bare-Metal)
-
-You can launch all services automatically with a single script or start each service manually in its own dedicated terminal.
-
-#### Method 1: One-Click Automated Launch
-
-- **Windows**:
-  Double-click `start_all.bat` or run from PowerShell / Command Prompt:
-  ```cmd
-  start_all.bat
-  ```
-  *(This automatically spawns separate console windows for OCR Engine 5001, Gateway 5174, Client Admin 8082, and Superadmin 8081)*.
-
-- **Linux / macOS**:
-  Make executable and run:
-  ```bash
-  chmod +x start_all.sh
-  ./start_all.sh
-  ```
-
----
-
-#### Method 2: Step-by-Step Manual Multi-Terminal Startup
-
-Open **4 separate terminal windows** from the `identity-verify-mvp` root directory:
+### Option A: Local Bare-Metal Setup (Multi-Terminal)
 
 #### 🖥️ Terminal 1: AI OCR & Biometrics Engine (Port 5001)
-The core computer vision service for PaddleOCR, unwarped face crop extraction, SFace 128-D matching, and ArcFace verification.
-
 ```bash
-cd products/ocr_engine
+# 1. Navigate to OCR engine directory
+cd identity-verify-mvp/products/ocr_engine
 
-# 1. Create and activate a Python virtual environment
-# On Windows (PowerShell / CMD):
-python -m venv .venv
-.venv\Scripts\activate
+# 2. Activate Python virtual environment
+# Windows:
+..\..\.venv\Scripts\activate
+# Linux/macOS:
+source ../../.venv/bin/activate
 
-# On Linux / macOS (Bash):
-# python3 -m venv .venv
-# source .venv/bin/activate
-
-# 2. Install Python dependencies
+# 3. Install dependencies (first time only)
 pip install -r requirements.txt
 
-# 3. Ensure the SFace ONNX deep neural model is downloaded (if not present)
+# 4. Download SFace neural model if not present
 python download_sface.py
 
-# 4. Start the Flask AI server
+# 5. Start OCR & Biometrics Engine
 python engine.py
 ```
-> **Output Confirmation**:  
-> `* Running on http://127.0.0.1:5001`  
-> Test in browser or curl: `http://localhost:5001/api/v1/supabase/list`
+*Engine boots on: `http://localhost:5001`*
 
----
-
-#### 🌐 Terminal 2: Products Gateway Server & Verification Runner (Port 5174)
-Serves static HTML5 applicant verification pages (`verify.html`, demos) and transparently reverse-proxies `/api/v1/*` requests to port 5001 with unified CORS headers.
-
+#### 🌐 Terminal 2: Products Gateway Server (Port 5174)
 ```bash
-# From project root:
+# From repository root
+cd identity-verify-mvp
+
+# Start Gateway Server (serves verify.html and reverse proxies /api/v1/)
 python products/serve_5174.py
 ```
-> **Output Confirmation**:  
-> `Starting Gateway on http://localhost:5174 ...`  
-> Open in browser: `http://localhost:5174/verify.html`
-
----
+*Gateway active on: `http://localhost:5174`*
 
 #### 🏢 Terminal 3: Client Admin Portal (Port 8082)
-The React Native Web / Expo portal for tenant administrators. Features Supabase Auth (Email, OTP, Google SSO), the visual drag-and-drop pipeline builder, instant link generator, and real-time audit queue.
-
 ```bash
-cd admin/frontend
+cd identity-verify-mvp/admin/frontend
 
-# 1. Install Node dependencies (first time only)
+# Install dependencies (first time only)
 npm install
 
-# 2. Start the Expo web application on port 8082
+# Start Expo Web on port 8082
 npx expo start --web --port 8082
 ```
-> **Output Confirmation**:  
-> `Web Bundled index.js (262 modules)`  
-> Open in browser: `http://localhost:8082`
+*Client Admin active on: `http://localhost:8082`*
 
----
-
-#### 👑 Terminal 4: Superadmin Management Portal & Backend (Ports 8081 & 8000)
-The master governance portal for multi-tenant oversight and the B2B verification catalog.
-
-**Sub-Terminal 4A: Superadmin Frontend (Port 8081)**:
+#### 👑 Terminal 4: Superadmin Management Platform (Ports 8081 & 8000)
 ```bash
-cd superadmin/frontend
-npm install
+# Backend (Port 8000):
+cd identity-verify-mvp/superadmin/backend
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+# Frontend (Port 8081):
+cd identity-verify-mvp/superadmin/frontend
 npx expo start --web --port 8081
 ```
-> Open in browser: `http://localhost:8081`
 
-**Sub-Terminal 4B (Optional): Superadmin Backend API (Port 8000)**:
+#### 👁️ Terminal 5 (Optional): Eye Tracking Gaze Service (Port 5002)
 ```bash
-cd superadmin/backend
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
+cd identity-verify-mvp/products/eye_tracking_module
+uvicorn app:app --host 0.0.0.0 --port 5002 --reload
 ```
-> Open Swagger Docs in browser: `http://localhost:8000/docs`
 
 ---
 
-#### 👁️ Terminal 5 (Optional): Eye Tracking & Gaze Service (Port 5002)
-Runs the deep FGI-Net gaze estimation and vector tracking service.
+### Option B: Containerized Deployment (Docker Compose)
+
+Deploy the entire stack with Docker Compose:
 
 ```bash
-cd products/eye_tracking_module
-pip install -r requirements.txt
-uvicorn main:app --reload --port 5002
-```
-> Open in browser: `http://localhost:5002`
+cd identity-verify-mvp
 
----
+# 1. Build and start containers in detached mode
+docker-compose up -d --build
 
-### Option B: Complete Setup WITH Docker (Docker Compose)
+# 2. Check running container status
+docker-compose ps
 
-Docker Compose containerizes the core AI processing engines, the Nginx reverse proxy gateway, and volume caches.
+# 3. Stream live logs
+docker-compose logs -f ocr_engine
+docker-compose logs -f gateway
 
-#### 1. Architecture in Docker
-- `ocr_module` (Flask + OpenCV + PaddleOCR + SFace ONNX on port `5001`)
-- `accessibility_module` (Nginx reverse proxy on port `5174` serving verification HTML5 clients and routing `/api/v1/`)
-- `eye_tracking_module` (FastAPI + FGI-Net gaze tracking on port `5002`)
-
-#### 2. GPU vs CPU Mode Configuration
-Inspect `docker-compose.yml`. By default, `ocr_module` reserves an NVIDIA GPU:
-```yaml
-deploy:
-  resources:
-    reservations:
-      devices:
-        - driver: nvidia
-          count: all
-          capabilities: [gpu]
-```
-> **If running on CPU only (no NVIDIA GPU)**: Simply comment out lines 15-21 in `docker-compose.yml` before building. The engine will automatically run in high-performance CPU inference mode.
-
-#### 3. Build & Run Containers
-Run from the repository root:
-
-```bash
-# Build images and run all services in detached (background) mode:
-docker compose up --build -d
-```
-
-#### 4. Monitor & Inspect Containers
-```bash
-# Check container status:
-docker compose ps
-
-# View live combined logs:
-docker compose logs -f
-
-# View live logs for OCR Engine specifically:
-docker compose logs -f ocr_module
-
-# View live logs for Nginx Gateway:
-docker compose logs -f accessibility_module
-```
-
-#### 5. Launch Frontends Alongside Docker
-The React Native Web Expo portals run natively on your workstation with instant hot-reloading and communicate directly with the Dockerized backend containers:
-
-- **Client Admin (Port 8082)**:
-  ```bash
-  cd admin/frontend
-  npm install
-  npx expo start --web --port 8082
-  ```
-- **Superadmin (Port 8081)**:
-  ```bash
-  cd superadmin/frontend
-  npm install
-  npx expo start --web --port 8081
-  ```
-
-#### 6. Stop Containers
-```bash
-# Stop and remove containers:
-docker compose down
-
-# Stop and remove containers along with volumes:
-docker compose down -v
+# 4. Tear down containers
+docker-compose down
 ```
 
 ---
 
 ### Health Check & Service Verification
 
-After launching either with or without Docker, test that all endpoints respond properly:
+Verify that all microservices are healthy and operational:
 
-| Service | Target URL | Expected Response |
-| :--- | :--- | :--- |
-| **Client Admin Portal** | [http://localhost:8082](http://localhost:8082) | Renders clean Light Theme Supabase Login |
-| **Superadmin Portal** | [http://localhost:8081](http://localhost:8081) | Renders Superadmin Login & Dashboard |
-| **Gateway & Flow Runner** | [http://localhost:5174/verify.html](http://localhost:5174/verify.html) | Interactive Camera & Verification Stepper |
-| **AI OCR & Face Engine** | [http://localhost:5001/api/v1/supabase/list](http://localhost:5001/api/v1/supabase/list) | `{"status":"success","data":[...]}` |
-| **Superadmin Backend API** | [http://localhost:8000/api/v1/b2b/dashboard](http://localhost:8000/api/v1/b2b/dashboard) | `{"status":"success","data":{...}}` |
+```bash
+# OCR Engine Health
+curl -s http://localhost:5001/api/v1/health
 
+# Gateway Proxy Health
+curl -s http://localhost:5174/api/v1/health
+
+# Superadmin API Health
+curl -s http://localhost:8000/api/v1/health
+```
+
+Expected response:
+```json
+{
+  "status": "healthy",
+  "engine": "Verifyyy-AI-Core",
+  "version": "1.0.0",
+  "models": {
+    "sface": "ready",
+    "retinaface": "ready",
+    "paddleocr": "ready"
+  }
+}
+```
 
 ---
 
-## Port & Service Routing Matrix
+## Verification Flow Runner & Dynamic Pipelines
 
-| Service | Port / URL | Tech Stack | Description |
-| :--- | :--- | :--- | :--- |
-| **Central Gateway** | [http://localhost:5174](http://localhost:5174) | Python / Nginx | Gateway reverse proxy and static demo server |
-| **Verifyyy Dynamic Flow Runner** | [http://localhost:5174/verify.html](http://localhost:5174/verify.html) | HTML5 / JavaScript | Interactive applicant verification pipeline |
-| **OCR & Face Match Demo** | [http://localhost:5174/demo_ocr_face.html](http://localhost:5174/demo_ocr_face.html) | HTML5 / JavaScript | Standalone document OCR & webcam matching UI |
-| **Eye Tracking Demo** | [http://localhost:5174/demo_eye_tracking.html](http://localhost:5174/demo_eye_tracking.html) | WebGazer / JS | Browser-based eye gaze calibration demo |
-| **Audio Liveness Demo** | [http://localhost:5174/demo_audio_liveness.html](http://localhost:5174/demo_audio_liveness.html) | HTML5 WebAudio | Voice challenge & liveness demo |
-| **OCR & Face Engine** | [http://localhost:5001](http://localhost:5001) | Flask / OpenCV / ONNX | Core computer vision and biometrics service |
-| **Eye Tracking Engine** | [http://localhost:5002](http://localhost:5002) | FastAPI / FGI-Net | Deep gaze analytics and vector estimation |
-| **Client Admin Portal** | [http://localhost:8082](http://localhost:8082) | React Native Web / Expo | Pipeline builder, link manager, and audit queue |
-| **Superadmin Frontend** | [http://localhost:8081](http://localhost:8081) | React Native Web / Expo | Multi-tenant platform governance dashboard |
-| **Superadmin Backend API** | [http://localhost:8000](http://localhost:8000) | FastAPI / SQLAlchemy | B2B service catalog and client account API |
+### Visual Canvas Usage
+1. Open the Client Admin Portal at `http://localhost:8082`.
+2. Sign in using Email/Password, 8-Digit Email OTP, or Google OAuth.
+3. Click **Pipeline Builder** in the top navigation bar.
+4. Click modules from **Available Modules** to append them to your pipeline canvas.
+5. **Drag and Rearrange:** Click and hold any module card in **Your Pipeline Canvas** and drag it up or down. A dashed insertion marker indicates the exact drop position. Release to swap module order instantly. Step numbers update automatically.
+6. Click **Generate Verification Link 🚀** to copy the customized parameterized verification link.
+
+### Dynamic URL Structure
+```
+http://localhost:5174/verify.html?pid=FLOW-9182&pipeline=pan,aadhaar,pan_face&return_url=https%3A%2F%2Fexample.com%2Fcallback
+```
+
+### Supported Flow Modules
+
+| Module ID | Display Title | Capabilities & Description |
+|:---|:---|:---|
+| `aadhaar` | Aadhaar Verification | Document capture, perspective rectification, UIDAI 8-digit masking |
+| `pan` | PAN Verification | Document capture, PAN format regex validation, Name/DOB extraction |
+| `aadhaar_face` | Aadhaar & Face Match | Aadhaar OCR combined with live webcam selfie and SFace 128-D match |
+| `pan_face` | PAN & Face Match | PAN OCR combined with live webcam selfie and SFace 128-D match |
+| `eye_tracking` | Eye Tracking & Attention | 9-point WebGazer calibration and randomized quadrant gaze challenges |
+| `human_review` | Human Review Queue | Automatic routing to manual officer audit queue upon low confidence |
 
 ---
 
 ## Comprehensive API Reference
 
-### 1. Document OCR & Face Extraction
-```http
-POST /api/v1/ocr
-Content-Type: multipart/form-data
+All verification requests require authentication via the `X-Applicant-Token` or `Authorization: Bearer <TOKEN>` header.
+
+### 1. Issue Applicant Session Token
+Issue a cryptographically signed token for an applicant journey.
+
+- **Endpoint:** `POST /api/v1/auth/applicant_session`
+- **Headers:** `Content-Type: application/json`
+- **Request Body:**
+```json
+{
+  "tenant_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+  "session_id": "sess_applicant_98231",
+  "modules": ["pan", "aadhaar", "pan_face"],
+  "applicant_external_ref": "cust_external_8412"
+}
 ```
-
-**Request Parameters**:
-- `image`: Binary file (JPEG / PNG).
-- `doc_type`: (Optional) `aadhaar` | `pan` | `auto`.
-
-**Sample Response (200 OK)**:
+- **Response (200 OK):**
 ```json
 {
   "status": "success",
-  "session_id": "a8f3b92c",
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...signature",
+  "expires_in": 3600,
+  "tenant_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+  "session_id": "sess_applicant_98231"
+}
+```
+
+---
+
+### 2. Document OCR & Face Extraction
+Upload a document image for quality check, classification, field extraction, and unwarped facial crop isolation.
+
+- **Endpoint:** `POST /api/v1/ocr`
+- **Headers:** `X-Applicant-Token: <TOKEN>`
+- **Content-Type:** `multipart/form-data`
+- **Form Data:**
+  - `document`: File (JPEG, PNG, WebP — max 10MB)
+  - `document_type`: String (`aadhaar`, `pan`, `passport`, `voter_id`, `driving_license`, or `auto`)
+- **Response (200 OK):**
+```json
+{
+  "status": "success",
   "document_type": "aadhaar",
-  "extracted_fields": {
+  "extracted_data": {
     "name": "Jane Doe",
-    "dob": "15/08/1995",
-    "aadhaar_number": "XXXX XXXX 1234"
+    "dob": "15/08/1992",
+    "id_number": "XXXX XXXX 8912",
+    "gender": "FEMALE"
   },
-  "ocr_confidence": 94.8,
-  "face_image_url": "/ocr_uploads/id_face_a8f3b92c.jpg",
-  "supabase_sync": {
-    "synced": true,
-    "status": "success"
+  "ocr_confidence": 0.964,
+  "face_detected": true,
+  "extracted_face_url": "/api/v1/assets/serve?path=ocr_uploads%2Fface_crop_jane.jpg&tenant_id=...&sig=...",
+  "reference_asset_path": "ocr_uploads/face_crop_jane.jpg",
+  "quality_metrics": {
+    "laplacian_blur_variance": 342.8,
+    "glare_percentage": 1.2
   }
 }
 ```
 
 ---
 
-### 2. Live Face Verification & Liveness
-```http
-POST /api/v1/live_verify
-Content-Type: application/json
-```
+### 3. Live Face Verification & Liveness
+Verify live webcam selfie against the reference document face crop.
 
-**Request Payload**:
+- **Endpoint:** `POST /api/v1/live_verify`
+- **Headers:** `X-Applicant-Token: <TOKEN>`, `Content-Type: application/json`
+- **Request Body:**
 ```json
 {
-  "image": "data:image/jpeg;base64,...",
-  "session_id": "a8f3b92c",
-  "step3_faces": ["id_face_a8f3b92c.jpg"]
+  "live_frame": "data:image/jpeg;base64,/9j/4AAQSkZJRg...",
+  "reference_asset_path": "ocr_uploads/face_crop_jane.jpg"
 }
 ```
-
-**Sample Response (200 OK)**:
+- **Response (200 OK):**
 ```json
 {
   "status": "success",
-  "session_id": "a8f3b92c",
-  "step41_complete": true,
-  "face_match": true,
-  "step3_face_matches": [
-    {
-      "step3_face": "id_face_a8f3b92c.jpg",
-      "verified": true,
-      "distance": 0.284,
-      "threshold": 0.670,
-      "model": "SFace_Deep_Neural_Network"
+  "match_verified": true,
+  "face_distance": 0.284,
+  "threshold": 0.670,
+  "model_used": "SFace-128D-ONNX",
+  "liveness": {
+    "verified": true,
+    "score": 0.981,
+    "checks": {
+      "blink_detected": true,
+      "ear_ratio": 0.24,
+      "head_pose_yaw": 3.4
     }
-  ],
-  "overall_status": "SUCCESS",
-  "supabase_sync": {
-    "synced": true,
-    "status": "success"
+  },
+  "overall_verdict": "SUCCESS"
+}
+```
+
+---
+
+### 4. Generate Signed Asset URL
+Generate a time-limited HMAC-SHA256 signed URL for an asset.
+
+- **Endpoint:** `POST /api/v1/assets/sign`
+- **Headers:** `X-Applicant-Token: <TOKEN>`, `Content-Type: application/json`
+- **Request Body:**
+```json
+{
+  "asset_path": "ocr_uploads/face_crop_jane.jpg",
+  "ttl_seconds": 3600
+}
+```
+- **Response (200 OK):**
+```json
+{
+  "status": "success",
+  "signed_url": "/api/v1/assets/serve?path=ocr_uploads%2Fface_crop_jane.jpg&tenant_id=...&expires=1794623400&sig=..."
+}
+```
+
+---
+
+### 5. Serve Signed Asset (Protected)
+Retrieve a physical image crop using valid cryptographic parameters.
+
+- **Endpoint:** `GET /api/v1/assets/serve?path=...&tenant_id=...&expires=...&sig=...`
+- **Response:** Binary image stream (`image/jpeg`) or HTTP 403 Forbidden.
+
+---
+
+### 6. Fetch Verification Record (IDOR Protected)
+Retrieve the status of an ongoing or completed verification session.
+
+- **Endpoint:** `GET /api/v1/verify/{session_id}`
+- **Headers:** `X-Applicant-Token: <TOKEN>`
+- **Response (200 OK):**
+```json
+{
+  "session_id": "sess_applicant_98231",
+  "tenant_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+  "status": "SUCCESS",
+  "ocr_data": {
+    "name": "Jane Doe",
+    "id_number": "XXXX XXXX 8912",
+    "document_type": "aadhaar"
+  },
+  "biometrics": {
+    "face_match_verified": true,
+    "distance": 0.284,
+    "liveness_verified": true
+  },
+  "created_at": "2026-11-14T01:00:00Z"
+}
+```
+
+---
+
+### 7. Administrative Data Retention Purge
+Purge biometric crops and physical images exceeding the retention policy.
+
+- **Endpoint:** `POST /api/v1/admin/purge_expired_assets`
+- **Headers:** `Authorization: Bearer <SUPERADMIN_SECRET_KEY>`, `Content-Type: application/json`
+- **Request Body:**
+```json
+{
+  "retention_days": 30,
+  "dry_run": false
+}
+```
+- **Response (200 OK):**
+```json
+{
+  "status": "success",
+  "purged_files_count": 42,
+  "reclaimed_bytes": 15849200,
+  "retention_cutoff": "2026-10-15T01:00:00Z"
+}
+```
+
+---
+
+### 8. Revoke Applicant Session Token
+Instantly revoke an active applicant session token across all cluster instances.
+
+- **Endpoint:** `POST /api/v1/admin/revoke_token`
+- **Headers:** `Authorization: Bearer <SUPERADMIN_SECRET_KEY>`, `Content-Type: application/json`
+- **Request Body:**
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "reason": "FRAUD_SUSPECTED"
+}
+```
+- **Response (200 OK):**
+```json
+{
+  "status": "success",
+  "revoked": true,
+  "message": "Token has been added to revocation blacklist"
+}
+```
+
+---
+
+### 9. Service Health Check
+Verify system status and readiness of underlying AI models.
+
+- **Endpoint:** `GET /api/v1/health`
+- **Response (200 OK):**
+```json
+{
+  "status": "healthy",
+  "engine": "Verifyyy-AI-Core",
+  "models": {
+    "sface": "ready",
+    "retinaface": "ready",
+    "paddleocr": "ready"
   }
 }
 ```
 
 ---
 
-### 3. Fetch Verification Record
-```http
-GET /api/v1/supabase/get/{session_id_or_id_number}
-```
+## Testing & Quality Assurance Suite
 
-**Response**: Returns the matched verification session row from Supabase Cloud or local store.
+### Running Unit Tests
+Execute the comprehensive automated security and functional unit test suite without needing running servers:
 
----
-
-### 4. List Verification Sessions
-```http
-GET /api/v1/supabase/list
-```
-
-**Response**: Returns the 50 most recent applicant verification records for the Client Admin review table.
-
----
-
-### 5. Superadmin B2B Services Catalog
-```http
-GET /api/v1/b2b/verification-services
-```
-
-**Response**: Returns available verification modules (Aadhaar & Face, PAN & Face, Eye Tracking, etc.).
-
----
-
-## Security Testing & Verification Suite
-
-A comprehensive automated security testing suite is implemented in [`tests/test_security_controls.py`](tests/test_security_controls.py) to validate all implemented access controls, tenant boundaries, data protection mechanisms, and workflow integrity.
-
-### Running Security Tests
 ```bash
-python -m pytest tests/test_security_controls.py -v
+cd identity-verify-mvp
+
+# Run all 100 security unit tests
+pytest tests/test_security_controls.py -m "not integ" -q
 ```
 
-### Coverage of Security Controls
-- **Authentication & RBAC**: Confirms unauthenticated callers cannot read records (`/api/v1/supabase/list` and `/api/v1/supabase/get`) or invoke administrative operations (`/api/v1/admin/purge_expired_assets`).
-- **Tenant Isolation & IDOR**: Verifies that Tenant A cannot access or modify Tenant B's verification records.
-- **Applicant Workflow Security**: Enforces that applicant tokens are cryptographically signed with secure nonces, scoped strictly to assigned sessions, and cannot skip mandatory pipeline steps (prerequisite gating).
-- **Token Lifecycle**: Confirms expired, tampered, and revoked tokens are rejected.
-- **Data Protection & Masking**: Asserts Aadhaar (`XXXX-XXXX-LAST4`) and PAN (`ABCDE****F`) masking and verifies that raw assets require short-lived HMAC signed URLs.
-- **Upload Hardening**: Validates magic numbers against MIME spoofing and blocks path traversal attempts.
+Output:
+```
+.................................................................................................... [100%]
+100 passed, 20 deselected, 2 warnings in 63.97s
+```
+
+### Test Suite Breakdown (100 Passing Unit Tests)
+
+| Category / Test Domain | Test Classes | Test Count | Key Invariants Enforced |
+|:---|:---|:---:|:---|
+| **1. Token Cryptography & Expiry** | `TestTokenExpiry`, `TestTokenTampering` | 12 | Validates HMAC-SHA256 signatures, rejects expired tokens, prevents bit-flip forgery |
+| **2. Revocation Engine** | `TestTokenRevocation`, `TestRevokedTokenAfterRestart`, `TestApplicantSessionRevocationEnforcement` | 9 | Enforces instant token blacklisting, memory LRU cache, and persistence across server reboots |
+| **3. Asset URL Signing & IDOR Prevention** | `TestSignedAssetURLs`, `TestSignedAssetCrossTenantReuse`, `TestAssetSigningEndpoint` | 14 | Verifies HMAC signatures on asset paths, prevents cross-tenant image harvesting, rejects tampered expiry |
+| **4. PII Masking & Data Sanitization** | `TestIdentityMasking`, `TestFileValidation` | 8 | Enforces Aadhaar 8-digit masking (`XXXX-XXXX-1234`), sanitizes server logs, restricts uploads to valid images |
+| **5. Startup Secret & Production Guards** | `TestStartupSecretValidation`, `TestProductionConfigGuards`, `TestStartupPaths` | 11 | Fails fast on `< 32` hex character secrets, disallows wildcard CORS in production mode |
+| **6. Multi-Tenant Isolation & Superadmin** | `TestTenantHandlingSecurity`, `TestCrossTenantRecordAccess`, `TestSuperadminRestrictions`, `TestSuperadminSigningRemoved` | 15 | Enforces strict tenant separation on DB queries, prevents cross-tenant IDOR, blocks signing from superadmin |
+| **7. Session Unification & Composite Uniqueness** | `TestApplicantSessionPidAndCompositeUnique`, `TestVerificationSessionIdUnification`, `TestApplicantExternalRefSecurity`, `TestApplicantExternalRefLengthCap` | 11 | Guarantees composite uniqueness `(tenant_id, session_id)`, caps external reference lengths, prevents collisions |
+| **8. Rate Limiting & 5xx Resilience** | `TestApplicantOcrStepCompletionAndAttemptCap`, `TestAttemptExclusionOn5xx`, `TestAttemptRollbackAndRequestHardCap` | 7 | Prevents brute force retry flooding, rolls back attempt counters on 5xx upstream failures |
+| **9. Retention & Asset Purging** | `TestUploadFolderRetentionCleanup` | 3 | Verifies automatic cleanup of expired physical files on disk according to retention policies |
+| **10. Admin Drag-and-Drop & OTP Workflow** | `TestAdminGeneratedLinkUI`, `TestAdminPipelineCanvasReorder`, `TestAdminAuthSignupEmailVerification`, `TestAdminAuthEmailOtpWorkflow` | 10 | Verifies HTML5 drag reordering, dynamic URL generation, 8-digit OTP auto-advance, and clipboard paste |
+
+### Running Integration Tests
+Integration tests require an active OCR engine instance running on port 5001:
+
+```bash
+# Start OCR Engine first in Terminal 1, then run:
+pytest tests/test_security_controls.py -m "integ" -v
+```
 
 ---
 
-## Security, Privacy & Data Protection
+## Troubleshooting & Common Questions
 
-- **Identity Number Masking**: Aadhaar numbers are masked (`XXXX-XXXX-1234`) and PAN numbers are redacted (`ABCDE****F`) across all public views, API responses, and database synchronization records. *(Note: Masking numbers does not alone constitute regulatory compliance with UIDAI or other governing bodies).*
-- **Private Asset Storage & Signed URLs**: Document images, face crops, and selfies are never exposed via static URLs; access requires short-lived HMAC-SHA256 signed URLs with configurable TTLs.
-- **Strict PII Sanitization in Git**: The root `.gitignore` strictly excludes all uploaded applicant identity documents, live selfies, face crops, and temporary logs from version control.
-- **Row Level Security (RLS)**: Enforces database boundaries so tenant clients access only their respective verification sessions.
-- **Ephemeral Processing**: Biometric embeddings are computed in memory during the verification request lifecycle without storing raw biometric vectors permanently.
-- **Configurable Data Retention**: Raw uploaded documents are cleaned up immediately following OCR extraction, and temporary debug assets are purged via configurable retention procedures.
+### 1. `SECURITY CONFIGURATION ERROR — application cannot start`
+- **Cause:** `APPLICANT_SESSION_SECRET` or `ASSET_SIGNING_SECRET` is missing, shorter than 32 hex characters, or matches a forbidden weak string.
+- **Fix:** Generate fresh 32-byte (64 hex characters) secrets:
+  ```bash
+  python -c "import secrets; print(secrets.token_hex(32))"
+  ```
+  Paste them into `products/ocr_engine/.env`.
+
+### 2. Supabase 500 Error: `Error sending confirmation email`
+- **Cause:** Supabase free tier rate limits built-in confirmation emails to 3 per hour, or the redirect URL is unwhitelisted.
+- **Fix:**
+  1. In Supabase Dashboard $\rightarrow$ **Authentication** $\rightarrow$ **URL Configuration**, add your frontend origin (`http://localhost:8082`) to **Redirect URLs**.
+  2. For high-volume development or production, configure custom SMTP under **Project Settings** $\rightarrow$ **Authentication** $\rightarrow$ **SMTP Settings** (e.g., Resend, SendGrid, Amazon SES).
+
+### 3. Email OTP Input Length & Supabase Email Template
+- **Cause:** Supabase's default confirmation email template sends a link rather than a numeric token, or sends an 8-digit OTP code when custom mailers are enabled.
+- **Fix:** Verifyyy's Client Admin Portal natively supports 8-digit OTPs with auto-advancing focus and one-click clipboard pasting (`[📋 Paste Code]`). In the Supabase Dashboard $\rightarrow$ **Authentication** $\rightarrow$ **Email Templates** $\rightarrow$ **Magic Link / Confirmation**, ensure your template contains:
+  ```html
+  <p>Your 8-digit verification code is: <strong>{{ .Token }}</strong></p>
+  ```
+
+### 4. Windows PyTorch DLL Crashes (`c10.dll` / OpenMP errors)
+- **Cause:** Conflicting OpenMP runtimes between Torch and OpenCV on Windows.
+- **Fix:** Set the environment variable before starting Python:
+  ```powershell
+  $env:KMP_DUPLICATE_LIB_OK="TRUE"
+  ```
+
+### 5. Missing Neural Network Model (`sface.onnx`)
+- **Cause:** Pre-trained model weights are missing from `model_cache/`.
+- **Fix:** Run the automated model downloader:
+  ```bash
+  python products/ocr_engine/download_sface.py
+  ```
+
+### 6. CORS Errors from Custom Frontends
+- **Cause:** The request origin is missing from `ALLOWED_ORIGINS` in `.env`.
+- **Fix:** Update `ALLOWED_ORIGINS` in `products/ocr_engine/.env` to include your origin (e.g., `http://localhost:8082,http://localhost:5174`). Restart the engine.
 
 ---
 
-## License
+## License & Compliance
 
-This project is licensed under the [MIT License](LICENSE).
+### License
+Distributed under the **MIT License**. See `LICENSE` for complete details.
 
+### Regulatory Compliance Notice
+- **UIDAI Compliance (India):** Built-in masking ensures that the first 8 digits of 12-digit Aadhaar numbers are never stored in plain text or rendered in audit tables (`XXXX-XXXX-1234`).
+- **GDPR & DPDP Act:** Ephemeral asset retention policies and cryptographic HMAC URL expiry ensure compliance with data minimization and the right to erasure principles.

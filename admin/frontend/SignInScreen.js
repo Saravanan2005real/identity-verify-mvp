@@ -17,6 +17,7 @@ import { supabase } from './lib/supabase';
 import {
   signIn,
   signUp,
+  resendVerificationEmail,
   signInWithOtp,
   verifyOtp,
   resetPasswordForEmail,
@@ -73,7 +74,7 @@ export default function SignInScreen({
 
   // --- OTP States ---
   const [otpStep, setOtpStep] = useState('request'); // 'request' | 'verify'
-  const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
+  const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '', '', '']);
   const [resendCountdown, setResendCountdown] = useState(45);
   const [canResend, setCanResend] = useState(false);
   const otpInputsRef = useRef([]);
@@ -86,6 +87,11 @@ export default function SignInScreen({
   const [fpEmail, setFpEmail] = useState('');
   const [fpSent, setFpSent] = useState(false);
   const [fpLoading, setFpLoading] = useState(false);
+
+  // --- Email Verification States ---
+  const [signupSuccess, setSignupSuccess] = useState(false);
+  const [signupSuccessEmail, setSignupSuccessEmail] = useState('');
+  const [resendLoading, setResendLoading] = useState(false);
 
   useEffect(() => {
     try {
@@ -120,6 +126,21 @@ export default function SignInScreen({
     setTimeout(() => setToastMessage(''), 3500);
   };
 
+  const handleResendVerification = async () => {
+    const targetEmail = (signupSuccessEmail || email).trim();
+    if (!targetEmail) return;
+    setResendLoading(true);
+    setErrorMessage('');
+    try {
+      await resendVerificationEmail(targetEmail);
+      triggerToast('Verification email resent! Please check your inbox.');
+    } catch (err) {
+      setErrorMessage(err.message || 'Failed to resend verification email.');
+    } finally {
+      setResendLoading(false);
+    }
+  };
+
   // --- Password Authentication (Sign In / Sign Up) ---
   const handlePasswordAuth = async () => {
     setErrorMessage('');
@@ -151,8 +172,9 @@ export default function SignInScreen({
           }
           if (onLoginSuccess) onLoginSuccess(data.user);
         } else {
-          triggerToast('Account created! Please check your email to confirm registration or sign in.');
-          setIsSignUpMode(false);
+          setSignupSuccessEmail(cleanEmail);
+          setSignupSuccess(true);
+          triggerToast('Verification link sent to your email!');
         }
       } else {
         const data = await signIn(cleanEmail, password);
@@ -169,7 +191,18 @@ export default function SignInScreen({
         }
       }
     } catch (err) {
-      setErrorMessage(err.message || 'Authentication failed. Please check credentials.');
+      const raw = (err?.message || '').toLowerCase();
+      if (raw.includes('already registered') || raw.includes('user already exists')) {
+        setErrorMessage('An account with this email already exists. Please sign in with your password.');
+      } else if (raw.includes('email not confirmed') || raw.includes('not confirmed')) {
+        setSignupSuccessEmail(cleanEmail);
+        setErrorMessage('Email address has not been confirmed yet. Please check your inbox or click Resend Verification below.');
+      } else if (raw.includes('error sending confirmation email') || err?.status === 500) {
+        setSignupSuccessEmail(cleanEmail);
+        setErrorMessage('Account created in Supabase, but failed to send verification email (Supabase SMTP Error). Please check your Supabase SMTP settings or click Resend Verification.');
+      } else {
+        setErrorMessage(err.message || 'Authentication failed. Please check credentials.');
+      }
     } finally {
       setLoading(false);
     }
@@ -232,12 +265,12 @@ export default function SignInScreen({
     }
   };
 
-  const handleVerifyOtp = async () => {
+  const handleVerifyOtp = async (codeToVerify) => {
     setErrorMessage('');
-    const entered = otpDigits.join('');
+    const entered = (typeof codeToVerify === 'string' ? codeToVerify : otpDigits.join('')).trim();
 
     if (entered.length < 6) {
-      setErrorMessage('Please enter all 6 digits of the code.');
+      setErrorMessage('Please enter the verification code.');
       return;
     }
 
@@ -245,37 +278,83 @@ export default function SignInScreen({
 
     try {
       const data = await verifyOtp(email, entered);
-      if (data?.user) {
+      const user = data?.user || data?.session?.user;
+      if (user) {
+        if (rememberMe) {
+          try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+              localStorage.setItem('verifyyy_remembered_email', email.trim());
+            }
+          } catch (e) {}
+        }
         triggerToast('Code verified successfully!');
-        if (onLoginSuccess) onLoginSuccess(data.user);
+        if (onLoginSuccess) onLoginSuccess(user);
       }
     } catch (err) {
-      setErrorMessage(err.message || 'Invalid verification code.');
+      const msg = err?.message || '';
+      if (msg.toLowerCase().includes('expired') || msg.toLowerCase().includes('invalid')) {
+        setErrorMessage('Invalid or expired verification code. Please enter the code from your email or click Resend Code.');
+      } else {
+        setErrorMessage(msg || 'Invalid verification code.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  const applyPastedCode = (pastedText) => {
+    if (!pastedText) return;
+    const clean = pastedText.replace(/[^0-9]/g, '').slice(0, 8);
+    if (!clean) return;
+
+    const updated = ['', '', '', '', '', '', '', ''];
+    for (let i = 0; i < clean.length; i++) {
+      updated[i] = clean[i];
+    }
+    setOtpDigits(updated);
+    setErrorMessage('');
+
+    const targetIdx = Math.min(clean.length, 7);
+    if (otpInputsRef.current[targetIdx]) {
+      otpInputsRef.current[targetIdx].focus();
+    }
+
+    // Auto-verify if full 6 to 8 digit code is pasted
+    if (clean.length >= 6) {
+      triggerToast('Pasted code from clipboard!');
+      handleVerifyOtp(clean);
+    }
+  };
+
+  const pasteFromClipboard = async () => {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.readText) {
+        const text = await navigator.clipboard.readText();
+        if (text) {
+          applyPastedCode(text);
+          return;
+        }
+      }
+      triggerToast('Clipboard is empty or access was denied.');
+    } catch (e) {
+      triggerToast('Could not read clipboard. Please paste directly into the box.');
+    }
+  };
+
   const handleOtpDigitChange = (val, index) => {
     const clean = val.replace(/[^0-9]/g, '');
-    const updated = [...otpDigits];
 
+    // Handle full paste or multi-character entry
     if (clean.length > 1) {
-      const split = clean.slice(0, 6).split('');
-      for (let i = 0; i < 6; i++) {
-        updated[i] = split[i] || '';
-      }
-      setOtpDigits(updated);
-      if (split.length === 6 && otpInputsRef.current[5]) {
-        otpInputsRef.current[5].focus();
-      }
+      applyPastedCode(clean);
       return;
     }
 
+    const updated = [...otpDigits];
     updated[index] = clean;
     setOtpDigits(updated);
 
-    if (clean && index < 5 && otpInputsRef.current[index + 1]) {
+    if (clean && index < 7 && otpInputsRef.current[index + 1]) {
       otpInputsRef.current[index + 1].focus();
     }
   };
@@ -356,11 +435,55 @@ export default function SignInScreen({
           {errorMessage ? (
             <View style={styles.errorBox}>
               <Text style={styles.errorText}>{errorMessage}</Text>
+              {signupSuccessEmail ? (
+                <TouchableOpacity
+                  style={[styles.resendBtn, { marginTop: 8 }]}
+                  onPress={handleResendVerification}
+                  disabled={resendLoading}
+                >
+                  <Text style={styles.resendBtnText}>
+                    {resendLoading ? 'Resending verification...' : 'Resend Verification Link ✉️'}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
           ) : null}
 
-          {/* MODE 1: Password Login */}
-          {authMode === 'password' && (
+          {/* Verification Notice Card */}
+          {signupSuccess ? (
+            <View style={styles.verificationNoticeCard}>
+              <Text style={styles.verificationTitle}>Verify Your Email Address</Text>
+              <Text style={styles.verificationText}>
+                We've sent a verification link to{' '}
+                <Text style={{ fontWeight: '700', color: COLORS.primary }}>{signupSuccessEmail}</Text>.
+                Please check your inbox (and spam folder) and click the link to activate your account.
+              </Text>
+              <TouchableOpacity
+                style={[styles.primaryButton, { marginTop: 16, backgroundColor: COLORS.primary }]}
+                onPress={handleResendVerification}
+                disabled={resendLoading}
+              >
+                {resendLoading ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={styles.primaryButtonText}>Resend Verification Link ✉️</Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.switchModeRow, { marginTop: 14 }]}
+                onPress={() => {
+                  setSignupSuccess(false);
+                  setIsSignUpMode(false);
+                  setErrorMessage('');
+                }}
+              >
+                <Text style={styles.switchModeText}>← Back to Sign In</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <>
+              {/* MODE 1: Password Login */}
+              {authMode === 'password' && (
             <View style={styles.formSection}>
               {/* Email */}
               <View style={styles.inputGroup}>
@@ -552,18 +675,26 @@ export default function SignInScreen({
                     </TouchableOpacity>
                   </View>
 
-                  <Text style={[styles.inputLabel, { textAlign: 'center', marginTop: 14 }]}>
-                    Enter 6-Digit Code
-                  </Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 14 }}>
+                    <Text style={styles.inputLabel}>
+                      Enter Verification Code
+                    </Text>
+                    <TouchableOpacity
+                      onPress={pasteFromClipboard}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 2, paddingHorizontal: 6, borderRadius: 6, backgroundColor: COLORS.primaryLight }}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: COLORS.primary }}>📋 Paste Code</Text>
+                    </TouchableOpacity>
+                  </View>
 
-                  {/* 6 OTP Boxes */}
+                  {/* 8 OTP Boxes */}
                   <View style={styles.otpBoxesRow}>
                     {otpDigits.map((digit, idx) => (
                       <TextInput
                         key={idx}
                         ref={(ref) => (otpInputsRef.current[idx] = ref)}
                         style={styles.otpBox}
-                        maxLength={1}
+                        maxLength={8}
                         keyboardType="numeric"
                         value={digit}
                         onChangeText={(val) => handleOtpDigitChange(val, idx)}
@@ -600,6 +731,8 @@ export default function SignInScreen({
               )}
             </View>
           )}
+        </>
+      )}
         </View>
       </ScrollView>
 
@@ -788,6 +921,42 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'center',
   },
+  verificationNoticeCard: {
+    backgroundColor: COLORS.primaryLight,
+    borderColor: 'rgba(15, 118, 110, 0.25)',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 20,
+    alignItems: 'center',
+    marginVertical: 8,
+  },
+  verificationTitle: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.primary,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  verificationText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 13,
+    color: COLORS.textMain,
+    textAlign: 'center',
+    lineHeight: 19,
+  },
+  resendBtn: {
+    alignSelf: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  resendBtnText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.primary,
+    textDecorationLine: 'underline',
+  },
   formSection: {
     width: '100%',
   },
@@ -924,18 +1093,21 @@ const styles = StyleSheet.create({
   otpBoxesRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 8,
+    gap: 6,
     marginVertical: 14,
+    flexWrap: 'nowrap',
+    width: '100%',
   },
   otpBox: {
-    width: 44,
+    flex: 1,
+    maxWidth: 40,
     height: 48,
     borderRadius: 8,
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: COLORS.inputBorder,
     color: COLORS.textMain,
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     fontFamily: Platform.OS === 'web' ? 'monospace' : undefined,
   },

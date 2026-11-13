@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import json
+import re
 import hmac
 import hashlib
 import base64
@@ -12,14 +13,13 @@ import urllib.error
 
 logger = logging.getLogger("auth_validator")
 
-# Minimum acceptable secret length (32 hex chars = 128-bit minimum)
-_MIN_SECRET_LEN = 32
+# Minimum acceptable secret length (64 hex chars = 256-bit minimum)
+_MIN_SECRET_LEN = 64
 
 # Module-level configuration placeholders
 SUPABASE_URL = ""
 SUPABASE_KEY = ""
 SUPABASE_SERVICE_ROLE_KEY = ""
-APPLICANT_SESSION_SECRET = ""
 ALLOWED_CORS_ORIGINS: set = set()
 
 
@@ -53,13 +53,11 @@ def reload_secrets() -> None:
     Ensures runtime/test environment changes are reflected immediately.
     """
     global SUPABASE_URL, SUPABASE_KEY, SUPABASE_SERVICE_ROLE_KEY
-    global APPLICANT_SESSION_SECRET
     global ALLOWED_CORS_ORIGINS
 
     SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
     SUPABASE_KEY = os.getenv("SUPABASE_KEY", "") or os.getenv("EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "")
     SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-    APPLICANT_SESSION_SECRET = os.getenv("APPLICANT_SESSION_SECRET", "")
 
     raw_origins = os.getenv(
         "ALLOWED_CORS_ORIGINS",
@@ -133,12 +131,17 @@ def validate_production_config() -> None:
 # ---------------------------------------------------------------------------
 
 def _is_placeholder_secret(val: str) -> bool:
+    """
+    Validates cryptographic secrets.
+    Must be a hexadecimal string of at least 64 characters (^[0-9a-fA-F]{64,}$).
+    Rejects placeholders, non-hex strings, and single repeated characters.
+    """
     if not val:
         return True
     s = str(val).strip()
-    if "CHANGE_ME" in s or "your-" in s:
+    if not re.fullmatch(r"^[0-9a-fA-F]{64,}$", s):
         return True
-    if len(s) > 1 and len(set(s)) == 1:
+    if len(set(s)) <= 1:
         return True
     return False
 
@@ -154,18 +157,8 @@ def validate_startup_secrets() -> None:
     errors = []
     if not SUPABASE_URL or SUPABASE_URL.startswith("https://your-project-ref") or "your-" in SUPABASE_URL or "CHANGE_ME" in SUPABASE_URL:
         errors.append("SUPABASE_URL is not configured or contains placeholder.")
-    if not SUPABASE_KEY or _is_placeholder_secret(SUPABASE_KEY):
+    if not SUPABASE_KEY or SUPABASE_KEY.startswith("your-") or "CHANGE_ME" in SUPABASE_KEY or (len(SUPABASE_KEY.strip()) > 1 and len(set(SUPABASE_KEY.strip())) == 1):
         errors.append("SUPABASE_KEY (publishable/anon key) is not configured or contains placeholder.")
-    if not APPLICANT_SESSION_SECRET:
-        errors.append("APPLICANT_SESSION_SECRET is not set.")
-    elif len(APPLICANT_SESSION_SECRET) < _MIN_SECRET_LEN:
-        errors.append(
-            f"APPLICANT_SESSION_SECRET is too short ({len(APPLICANT_SESSION_SECRET)} chars); "
-            f"minimum {_MIN_SECRET_LEN} characters required. "
-            "Generate: python -c \"import secrets; print(secrets.token_hex(32))\""
-        )
-    elif _is_placeholder_secret(APPLICANT_SESSION_SECRET):
-        errors.append("APPLICANT_SESSION_SECRET contains placeholder (CHANGE_ME/your-) or repeated characters.")
     if errors:
         msg = "SECURITY CONFIGURATION ERROR — application cannot start:\n" + "\n".join(f"  * {e}" for e in errors)
         logger.critical(msg)
@@ -275,151 +268,6 @@ def is_superadmin(user_data: dict, memberships: list) -> bool:
         except Exception:
             pass
 
-    return False
-
-import secrets
-
-# In-memory session tracking for applicant tokens (maps token_hash -> session state)
-# In production clusters, this can be backed by Redis or PostgreSQL
-_ACTIVE_APPLICANT_SESSIONS = {}
-_REVOKED_TOKEN_HASHES = set()
-
-def create_applicant_token(pid: str, flow: str, tenant_id: str, ttl_seconds: int = 3600) -> str:
-    """
-    Generate a cryptographically secure, signed applicant session token.
-    Includes:
-      - secure random nonce (secrets.token_hex)
-      - strictly bounded allowed workflow steps (parsed from flow)
-      - expiration timestamp
-      - tenant scoping
-    """
-    if not pid or not flow or not tenant_id:
-        raise ValueError("pid, flow, and tenant_id are all required.")
-    exp = int(time.time()) + ttl_seconds
-    nonce = secrets.token_hex(16)
-    allowed_steps = [s.strip().upper() for s in (flow or "").split(",") if s.strip()]
-
-    payload = {
-        "pid": pid,
-        "flow": flow,
-        "allowed_steps": allowed_steps,
-        "tenant_id": tenant_id,
-        "nonce": nonce,
-        "exp": exp,
-        "created_at": int(time.time()),
-    }
-    payload_str = json.dumps(payload, separators=(',', ':'), sort_keys=True)
-    payload_b64 = base64.urlsafe_b64encode(payload_str.encode('utf-8')).decode('utf-8').rstrip('=')
-    
-    sig = hmac.new(
-        APPLICANT_SESSION_SECRET.encode('utf-8'),
-        payload_b64.encode('utf-8'),
-        hashlib.sha256
-    ).hexdigest()
-    
-    full_token = f"{payload_b64}.{sig}"
-    token_hash = hashlib.sha256(full_token.encode('utf-8')).hexdigest()
-    
-    # Track session state
-    _ACTIVE_APPLICANT_SESSIONS[token_hash] = {
-        "pid": pid,
-        "tenant_id": tenant_id,
-        "allowed_steps": allowed_steps,
-        "completed_steps": set(),
-        "exp": exp,
-        "used": False
-    }
-
-    return full_token
-
-def verify_applicant_token(token: str) -> dict:
-    """
-    Verify and decode a signed applicant verification session token.
-    Enforces signature authenticity, expiration, and revocation status.
-    """
-    if not token or "." not in token:
-        raise ValueError("Invalid applicant token format.")
-        
-    payload_b64, sig = token.split(".", 1)
-    
-    expected_sig = hmac.new(
-        APPLICANT_SESSION_SECRET.encode('utf-8'),
-        payload_b64.encode('utf-8'),
-        hashlib.sha256
-    ).hexdigest()
-    
-    if not hmac.compare_digest(sig, expected_sig):
-        raise ValueError("Tampered applicant session token.")
-        
-    padding = '=' * (-len(payload_b64) % 4)
-    try:
-        payload_json = base64.urlsafe_b64decode((payload_b64 + padding).encode('utf-8')).decode('utf-8')
-        payload = json.loads(payload_json)
-    except Exception:
-        raise ValueError("Malformed applicant session payload.")
-        
-    token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
-    if token_hash in _REVOKED_TOKEN_HASHES:
-        raise ValueError("This applicant session token has been revoked.")
-
-    exp = payload.get("exp", 0)
-    if time.time() > exp:
-        raise ValueError("Applicant session token has expired.")
-        
-    # Check if session is tracked in active registry
-    if token_hash in _ACTIVE_APPLICANT_SESSIONS:
-        session_state = _ACTIVE_APPLICANT_SESSIONS[token_hash]
-        payload["completed_steps"] = list(session_state.get("completed_steps", []))
-        payload["is_used"] = session_state.get("used", False)
-    else:
-        # Fallback registration if restarted
-        _ACTIVE_APPLICANT_SESSIONS[token_hash] = {
-            "pid": payload.get("pid"),
-            "tenant_id": payload.get("tenant_id"),
-            "allowed_steps": payload.get("allowed_steps", []),
-            "completed_steps": set(),
-            "exp": exp,
-            "used": False
-        }
-        payload["completed_steps"] = []
-        payload["is_used"] = False
-
-    payload["token_hash"] = token_hash
-    return payload
-
-def revoke_applicant_token(token: str) -> bool:
-    """Explicitly revoke an applicant token (e.g. upon completion or security flag)."""
-    try:
-        token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
-        _REVOKED_TOKEN_HASHES.add(token_hash)
-        _ACTIVE_APPLICANT_SESSIONS.pop(token_hash, None)
-        return True
-    except Exception:
-        return False
-
-def record_applicant_step_completion(token: str, step_name: str) -> bool:
-    """Record verified completion of a mandatory workflow step."""
-    try:
-        token_hash = hashlib.sha256(token.encode('utf-8')).hexdigest()
-        if token_hash in _ACTIVE_APPLICANT_SESSIONS:
-            _ACTIVE_APPLICANT_SESSIONS[token_hash]["completed_steps"].add(step_name.upper())
-            return True
-        return False
-    except Exception:
-        return False
-
-def check_step_allowed(payload: dict, step_name: str) -> bool:
-    """Enforce that the requested operation is permitted in this token's workflow."""
-    allowed = payload.get("allowed_steps", [])
-    step = step_name.upper()
-    # If the pipeline includes composite steps like PAN_FACE, it permits PAN and LIVE_VERIFY
-    for a in allowed:
-        if step == a or (step in ("PAN", "AADHAAR") and (f"{step}_FACE" in a or step in a)):
-            return True
-        if step in ("LIVE_VERIFY", "FACE_MATCH") and ("_FACE" in a):
-            return True
-        if step == "EYE_TRACKING" and "EYE_TRACKING" in a:
-            return True
     return False
 
 def mask_identity_number(id_num: str, doc_type: str = "ID") -> str:

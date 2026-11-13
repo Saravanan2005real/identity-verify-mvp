@@ -1,4 +1,4 @@
-const API_BASE = "http://localhost:5001";
+const API_BASE = "";
 
 // DOM Elements
 const stepperEl = document.getElementById('pipeline-stepper');

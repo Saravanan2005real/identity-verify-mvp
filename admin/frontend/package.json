@@ -17,6 +17,9 @@
     "react-native-url-polyfill": "^4.0.0",
     "react-native-web": "^0.21.2"
   },
+  "devDependencies": {
+    "dotenv": "^16.4.7"
+  },
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",

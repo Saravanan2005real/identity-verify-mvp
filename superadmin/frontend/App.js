@@ -31,8 +31,22 @@ import {
 
 const { width } = Dimensions.get('window');
 
+const isDev = process.env.NODE_ENV === 'development' || process.env.APP_ENV === 'development';
+
 const SUPERADMIN_API_URL = (
-  process.env.EXPO_PUBLIC_SUPERADMIN_API_URL || 'http://127.0.0.1:8000'
+  process.env.EXPO_PUBLIC_SUPERADMIN_API_URL || (isDev ? 'http://127.0.0.1:8000' : '')
+).replace(/\/+$/, '');
+
+const VERIFY_BASE_URL = (
+  process.env.EXPO_PUBLIC_VERIFY_BASE_URL || (isDev ? 'http://localhost:5174' : '')
+).replace(/\/+$/, '');
+
+const ADMIN_PORTAL_URL = (
+  process.env.EXPO_PUBLIC_ADMIN_PORTAL_URL || (isDev ? 'http://localhost:8082' : '')
+).replace(/\/+$/, '');
+
+const SUPERADMIN_PORTAL_URL = (
+  process.env.EXPO_PUBLIC_SUPERADMIN_PORTAL_URL || (isDev ? 'http://localhost:8081' : '')
 ).replace(/\/+$/, '');
 
 // Theme Colors for Verifyyy matching Customer Portal
@@ -288,7 +302,8 @@ export default function App() {
   };
 
   const openProduct = (file) => {
-    Linking.openURL('http://localhost:5174/' + file);
+    const base = VERIFY_BASE_URL || (isDev ? 'http://localhost:5174' : '');
+    Linking.openURL(`${base}/${file}`);
   };
 
   // --- Render Dashboard Tab ---
@@ -338,7 +353,7 @@ export default function App() {
           ) : (
             <View style={styles.emptyState}>
               <Text style={styles.emptyStateText}>Verifyyy Internal Sandbox Org</Text>
-              <Text style={styles.emptyStateSubtext}>Status: Active • Client Portal: http://localhost:8082</Text>
+              <Text style={styles.emptyStateSubtext}>Status: Active • Client Portal: {ADMIN_PORTAL_URL || (isDev ? 'http://localhost:8082' : '')}</Text>
             </View>
           )}
         </View>
@@ -594,7 +609,8 @@ export default function App() {
                     <TouchableOpacity
                       style={styles.actionBtnSmall}
                       onPress={() => {
-                        const msg = `Hi! You have been granted Superadmin access to Verifyyy (http://localhost:8081). Enter this Access Key: ${key.accessKey} for your email (${key.targetEmail}) to accept.`;
+                        const superadminPortal = SUPERADMIN_PORTAL_URL || (isDev ? 'http://localhost:8081' : '');
+                        const msg = `Hi! You have been granted Superadmin access to Verifyyy (${superadminPortal}). Enter this Access Key: ${key.accessKey} for your email (${key.targetEmail}) to accept.`;
                         copyText(msg, 'Invitation message copied!');
                       }}
                     >
@@ -886,7 +902,8 @@ export default function App() {
             <TouchableOpacity
               style={styles.copyInvitationFullBtn}
               onPress={() => {
-                const inviteMsg = `Hi! You have been granted Superadmin access to the Verifyyy Management Portal (http://localhost:8081). Log in with your email (${issuedModalData?.targetEmail}) and enter your Access Key: ${issuedModalData?.accessKey} to accept and activate your privileges.`;
+                const superadminPortal = SUPERADMIN_PORTAL_URL || (isDev ? 'http://localhost:8081' : '');
+                const inviteMsg = `Hi! You have been granted Superadmin access to the Verifyyy Management Portal (${superadminPortal}). Log in with your email (${issuedModalData?.targetEmail}) and enter your Access Key: ${issuedModalData?.accessKey} to accept and activate your privileges.`;
                 copyText(inviteMsg, 'Full invitation message copied!');
               }}
             >

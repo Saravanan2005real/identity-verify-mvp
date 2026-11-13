@@ -3561,10 +3561,7 @@ def purge_expired_assets_api():
     })
 
 if __name__ == '__main__':
-    # Standalone Flask on 5001 is optional. The product entrypoint is:
-    #   python main.py   → everything on http://127.0.0.1:8080
-    print("OCR is in-process on the portal. Start the app with: python main.py")
-    print("(Optional standalone) OCR_STANDALONE=1 python -m ocr.engine")
-    if os.getenv("OCR_STANDALONE", "").strip() in ("1", "true", "yes"):
+    print("Starting Verifyyy AI OCR & Biometrics Engine on http://127.0.0.1:5001 ...")
+    if os.getenv("OCR_STANDALONE", "1").strip() in ("1", "true", "yes"):
         app.run(host='0.0.0.0', port=5001, debug=False, threaded=True)
 

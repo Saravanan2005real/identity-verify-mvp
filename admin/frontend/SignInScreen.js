@@ -526,6 +526,8 @@ export default function SignInScreen({
                     }}
                     secureTextEntry={!showPassword}
                     autoCapitalize="none"
+                    returnKeyType="go"
+                    onSubmitEditing={handlePasswordAuth}
                   />
                   <TouchableOpacity
                     style={styles.eyeToggleBtn}

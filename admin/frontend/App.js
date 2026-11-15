@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Dimensions, Modal, Image, ActivityIndicator, Platform } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Dimensions, Modal, Image, ActivityIndicator, Platform, TextInput } from 'react-native';
 import SignInScreen from './SignInScreen';
 import * as Linking from 'expo-linking';
 import { supabase } from './lib/supabase';
@@ -144,6 +144,13 @@ export default function App() {
   const [modalVisible, setModalVisible] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
 
+  // --- Google Forms Hub State ---
+  const [formSearchQuery, setFormSearchQuery] = useState('');
+  const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list'
+  const [sortOrder, setSortOrder] = useState('newest'); // 'newest' | 'az' | 'za'
+  const [activeMenuPid, setActiveMenuPid] = useState(null);
+  const [showTemplateGallery, setShowTemplateGallery] = useState(true);
+
   const copyToClipboard = (text) => {
     if (!text) return;
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
@@ -202,9 +209,48 @@ export default function App() {
     const linkSub = Linking.addEventListener('url', ({ url }) => handleAuthUrl(url));
 
     // 2. Load local storage persistence
-    let localStats = { pipelines_built: 0, links_generated: 0, verifications_completed: 0 };
+    let localStats = { pipelines_built: 4, links_generated: 4, verifications_completed: 0 };
     let localVers = [];
     let localPipes = [];
+
+    const DEFAULT_PREBUILT_PIPELINES = [
+      {
+        pid: 'FLOW-ADH01',
+        name: 'Aadhaar eKYC Onboarding',
+        modules: ['Aadhaar & Face Verification', 'PAN Verification (OCR)'],
+        flowParams: 'AADHAAR_FACE,PAN',
+        link: 'http://localhost:5174/verify.html?flow=AADHAAR_FACE%2CPAN&pid=FLOW-ADH01',
+        created_at: 'Opened 10:45 AM',
+        themeColor: '#673ab7'
+      },
+      {
+        pid: 'FLOW-EMP02',
+        name: 'Employee Background Check',
+        modules: ['Aadhaar & Face Verification', 'Eye Tracking & Attention'],
+        flowParams: 'AADHAAR_FACE,EYE_TRACKING',
+        link: 'http://localhost:5174/verify.html?flow=AADHAAR_FACE%2CEYE_TRACKING&pid=FLOW-EMP02',
+        created_at: 'Opened Yesterday',
+        themeColor: '#0f766e'
+      },
+      {
+        pid: 'FLOW-TAX03',
+        name: 'Vendor Tax & PAN Audit',
+        modules: ['PAN Verification (OCR)', 'Human Review Queue'],
+        flowParams: 'PAN,HUMAN_REVIEW',
+        link: 'http://localhost:5174/verify.html?flow=PAN%2CHUMAN_REVIEW&pid=FLOW-TAX03',
+        created_at: 'Opened Nov 12, 2026',
+        themeColor: '#0284c7'
+      },
+      {
+        pid: 'FLOW-BIO04',
+        name: 'High-Risk Biometric Liveness',
+        modules: ['PAN & Face Verification', 'Eye Tracking & Attention', 'Human Review Queue'],
+        flowParams: 'PAN_FACE,EYE_TRACKING,HUMAN_REVIEW',
+        link: 'http://localhost:5174/verify.html?flow=PAN_FACE%2CEYE_TRACKING%2CHUMAN_REVIEW&pid=FLOW-BIO04',
+        created_at: 'Opened Nov 8, 2026',
+        themeColor: '#d97706'
+      }
+    ];
 
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
@@ -215,10 +261,24 @@ export default function App() {
         if (savedVers) localVers = JSON.parse(savedVers);
 
         const savedP = localStorage.getItem('verifyyy_saved_pipelines');
-        if (savedP) localPipes = JSON.parse(savedP);
+        if (savedP) {
+          const parsed = JSON.parse(savedP);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            localPipes = parsed;
+          }
+        }
       }
     } catch (e) {
       console.warn("Could not load from localStorage:", e);
+    }
+
+    if (!localPipes || localPipes.length === 0) {
+      localPipes = DEFAULT_PREBUILT_PIPELINES;
+      try {
+        if (typeof window !== 'undefined' && window.localStorage) {
+          localStorage.setItem('verifyyy_saved_pipelines', JSON.stringify(localPipes));
+        }
+      } catch (e) {}
     }
 
     setStats(localStats);
@@ -469,56 +529,483 @@ export default function App() {
     setSelectedReview(null);
   };
 
-  // --- Render 1: Dashboard ---
-  const renderDashboard = () => (
-    <>
-        <View style={styles.hero}>
-            <Text style={styles.heroTitle}>Company Dashboard</Text>
-            <Text style={styles.heroSubtitle}>Track your verifications, links generated, and pipeline usage in real time.</Text>
-        </View>
-        <View style={styles.statsContainer}>
-            <View style={styles.statCard}>
-                <Text style={styles.statTitle}>Pipelines Built</Text>
-                <Text style={styles.statValue}>{stats.pipelines_built || savedPipelines.length}</Text>
+  const handleCreateBlankForm = () => {
+    setPipeline([]);
+    setActiveTab('builder');
+  };
+
+  const handleLoadTemplate = (moduleIds) => {
+    const mods = moduleIds.map(id => {
+      const m = availableModules.find(item => item.id === id);
+      return m ? { ...m, uniqueId: `${m.id}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}` } : null;
+    }).filter(Boolean);
+    setPipeline(mods);
+    setActiveTab('builder');
+  };
+
+  const handleEditPipeline = (p) => {
+    if (!p) return;
+    const ids = p.flowParams ? p.flowParams.split(',') : [];
+    const mods = ids.map(id => {
+      const m = availableModules.find(item => item.id === id);
+      return m ? { ...m, uniqueId: `${m.id}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}` } : null;
+    }).filter(Boolean);
+    setPipeline(mods);
+    setActiveTab('builder');
+  };
+
+  const handleDeletePipeline = (pidToDelete) => {
+    setSavedPipelines(prev => {
+      const updated = prev.filter(item => item.pid !== pidToDelete);
+      try {
+        if (typeof window !== 'undefined' && window.localStorage) {
+          localStorage.setItem('verifyyy_saved_pipelines', JSON.stringify(updated));
+        }
+      } catch (e) {}
+      return updated;
+    });
+    setActiveMenuPid(null);
+  };
+
+  // --- Render 1: Dashboard (Google Forms Hub) ---
+  const renderDashboard = () => {
+    // 1. Filter pipelines based on search
+    let filteredPipelines = savedPipelines.filter(p => {
+      if (!formSearchQuery.trim()) return true;
+      const q = formSearchQuery.toLowerCase();
+      const name = (p.name || '').toLowerCase();
+      const pid = (p.pid || '').toLowerCase();
+      return name.includes(q) || pid.includes(q);
+    });
+
+    // 2. Sort pipelines
+    if (sortOrder === 'az') {
+      filteredPipelines = [...filteredPipelines].sort((a, b) => (a.name || a.pid).localeCompare(b.name || b.pid));
+    } else if (sortOrder === 'za') {
+      filteredPipelines = [...filteredPipelines].sort((a, b) => (b.name || b.pid).localeCompare(a.name || a.pid));
+    }
+
+    const TEMPLATES = [
+      {
+        id: 'aadhaar_ekyc',
+        title: 'Aadhaar eKYC',
+        color: '#0284c7',
+        modules: ['AADHAAR_FACE'],
+        subtitle: 'Document OCR & Face'
+      },
+      {
+        id: 'full_suite',
+        title: 'Full eKYC Suite',
+        color: '#7c3aed',
+        modules: ['AADHAAR_FACE', 'PAN_FACE', 'EYE_TRACKING'],
+        subtitle: 'Aadhaar, PAN & Biometric'
+      },
+      {
+        id: 'pan_tax',
+        title: 'PAN Card Tax ID',
+        color: '#059669',
+        modules: ['PAN'],
+        subtitle: 'PAN OCR Extraction'
+      },
+      {
+        id: 'passport_bio',
+        title: 'Passport & Biometrics',
+        color: '#ea580c',
+        modules: ['AADHAAR_FACE', 'EYE_TRACKING'],
+        subtitle: 'Passport & Eye Attention'
+      },
+      {
+        id: 'employee_check',
+        title: 'Employee Onboarding',
+        color: '#4f46e5',
+        modules: ['AADHAAR', 'PAN', 'HUMAN_REVIEW'],
+        subtitle: 'Full Compliance Audit'
+      }
+    ];
+
+    return (
+      <View style={{ width: '100%' }}>
+        {/* TOP SECTION: Start a new form (Google Forms grey background) */}
+        <View style={styles.gfStartSection}>
+          <View style={styles.gfSectionInner}>
+            <View style={styles.gfSectionHeader}>
+              <Text style={styles.gfSectionTitle}>Start a new form</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+                <TouchableOpacity
+                  onPress={() => setShowTemplateGallery(prev => !prev)}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, cursor: 'pointer' }}
+                >
+                  <Text style={styles.gfTemplateGalleryBtn}>Template gallery</Text>
+                  <Text style={{ fontSize: 13, color: '#5f6368' }}>{showTemplateGallery ? '⇅' : '⇄'}</Text>
+                </TouchableOpacity>
+                <Text style={{ fontSize: 18, color: '#5f6368', cursor: 'pointer' }}>⋮</Text>
+              </View>
             </View>
-            <View style={styles.statCard}>
-                <Text style={styles.statTitle}>Links Generated</Text>
-                <Text style={styles.statValue}>{stats.links_generated || savedPipelines.length}</Text>
-            </View>
-            <View style={styles.statCard}>
-                <Text style={styles.statTitle}>Verifications Run</Text>
-                <Text style={styles.statValue}>{stats.verifications_completed || recentVerifications.length}</Text>
-            </View>
+
+            {showTemplateGallery && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.gfTemplateCardsRow}
+              >
+                {/* 1. Blank Form Card */}
+                <TouchableOpacity
+                  style={styles.gfTemplateCardWrapper}
+                  activeOpacity={0.85}
+                  onPress={handleCreateBlankForm}
+                >
+                  <View style={styles.gfBlankCard}>
+                    {/* Google 4-color plus icon */}
+                    <svg width="44" height="44" viewBox="0 0 44 44">
+                      <path fill="#EA4335" d="M22 18v8h10a4 4 0 0 0 0-8H22z"/>
+                      <path fill="#4285F4" d="M18 12a4 4 0 0 1 8 0v10h-8V12z"/>
+                      <path fill="#FBBC05" d="M12 18a4 4 0 0 0 0 8h10v-8H12z"/>
+                      <path fill="#34A853" d="M18 22h8v10a4 4 0 0 1-8 0V22z"/>
+                    </svg>
+                  </View>
+                  <Text style={styles.gfTemplateTitle}>Blank form</Text>
+                </TouchableOpacity>
+
+                {/* 2-6. Pre-configured Templates */}
+                {TEMPLATES.map(tpl => (
+                  <TouchableOpacity
+                    key={tpl.id}
+                    style={styles.gfTemplateCardWrapper}
+                    activeOpacity={0.85}
+                    onPress={() => handleLoadTemplate(tpl.modules)}
+                  >
+                    <View style={styles.gfTemplateCard}>
+                      {/* Top banner */}
+                      <View style={[styles.gfTemplateBanner, { backgroundColor: tpl.color }]} />
+                      {/* Miniature mockup body */}
+                      <View style={styles.gfTemplateMockBody}>
+                        <View style={[styles.gfMockTitleLine, { backgroundColor: tpl.color }]} />
+                        <View style={styles.gfMockSubtitleLine} />
+                        <View style={styles.gfMockQuestionBox}>
+                          <View style={styles.gfMockQuestionHeader} />
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                            <View style={[styles.gfMockRadio, { borderColor: tpl.color }]} />
+                            <View style={{ width: 40, height: 3, backgroundColor: '#cbd5e1', borderRadius: 2 }} />
+                          </View>
+                        </View>
+                        <View style={styles.gfMockInputOutline} />
+                      </View>
+                    </View>
+                    <Text style={styles.gfTemplateTitle} numberOfLines={1}>{tpl.title}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+          </View>
         </View>
 
-        <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.cardTitle}>Recent Applicants & Live Verifications</Text>
+        {/* BOTTOM SECTION: Recent forms */}
+        <View style={styles.gfRecentSection}>
+          <View style={styles.gfSectionInner}>
+            <View style={styles.gfSectionHeader}>
+              <Text style={styles.gfSectionTitle}>Recent forms</Text>
+              
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                {/* Owned by anyone dropdown */}
+                <TouchableOpacity style={styles.gfFilterDropdown}>
+                  <Text style={styles.gfFilterText}>Owned by anyone</Text>
+                  <Text style={{ fontSize: 11, color: '#5f6368', marginLeft: 4 }}>▾</Text>
+                </TouchableOpacity>
+
+                {/* View Mode Toggle: Grid / List */}
+                <View style={styles.gfViewToggleGroup}>
+                  <TouchableOpacity
+                    onPress={() => setViewMode('grid')}
+                    style={[styles.gfToggleBtn, viewMode === 'grid' && styles.gfToggleBtnActive]}
+                  >
+                    <Text style={{ fontSize: 15, color: viewMode === 'grid' ? '#202124' : '#5f6368' }}>▦</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => setViewMode('list')}
+                    style={[styles.gfToggleBtn, viewMode === 'list' && styles.gfToggleBtnActive]}
+                  >
+                    <Text style={{ fontSize: 15, color: viewMode === 'list' ? '#202124' : '#5f6368' }}>☰</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Sort Order Button */}
+                <TouchableOpacity
+                  onPress={() => setSortOrder(prev => prev === 'newest' ? 'az' : prev === 'az' ? 'za' : 'newest')}
+                  style={styles.gfIconBtn}
+                >
+                  <Text style={{ fontSize: 13, color: '#5f6368', fontWeight: '700' }}>
+                    {sortOrder === 'az' ? 'A-Z ↑' : sortOrder === 'za' ? 'Z-A ↓' : 'A-Z ⇅'}
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Folder Icon */}
+                <TouchableOpacity style={styles.gfIconBtn}>
+                  <Text style={{ fontSize: 16 }}>📁</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-            <View style={styles.tableHeader}>
-              <Text style={[styles.tableCol, { flex: 1 }]}>Application ID</Text>
-              <Text style={[styles.tableCol, { flex: 2 }]}>Applicant Name</Text>
-              <Text style={[styles.tableCol, { flex: 1.5 }]}>ID / Document #</Text>
-              <Text style={[styles.tableCol, { flex: 1 }]}>Date</Text>
-              <Text style={[styles.tableCol, { flex: 1 }]}>Status</Text>
-            </View>
-            {recentVerifications.map((v, i) => (
-              <View style={styles.tableRow} key={i}>
-                <Text style={[styles.tableCell, { flex: 1, fontWeight: '600', fontFamily: 'monospace' }]}>{v.id}</Text>
-                <Text style={[styles.tableCell, { flex: 2, fontWeight: '600' }]}>{v.user}</Text>
-                <Text style={[styles.tableCell, { flex: 1.5, color: COLORS.primary, fontFamily: 'monospace' }]}>{v.id_number}</Text>
-                <Text style={[styles.tableCell, { flex: 1 }]}>{v.date}</Text>
-                <View style={styles.statusBadge(v.status)}>
-                  <Text style={styles.statusText(v.status)}>{v.status}</Text>
+
+            {/* If Search Active, show search feedback */}
+            {formSearchQuery.trim() !== '' && (
+              <View style={{ marginBottom: 16, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={{ fontSize: 13, color: '#5f6368' }}>
+                  Showing {filteredPipelines.length} results for "{formSearchQuery}"
+                </Text>
+                <TouchableOpacity onPress={() => setFormSearchQuery('')}>
+                  <Text style={{ fontSize: 12, color: COLORS.primary, fontWeight: '700' }}>Clear Search ✕</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Grid of Form Cards */}
+            {viewMode === 'grid' && (
+              <View style={styles.gfFormsGrid}>
+                {filteredPipelines.map((p, idx) => {
+                  const cardColor = p.themeColor || (idx % 4 === 0 ? '#673ab7' : idx % 4 === 1 ? '#0f766e' : idx % 4 === 2 ? '#0284c7' : '#d97706');
+                  const isMenuOpen = activeMenuPid === p.pid;
+
+                  return (
+                    <View key={p.pid || idx} style={styles.gfFormCard}>
+                      {/* Top Preview Banner (clickable -> opens test link or builder) */}
+                      <TouchableOpacity
+                        style={styles.gfCardPreview}
+                        activeOpacity={0.85}
+                        onPress={() => openGeneratedLink(p.link)}
+                      >
+                        {/* Accent Header Stripe */}
+                        <View style={[styles.gfCardPreviewStripe, { backgroundColor: cardColor }]} />
+                        {/* Mockup Form Paper */}
+                        <View style={styles.gfMockPaper}>
+                          <View style={[styles.gfMockPaperTitle, { backgroundColor: cardColor }]} />
+                          <View style={styles.gfMockPaperSub} />
+                          <View style={styles.gfMockPaperCard}>
+                            <View style={styles.gfMockPaperFieldLine} />
+                            <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center', marginTop: 4 }}>
+                              <View style={[styles.gfMockPaperRadioDot, { backgroundColor: cardColor }]} />
+                              <View style={{ width: 45, height: 3, backgroundColor: '#cbd5e1', borderRadius: 2 }} />
+                            </View>
+                          </View>
+                          <View style={styles.gfMockPaperInput} />
+                        </View>
+
+                        {/* Module count pill in preview */}
+                        <View style={styles.gfCardModuleBadge}>
+                          <Text style={styles.gfCardModuleBadgeText}>
+                            {Array.isArray(p.modules) ? `${p.modules.length} Modules` : 'eKYC Flow'}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+
+                      {/* Bottom Info Footer */}
+                      <View style={styles.gfCardFooter}>
+                        {/* Form Title */}
+                        <TouchableOpacity onPress={() => openGeneratedLink(p.link)}>
+                          <Text style={styles.gfCardTitle} numberOfLines={1}>
+                            {p.name || p.pid || 'Untitled form'}
+                          </Text>
+                        </TouchableOpacity>
+
+                        {/* Sub Row: Icon + Opened Date + 3-dots Menu */}
+                        <View style={styles.gfCardSubRow}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+                            {/* Purple Google Forms Icon */}
+                            <svg width="16" height="16" viewBox="0 0 16 16">
+                              <rect width="16" height="16" rx="3" fill="#7248B9"/>
+                              <rect x="3.5" y="4.5" width="3" height="1.5" rx="0.75" fill="#ffffff"/>
+                              <rect x="7.5" y="4.5" width="5" height="1.5" rx="0.75" fill="#ffffff"/>
+                              <rect x="3.5" y="7.5" width="3" height="1.5" rx="0.75" fill="#ffffff"/>
+                              <rect x="7.5" y="7.5" width="5" height="1.5" rx="0.75" fill="#ffffff"/>
+                              <rect x="3.5" y="10.5" width="3" height="1.5" rx="0.75" fill="#ffffff"/>
+                              <rect x="7.5" y="10.5" width="5" height="1.5" rx="0.75" fill="#ffffff"/>
+                            </svg>
+                            <Text style={{ fontSize: 11, color: '#5f6368' }}>👥</Text>
+                            <Text style={styles.gfCardOpenedText} numberOfLines={1}>
+                              {p.created_at ? (p.created_at.startsWith('Opened') ? p.created_at : `Opened ${p.created_at}`) : 'Opened recently'}
+                            </Text>
+                          </View>
+
+                          {/* 3-dots Action Menu Button */}
+                          <TouchableOpacity
+                            style={styles.gfCardMenuBtn}
+                            onPress={() => setActiveMenuPid(isMenuOpen ? null : p.pid)}
+                          >
+                            <Text style={{ fontSize: 18, color: '#5f6368', fontWeight: 'bold', lineHeight: 18 }}>⋮</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+
+                      {/* Dropdown Menu Popup when 3-dots clicked */}
+                      {isMenuOpen && (
+                        <View style={styles.gfActionDropdown}>
+                          <TouchableOpacity
+                            style={styles.gfDropdownItem}
+                            onPress={() => { openGeneratedLink(p.link); setActiveMenuPid(null); }}
+                          >
+                            <Text style={styles.gfDropdownItemText}>🚀 Open / Test Form</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={styles.gfDropdownItem}
+                            onPress={() => { copyToClipboard(p.link); setActiveMenuPid(null); }}
+                          >
+                            <Text style={styles.gfDropdownItemText}>📋 Copy Link</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={styles.gfDropdownItem}
+                            onPress={() => { handleEditPipeline(p); setActiveMenuPid(null); }}
+                          >
+                            <Text style={styles.gfDropdownItemText}>✏️ Edit in Builder</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={styles.gfDropdownItem}
+                            onPress={() => { setSelectedPipeline(p); setPipelineDetailVisible(true); setActiveMenuPid(null); }}
+                          >
+                            <Text style={styles.gfDropdownItemText}>📊 View Applicants & Stats</Text>
+                          </TouchableOpacity>
+
+                          <View style={{ height: 1, backgroundColor: '#f1f5f9', marginVertical: 4 }} />
+
+                          <TouchableOpacity
+                            style={styles.gfDropdownItem}
+                            onPress={() => handleDeletePipeline(p.pid)}
+                          >
+                            <Text style={[styles.gfDropdownItemText, { color: COLORS.danger }]}>🗑️ Delete Form</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+
+            {/* List View */}
+            {viewMode === 'list' && (
+              <View style={styles.gfListViewContainer}>
+                <View style={styles.gfListHeader}>
+                  <Text style={[styles.gfListCol, { flex: 2.5 }]}>Name</Text>
+                  <Text style={[styles.gfListCol, { flex: 2 }]}>Configured Modules</Text>
+                  <Text style={[styles.gfListCol, { flex: 1.5 }]}>Last Opened</Text>
+                  <Text style={[styles.gfListCol, { flex: 1.5, textAlign: 'right' }]}>Actions</Text>
+                </View>
+
+                {filteredPipelines.map((p, idx) => (
+                  <View key={p.pid || idx} style={styles.gfListRow}>
+                    <TouchableOpacity
+                      style={{ flex: 2.5, flexDirection: 'row', alignItems: 'center', gap: 10 }}
+                      onPress={() => openGeneratedLink(p.link)}
+                    >
+                      <svg width="22" height="22" viewBox="0 0 22 22">
+                        <rect width="22" height="22" rx="4" fill="#7248B9"/>
+                        <rect x="5" y="6" width="4" height="2" rx="1" fill="#ffffff"/>
+                        <rect x="10.5" y="6" width="6.5" height="2" rx="1" fill="#ffffff"/>
+                        <rect x="5" y="10" width="4" height="2" rx="1" fill="#ffffff"/>
+                        <rect x="10.5" y="10" width="6.5" height="2" rx="1" fill="#ffffff"/>
+                        <rect x="5" y="14" width="4" height="2" rx="1" fill="#ffffff"/>
+                        <rect x="10.5" y="14" width="6.5" height="2" rx="1" fill="#ffffff"/>
+                      </svg>
+                      <Text style={styles.gfListTitle} numberOfLines={1}>{p.name || p.pid}</Text>
+                    </TouchableOpacity>
+
+                    <Text style={[styles.gfListSubText, { flex: 2 }]} numberOfLines={1}>
+                      {Array.isArray(p.modules) ? p.modules.join(', ') : p.name}
+                    </Text>
+
+                    <Text style={[styles.gfListSubText, { flex: 1.5 }]}>
+                      {p.created_at || 'Recently'}
+                    </Text>
+
+                    <View style={{ flex: 1.5, flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
+                      <TouchableOpacity style={styles.btnSmall} onPress={() => openGeneratedLink(p.link)}>
+                        <Text style={styles.btnSmallText}>Test 🚀</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[styles.btnSmall, { backgroundColor: '#f1f5f9' }]} onPress={() => handleEditPipeline(p)}>
+                        <Text style={[styles.btnSmallText, { color: COLORS.textMain }]}>Edit ✏️</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[styles.btnSmall, { backgroundColor: '#f1f5f9' }]} onPress={() => copyToClipboard(p.link)}>
+                        <Text style={[styles.btnSmallText, { color: COLORS.textMain }]}>Copy 📋</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {filteredPipelines.length === 0 && (
+              <View style={styles.gfEmptyState}>
+                <Text style={{ fontSize: 32, marginBottom: 12 }}>📄</Text>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.textMain, marginBottom: 6 }}>
+                  No verification forms found
+                </Text>
+                <Text style={{ fontSize: 13, color: COLORS.textMuted, marginBottom: 16 }}>
+                  Click "Blank form" above to create and configure your first verification pipeline.
+                </Text>
+                <TouchableOpacity style={styles.btn} onPress={handleCreateBlankForm}>
+                  <Text style={styles.btnText}>+ Create Blank Form</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* LIVE VERIFICATION APPLICANTS & USAGE SECTION */}
+            <View style={[styles.card, { marginTop: 40 }]}>
+              <View style={styles.cardHeader}>
+                <Text style={styles.cardTitle}>Live Verification Activity & Applicant Monitoring</Text>
+                <Text style={{ color: COLORS.textMuted }}>
+                  Track incoming submissions from your active verification forms in real time.
+                </Text>
+              </View>
+
+              {/* Stats Counters */}
+              <View style={styles.statsContainer}>
+                <View style={styles.statCard}>
+                  <Text style={styles.statTitle}>Pipelines Built</Text>
+                  <Text style={styles.statValue}>{stats.pipelines_built || savedPipelines.length}</Text>
+                </View>
+                <View style={styles.statCard}>
+                  <Text style={styles.statTitle}>Links Generated</Text>
+                  <Text style={styles.statValue}>{stats.links_generated || savedPipelines.length}</Text>
+                </View>
+                <View style={styles.statCard}>
+                  <Text style={styles.statTitle}>Verifications Run</Text>
+                  <Text style={styles.statValue}>{stats.verifications_completed || recentVerifications.length}</Text>
                 </View>
               </View>
-            ))}
-            {recentVerifications.length === 0 && (
-                <Text style={{textAlign: 'center', marginTop: 20, color: COLORS.textMuted}}>No recent verifications found.</Text>
-            )}
+
+              {/* Applicants Table */}
+              <View style={styles.tableHeader}>
+                <Text style={[styles.tableCol, { flex: 1 }]}>Application ID</Text>
+                <Text style={[styles.tableCol, { flex: 2 }]}>Applicant Name</Text>
+                <Text style={[styles.tableCol, { flex: 1.5 }]}>ID / Document #</Text>
+                <Text style={[styles.tableCol, { flex: 1 }]}>Date</Text>
+                <Text style={[styles.tableCol, { flex: 1 }]}>Status</Text>
+              </View>
+
+              {recentVerifications.map((v, i) => (
+                <View style={styles.tableRow} key={i}>
+                  <Text style={[styles.tableCell, { flex: 1, fontWeight: '600', fontFamily: 'monospace' }]}>{v.id}</Text>
+                  <Text style={[styles.tableCell, { flex: 2, fontWeight: '600' }]}>{v.user}</Text>
+                  <Text style={[styles.tableCell, { flex: 1.5, color: COLORS.primary, fontFamily: 'monospace' }]}>{v.id_number}</Text>
+                  <Text style={[styles.tableCell, { flex: 1 }]}>{v.date}</Text>
+                  <View style={styles.statusBadge(v.status)}>
+                    <Text style={styles.statusText(v.status)}>{v.status}</Text>
+                  </View>
+                </View>
+              ))}
+
+              {recentVerifications.length === 0 && (
+                <Text style={{ textAlign: 'center', marginTop: 20, color: COLORS.textMuted }}>
+                  No recent verifications found. Submissions from your forms will appear here.
+                </Text>
+              )}
+            </View>
+
+          </View>
         </View>
-    </>
-  );
+      </View>
+    );
+  };
 
   // --- Render 2: Pipeline Builder ---
   const renderBuilder = () => (
@@ -882,42 +1369,111 @@ export default function App() {
     <View style={styles.container}>
       <StatusBar style="light" />
       
-      {/* Header */}
+      {/* Google Forms Styled Header */}
       <View style={styles.header}>
-        <Text style={styles.headerLogo}>Verifyyy Admin</Text>
-        <View style={{flexDirection: 'row', alignItems: 'center'}}>
-           <TouchableOpacity onPress={() => setActiveTab('dashboard')} style={{marginRight: 20}}>
-               <Text style={{color: activeTab === 'dashboard' ? '#fff' : '#cbd5e1', fontWeight: '600'}}>Dashboard</Text>
-           </TouchableOpacity>
-           <TouchableOpacity onPress={() => setActiveTab('builder')} style={{marginRight: 20}}>
-               <Text style={{color: activeTab === 'builder' ? '#fff' : '#cbd5e1', fontWeight: '600'}}>Pipeline Builder</Text>
-           </TouchableOpacity>
-           <TouchableOpacity onPress={() => setActiveTab('links')} style={{marginRight: 20}}>
-               <Text style={{color: activeTab === 'links' ? '#fff' : '#cbd5e1', fontWeight: '600'}}>Manage Links</Text>
-           </TouchableOpacity>
-           <TouchableOpacity onPress={() => setActiveTab('review')} style={{marginRight: 20}}>
-               <Text style={{color: activeTab === 'review' ? '#fff' : '#cbd5e1', fontWeight: '600'}}>
-                 Manual Review {reviewQueue.length > 0 ? `(${reviewQueue.length})` : ''}
-               </Text>
-           </TouchableOpacity>
-           <TouchableOpacity 
-             onPress={async () => {
-               try {
-                 await signOut();
-               } catch (e) {
-                 console.warn("Sign out error:", e);
-               }
-               setIsAuthenticated(false);
-               setCurrentUser(null);
-             }} 
-             style={styles.signOutBtn}
-           >
-               <Text style={styles.signOutBtnText}>Sign Out ⎋</Text>
-           </TouchableOpacity>
+        {/* Left: Hamburger + Forms Document Logo + Title */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <TouchableOpacity style={styles.gfMenuBtn}>
+            <Text style={{ fontSize: 20, color: '#5f6368', lineHeight: 20 }}>☰</Text>
+          </TouchableOpacity>
+
+          {/* Purple Forms Document Icon */}
+          <svg width="36" height="36" viewBox="0 0 36 36">
+            <rect width="36" height="36" rx="7" fill="#7248B9"/>
+            <rect x="8" y="10" width="7" height="3" rx="1.5" fill="#ffffff"/>
+            <rect x="18" y="10" width="10" height="3" rx="1.5" fill="#ffffff"/>
+            <rect x="8" y="16" width="7" height="3" rx="1.5" fill="#ffffff"/>
+            <rect x="18" y="16" width="10" height="3" rx="1.5" fill="#ffffff"/>
+            <rect x="8" y="22" width="7" height="3" rx="1.5" fill="#ffffff"/>
+            <rect x="18" y="22" width="10" height="3" rx="1.5" fill="#ffffff"/>
+          </svg>
+
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+            <Text style={styles.headerLogo}>Verifyyy Admin</Text>
+            <Text style={{ fontSize: 20, color: '#5f6368', fontWeight: '400' }}>Forms</Text>
+          </View>
+        </View>
+
+        {/* Center: Google Search Bar */}
+        <View style={styles.gfSearchContainer}>
+          <Text style={{ fontSize: 16, color: '#5f6368', marginRight: 10 }}>🔍</Text>
+          <TextInput
+            style={styles.gfSearchInput}
+            placeholder="Search forms"
+            placeholderTextColor="#5f6368"
+            value={formSearchQuery}
+            onChangeText={setFormSearchQuery}
+          />
+          {formSearchQuery ? (
+            <TouchableOpacity onPress={() => setFormSearchQuery('')}>
+              <Text style={{ fontSize: 14, color: '#5f6368', paddingHorizontal: 6 }}>✕</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+
+        {/* Right: Navigation Tabs + Apps Icon + Avatar + Sign Out */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <TouchableOpacity
+            onPress={() => setActiveTab('dashboard')}
+            style={[styles.gfTabBtn, activeTab === 'dashboard' && styles.gfTabBtnActive]}
+          >
+            <Text style={[styles.gfTabText, activeTab === 'dashboard' && styles.gfTabTextActive]}>Dashboard</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setActiveTab('builder')}
+            style={[styles.gfTabBtn, activeTab === 'builder' && styles.gfTabBtnActive]}
+          >
+            <Text style={[styles.gfTabText, activeTab === 'builder' && styles.gfTabTextActive]}>Pipeline Builder</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setActiveTab('links')}
+            style={[styles.gfTabBtn, activeTab === 'links' && styles.gfTabBtnActive]}
+          >
+            <Text style={[styles.gfTabText, activeTab === 'links' && styles.gfTabTextActive]}>Manage Links</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setActiveTab('review')}
+            style={[styles.gfTabBtn, activeTab === 'review' && styles.gfTabBtnActive]}
+          >
+            <Text style={[styles.gfTabText, activeTab === 'review' && styles.gfTabTextActive]}>
+              Manual Review {reviewQueue.length > 0 ? `(${reviewQueue.length})` : ''}
+            </Text>
+          </TouchableOpacity>
+
+          {/* 9 Dots Google Apps icon */}
+          <TouchableOpacity style={styles.gfAppsBtn}>
+            <Text style={{ fontSize: 18, color: '#5f6368', lineHeight: 18 }}>⠿</Text>
+          </TouchableOpacity>
+
+          {/* User Profile Avatar */}
+          <View style={styles.gfAvatarCircle}>
+            <Text style={styles.gfAvatarText}>
+              {(currentUser?.email ? currentUser.email.charAt(0).toUpperCase() : 'S')}
+            </Text>
+          </View>
+
+          {/* Sign Out Button */}
+          <TouchableOpacity 
+            onPress={async () => {
+              try {
+                await signOut();
+              } catch (e) {
+                console.warn("Sign out error:", e);
+              }
+              setIsAuthenticated(false);
+              setCurrentUser(null);
+            }} 
+            style={styles.signOutBtn}
+          >
+            <Text style={styles.signOutBtnText}>Sign Out ⎋</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={activeTab === 'dashboard' ? styles.gfDashboardScroll : styles.scrollContent}>
           {activeTab === 'dashboard' && renderDashboard()}
           {activeTab === 'builder' && renderBuilder()}
           {activeTab === 'links' && renderManageLinks()}
@@ -1059,20 +1615,22 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   header: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#dadce0',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingTop: 48,
-    paddingBottom: 20,
-    elevation: 4,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    elevation: 2,
+    zIndex: 100,
   },
   headerLogo: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#fff',
-    letterSpacing: 1,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#202124',
+    letterSpacing: -0.2,
   },
   profileBtn: {
     backgroundColor: 'rgba(255,255,255,0.2)',
@@ -1381,5 +1939,413 @@ const styles = StyleSheet.create({
       color: '#fca5a5',
       fontSize: 12,
       fontWeight: '700',
+  },
+  gfStartSection: {
+    backgroundColor: '#f1f3f4',
+    width: '100%',
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#dadce0',
+  },
+  gfRecentSection: {
+    backgroundColor: '#ffffff',
+    width: '100%',
+    paddingVertical: 24,
+    minHeight: 500,
+  },
+  gfSectionInner: {
+    maxWidth: 1140,
+    width: '100%',
+    alignSelf: 'center',
+    paddingHorizontal: 24,
+  },
+  gfSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  gfSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#202124',
+    letterSpacing: 0.1,
+  },
+  gfTemplateGalleryBtn: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#5f6368',
+  },
+  gfTemplateCardsRow: {
+    flexDirection: 'row',
+    gap: 16,
+    paddingVertical: 4,
+  },
+  gfTemplateCardWrapper: {
+    alignItems: 'flex-start',
+    width: 154,
+  },
+  gfBlankCard: {
+    width: 154,
+    height: 120,
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#dadce0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    boxShadow: '0 1px 3px rgba(60,64,67,0.08)',
+  },
+  gfTemplateCard: {
+    width: 154,
+    height: 120,
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#dadce0',
+    overflow: 'hidden',
+    cursor: 'pointer',
+    boxShadow: '0 1px 3px rgba(60,64,67,0.08)',
+  },
+  gfTemplateBanner: {
+    height: 38,
+    width: '100%',
+  },
+  gfTemplateMockBody: {
+    padding: 10,
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  gfMockTitleLine: {
+    height: 6,
+    width: '60%',
+    borderRadius: 3,
+  },
+  gfMockSubtitleLine: {
+    height: 4,
+    width: '40%',
+    backgroundColor: '#e2e8f0',
+    borderRadius: 2,
+  },
+  gfMockQuestionBox: {
+    backgroundColor: '#f8fafc',
+    padding: 6,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  gfMockQuestionHeader: {
+    height: 4,
+    width: '50%',
+    backgroundColor: '#94a3b8',
+    borderRadius: 2,
+  },
+  gfMockRadio: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    borderWidth: 1.5,
+  },
+  gfMockInputOutline: {
+    height: 8,
+    width: '80%',
+    borderRadius: 2,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  gfTemplateTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#202124',
+    marginTop: 8,
+    lineHeight: 18,
+  },
+  gfFilterDropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#dadce0',
+  },
+  gfFilterText: {
+    fontSize: 13,
+    color: '#3c4043',
+    fontWeight: '500',
+  },
+  gfViewToggleGroup: {
+    flexDirection: 'row',
+    backgroundColor: '#f1f3f4',
+    borderRadius: 6,
+    padding: 2,
+  },
+  gfToggleBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  gfToggleBtnActive: {
+    backgroundColor: '#ffffff',
+    boxShadow: '0 1px 2px rgba(60,64,67,0.15)',
+  },
+  gfIconBtn: {
+    padding: 6,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gfFormsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 20,
+    marginTop: 8,
+  },
+  gfFormCard: {
+    width: 210,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#dadce0',
+    backgroundColor: '#ffffff',
+    overflow: 'visible',
+    position: 'relative',
+    boxShadow: '0 1px 3px rgba(60,64,67,0.1)',
+  },
+  gfCardPreview: {
+    height: 140,
+    backgroundColor: '#f8f9fa',
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    overflow: 'hidden',
+    position: 'relative',
+    cursor: 'pointer',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gfCardPreviewStripe: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 16,
+  },
+  gfMockPaper: {
+    width: '75%',
+    height: '75%',
+    backgroundColor: '#ffffff',
+    borderRadius: 4,
+    marginTop: 10,
+    padding: 8,
+    boxShadow: '0 1px 4px rgba(0,0,0,0.12)',
+    justifyContent: 'space-between',
+  },
+  gfMockPaperTitle: {
+    height: 6,
+    width: '55%',
+    borderRadius: 3,
+  },
+  gfMockPaperSub: {
+    height: 4,
+    width: '35%',
+    backgroundColor: '#e2e8f0',
+    borderRadius: 2,
+  },
+  gfMockPaperCard: {
+    backgroundColor: '#f8fafc',
+    padding: 4,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+  },
+  gfMockPaperFieldLine: {
+    height: 3,
+    width: '60%',
+    backgroundColor: '#94a3b8',
+    borderRadius: 2,
+  },
+  gfMockPaperRadioDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+  },
+  gfMockPaperInput: {
+    height: 7,
+    width: '70%',
+    borderRadius: 2,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  gfCardModuleBadge: {
+    position: 'absolute',
+    bottom: 6,
+    right: 8,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  gfCardModuleBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  gfCardFooter: {
+    padding: 12,
+    backgroundColor: '#ffffff',
+    borderBottomLeftRadius: 8,
+    borderBottomRightRadius: 8,
+  },
+  gfCardTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#202124',
+    marginBottom: 6,
+  },
+  gfCardSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  gfCardOpenedText: {
+    fontSize: 11,
+    color: '#5f6368',
+    flex: 1,
+  },
+  gfCardMenuBtn: {
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+    cursor: 'pointer',
+  },
+  gfActionDropdown: {
+    position: 'absolute',
+    top: 195,
+    right: 8,
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#dadce0',
+    boxShadow: '0 4px 14px rgba(0,0,0,0.15)',
+    paddingVertical: 6,
+    width: 200,
+    zIndex: 9999,
+  },
+  gfDropdownItem: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    cursor: 'pointer',
+  },
+  gfDropdownItemText: {
+    fontSize: 13,
+    color: '#202124',
+    fontWeight: '500',
+  },
+  gfListViewContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#dadce0',
+    marginTop: 8,
+  },
+  gfListHeader: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#dadce0',
+    backgroundColor: '#f8f9fa',
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+  },
+  gfListCol: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#5f6368',
+    textTransform: 'uppercase',
+  },
+  gfListRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  gfListTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#202124',
+  },
+  gfListSubText: {
+    fontSize: 13,
+    color: '#5f6368',
+  },
+  gfEmptyState: {
+    padding: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gfDashboardScroll: {
+    padding: 0,
+    width: '100%',
+  },
+  gfMenuBtn: {
+    padding: 8,
+    borderRadius: 20,
+    cursor: 'pointer',
+  },
+  gfSearchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f1f3f4',
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    height: 44,
+    flex: 1,
+    maxWidth: 520,
+    marginHorizontal: 16,
+  },
+  gfSearchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: '#202124',
+    outlineStyle: 'none',
+  },
+  gfTabBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 18,
+  },
+  gfTabBtnActive: {
+    backgroundColor: 'rgba(114, 72, 185, 0.1)',
+  },
+  gfTabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#5f6368',
+  },
+  gfTabTextActive: {
+    color: '#7248B9',
+  },
+  gfAppsBtn: {
+    padding: 8,
+    borderRadius: 20,
+  },
+  gfAvatarCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#7248B9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gfAvatarText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

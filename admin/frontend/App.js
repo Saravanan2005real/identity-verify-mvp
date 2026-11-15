@@ -585,121 +585,40 @@ export default function App() {
       filteredPipelines = [...filteredPipelines].sort((a, b) => (b.name || b.pid).localeCompare(a.name || a.pid));
     }
 
-    const TEMPLATES = [
-      {
-        id: 'aadhaar_ekyc',
-        title: 'Aadhaar eKYC',
-        color: '#0284c7',
-        modules: ['AADHAAR_FACE'],
-        subtitle: 'Document OCR & Face'
-      },
-      {
-        id: 'full_suite',
-        title: 'Full eKYC Suite',
-        color: '#7c3aed',
-        modules: ['AADHAAR_FACE', 'PAN_FACE', 'EYE_TRACKING'],
-        subtitle: 'Aadhaar, PAN & Biometric'
-      },
-      {
-        id: 'pan_tax',
-        title: 'PAN Card Tax ID',
-        color: '#059669',
-        modules: ['PAN'],
-        subtitle: 'PAN OCR Extraction'
-      },
-      {
-        id: 'passport_bio',
-        title: 'Passport & Biometrics',
-        color: '#ea580c',
-        modules: ['AADHAAR_FACE', 'EYE_TRACKING'],
-        subtitle: 'Passport & Eye Attention'
-      },
-      {
-        id: 'employee_check',
-        title: 'Employee Onboarding',
-        color: '#4f46e5',
-        modules: ['AADHAAR', 'PAN', 'HUMAN_REVIEW'],
-        subtitle: 'Full Compliance Audit'
-      }
-    ];
-
     return (
       <View style={{ width: '100%' }}>
-        {/* TOP SECTION: Start a new form (Google Forms grey background) */}
+        {/* TOP SECTION: Start a new form - Only the Create Option */}
         <View style={styles.gfStartSection}>
           <View style={styles.gfSectionInner}>
             <View style={styles.gfSectionHeader}>
               <Text style={styles.gfSectionTitle}>Start a new form</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-                <TouchableOpacity
-                  onPress={() => setShowTemplateGallery(prev => !prev)}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, cursor: 'pointer' }}
-                >
-                  <Text style={styles.gfTemplateGalleryBtn}>Template gallery</Text>
-                  <Text style={{ fontSize: 13, color: '#5f6368' }}>{showTemplateGallery ? '⇅' : '⇄'}</Text>
-                </TouchableOpacity>
-                <Text style={{ fontSize: 18, color: '#5f6368', cursor: 'pointer' }}>⋮</Text>
-              </View>
             </View>
 
-            {showTemplateGallery && (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.gfTemplateCardsRow}
+            <View style={styles.gfTemplateCardsRow}>
+              {/* Blank Form / Create Option */}
+              <TouchableOpacity
+                style={styles.gfTemplateCardWrapper}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                testID="blank-form-btn"
+                onPress={handleCreateBlankForm}
               >
-                {/* 1. Blank Form Card */}
-                <TouchableOpacity
-                  style={styles.gfTemplateCardWrapper}
-                  activeOpacity={0.85}
-                  onPress={handleCreateBlankForm}
-                >
-                  <View style={styles.gfBlankCard}>
-                    {/* Google 4-color plus icon */}
-                    <svg width="44" height="44" viewBox="0 0 44 44">
-                      <path fill="#EA4335" d="M22 18v8h10a4 4 0 0 0 0-8H22z"/>
-                      <path fill="#4285F4" d="M18 12a4 4 0 0 1 8 0v10h-8V12z"/>
-                      <path fill="#FBBC05" d="M12 18a4 4 0 0 0 0 8h10v-8H12z"/>
-                      <path fill="#34A853" d="M18 22h8v10a4 4 0 0 1-8 0V22z"/>
-                    </svg>
-                  </View>
-                  <Text style={styles.gfTemplateTitle}>Blank form</Text>
-                </TouchableOpacity>
-
-                {/* 2-6. Pre-configured Templates */}
-                {TEMPLATES.map(tpl => (
-                  <TouchableOpacity
-                    key={tpl.id}
-                    style={styles.gfTemplateCardWrapper}
-                    activeOpacity={0.85}
-                    onPress={() => handleLoadTemplate(tpl.modules)}
-                  >
-                    <View style={styles.gfTemplateCard}>
-                      {/* Top banner */}
-                      <View style={[styles.gfTemplateBanner, { backgroundColor: tpl.color }]} />
-                      {/* Miniature mockup body */}
-                      <View style={styles.gfTemplateMockBody}>
-                        <View style={[styles.gfMockTitleLine, { backgroundColor: tpl.color }]} />
-                        <View style={styles.gfMockSubtitleLine} />
-                        <View style={styles.gfMockQuestionBox}>
-                          <View style={styles.gfMockQuestionHeader} />
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
-                            <View style={[styles.gfMockRadio, { borderColor: tpl.color }]} />
-                            <View style={{ width: 40, height: 3, backgroundColor: '#cbd5e1', borderRadius: 2 }} />
-                          </View>
-                        </View>
-                        <View style={styles.gfMockInputOutline} />
-                      </View>
-                    </View>
-                    <Text style={styles.gfTemplateTitle} numberOfLines={1}>{tpl.title}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            )}
+                <View style={styles.gfBlankCard}>
+                  {/* Google 4-color plus icon */}
+                  <svg width="44" height="44" viewBox="0 0 44 44">
+                    <path fill="#EA4335" d="M22 18v8h10a4 4 0 0 0 0-8H22z"/>
+                    <path fill="#4285F4" d="M18 12a4 4 0 0 1 8 0v10h-8V12z"/>
+                    <path fill="#FBBC05" d="M12 18a4 4 0 0 0 0 8h10v-8H12z"/>
+                    <path fill="#34A853" d="M18 22h8v10a4 4 0 0 1-8 0V22z"/>
+                  </svg>
+                </View>
+                <Text style={styles.gfTemplateTitle}>Blank form</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
-        {/* BOTTOM SECTION: Recent forms */}
+        {/* BOTTOM SECTION: Recently built forms */}
         <View style={styles.gfRecentSection}>
           <View style={styles.gfSectionInner}>
             <View style={styles.gfSectionHeader}>
@@ -947,59 +866,6 @@ export default function App() {
                 </TouchableOpacity>
               </View>
             )}
-
-            {/* LIVE VERIFICATION APPLICANTS & USAGE SECTION */}
-            <View style={[styles.card, { marginTop: 40 }]}>
-              <View style={styles.cardHeader}>
-                <Text style={styles.cardTitle}>Live Verification Activity & Applicant Monitoring</Text>
-                <Text style={{ color: COLORS.textMuted }}>
-                  Track incoming submissions from your active verification forms in real time.
-                </Text>
-              </View>
-
-              {/* Stats Counters */}
-              <View style={styles.statsContainer}>
-                <View style={styles.statCard}>
-                  <Text style={styles.statTitle}>Pipelines Built</Text>
-                  <Text style={styles.statValue}>{stats.pipelines_built || savedPipelines.length}</Text>
-                </View>
-                <View style={styles.statCard}>
-                  <Text style={styles.statTitle}>Links Generated</Text>
-                  <Text style={styles.statValue}>{stats.links_generated || savedPipelines.length}</Text>
-                </View>
-                <View style={styles.statCard}>
-                  <Text style={styles.statTitle}>Verifications Run</Text>
-                  <Text style={styles.statValue}>{stats.verifications_completed || recentVerifications.length}</Text>
-                </View>
-              </View>
-
-              {/* Applicants Table */}
-              <View style={styles.tableHeader}>
-                <Text style={[styles.tableCol, { flex: 1 }]}>Application ID</Text>
-                <Text style={[styles.tableCol, { flex: 2 }]}>Applicant Name</Text>
-                <Text style={[styles.tableCol, { flex: 1.5 }]}>ID / Document #</Text>
-                <Text style={[styles.tableCol, { flex: 1 }]}>Date</Text>
-                <Text style={[styles.tableCol, { flex: 1 }]}>Status</Text>
-              </View>
-
-              {recentVerifications.map((v, i) => (
-                <View style={styles.tableRow} key={i}>
-                  <Text style={[styles.tableCell, { flex: 1, fontWeight: '600', fontFamily: 'monospace' }]}>{v.id}</Text>
-                  <Text style={[styles.tableCell, { flex: 2, fontWeight: '600' }]}>{v.user}</Text>
-                  <Text style={[styles.tableCell, { flex: 1.5, color: COLORS.primary, fontFamily: 'monospace' }]}>{v.id_number}</Text>
-                  <Text style={[styles.tableCell, { flex: 1 }]}>{v.date}</Text>
-                  <View style={styles.statusBadge(v.status)}>
-                    <Text style={styles.statusText(v.status)}>{v.status}</Text>
-                  </View>
-                </View>
-              ))}
-
-              {recentVerifications.length === 0 && (
-                <Text style={{ textAlign: 'center', marginTop: 20, color: COLORS.textMuted }}>
-                  No recent verifications found. Submissions from your forms will appear here.
-                </Text>
-              )}
-            </View>
 
           </View>
         </View>

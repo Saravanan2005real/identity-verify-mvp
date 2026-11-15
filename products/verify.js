@@ -1,4 +1,24 @@
 const API_BASE = "";
+const SUPABASE_REST_URL = 'https://mhxhttawwpqywedzpybf.supabase.co/rest/v1';
+const SUPABASE_ANON_KEY = 'sb_publishable_fa7-pjSYD5TS9Z-YxOUMGQ_JrX2jY-E';
+
+async function fetchPipelineFromSupabase(pid) {
+    try {
+        const resp = await fetch(`${SUPABASE_REST_URL}/verifications?session_id=eq.pipeline_${encodeURIComponent(pid)}&select=*`, {
+            headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+            }
+        });
+        const rows = await resp.json();
+        if (Array.isArray(rows) && rows.length > 0 && rows[0].metadata) {
+            return rows[0].metadata;
+        }
+    } catch (e) {
+        console.warn('Could not load pipeline from Supabase:', e);
+    }
+    return null;
+}
 
 // DOM Elements
 const stepperEl = document.getElementById('pipeline-stepper');
@@ -105,15 +125,19 @@ function renderCurrentStep() {
 // -------------------------------------------------------------
 // MODULE: Custom Application Form Fields
 // -------------------------------------------------------------
-function renderFormFieldsStep() {
+async function renderFormFieldsStep() {
     let savedData = null;
     try {
         const raw = localStorage.getItem('verifyyy_form_data_' + pipelineId);
         if (raw) savedData = JSON.parse(raw);
     } catch(e) {}
 
-    const title = (savedData && savedData.title) || 'Application Form';
-    const desc = (savedData && savedData.description) || 'Please provide your required information before proceeding to identity verification.';
+    if (!savedData && pipelineId) {
+        savedData = await fetchPipelineFromSupabase(pipelineId);
+    }
+
+    const title = (savedData && (savedData.title || savedData.name)) || 'Application Form';
+    const desc = (savedData && (savedData.description)) || 'Please provide your required information before proceeding to identity verification.';
     const fields = (savedData && savedData.fields && savedData.fields.length) ? savedData.fields : [
         { id: 'f1', title: 'Full Legal Name', type: 'short_answer', required: true },
         { id: 'f2', title: 'Work Email Address', type: 'short_answer', required: true }
@@ -147,6 +171,15 @@ function renderFormFieldsStep() {
     `;
 
     window.submitApplicantForm = function() {
+        const formEl = document.getElementById('applicant-custom-form');
+        window.__applicantAnswers = {};
+        if (formEl) {
+            const inputs = formEl.querySelectorAll('input, textarea, select');
+            inputs.forEach((inp, idx) => {
+                const label = fields[idx]?.title || `Question ${idx + 1}`;
+                window.__applicantAnswers[label] = inp.value;
+            });
+        }
         currentStepIndex++;
         renderCurrentStep();
     };
@@ -553,6 +586,35 @@ function renderFinalCompletion() {
             <button class="btn" onclick="location.reload()" style="margin-top:20px;">Run Flow Again</button>
         </div>
     `;
+
+    // Persist applicant verification completion to Supabase database
+    try {
+        const applicantName = (window.__applicantAnswers && (window.__applicantAnswers['Full Legal Name'] || window.__applicantAnswers['Work Email Address'])) || `Applicant ${pipelineId}`;
+        fetch(`${SUPABASE_REST_URL}/verifications`, {
+            method: 'POST',
+            headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify({
+                session_id: `run_${pipelineId}_${Date.now()}`,
+                document_type: 'VERIFICATION_RUN',
+                extracted_name: applicantName,
+                overall_status: allPassed ? 'SUCCESS' : 'MANUAL_REVIEW',
+                face_match_verified: allPassed,
+                metadata: {
+                    pipelineId,
+                    results: verificationResults,
+                    answers: window.__applicantAnswers || {},
+                    completed_at: new Date().toISOString()
+                }
+            })
+        }).catch(err => console.warn('Supabase verification save warning:', err));
+    } catch (sbErr) {
+        console.warn('Could not sync verification run to Supabase:', sbErr);
+    }
 
     contentEl.innerHTML = html;
 }

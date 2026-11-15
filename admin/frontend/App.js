@@ -32,6 +32,49 @@ const COLORS = {
 
 const PLACEHOLDER_IMAGE = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="140" height="140" viewBox="0 0 140 140"><rect width="140" height="140" fill="%23f1f5f9" rx="8"/><path d="M40 95 L65 65 L80 82 L95 62 L115 95 Z" fill="%23cbd5e1"/><circle cx="55" cy="50" r="8" fill="%23cbd5e1"/><text x="70" y="120" text-anchor="middle" fill="%2394a3b8" font-size="11" font-family="sans-serif">Unavailable</text></svg>';
 
+const DEFAULT_PREBUILT_PIPELINES = [
+  {
+    pid: 'FLOW-ADH01',
+    name: 'Aadhaar eKYC Onboarding',
+    modules: ['Aadhaar & Face Verification', 'PAN Verification (OCR)'],
+    flowParams: 'AADHAAR_FACE,PAN',
+    link: 'http://localhost:5174/verify.html?flow=AADHAAR_FACE%2CPAN&pid=FLOW-ADH01',
+    status: 'published',
+    created_at: 'Opened 10:45 AM',
+    themeColor: '#673ab7'
+  },
+  {
+    pid: 'FLOW-EMP02',
+    name: 'Employee Background Check',
+    modules: ['Aadhaar & Face Verification', 'Eye Tracking & Attention'],
+    flowParams: 'AADHAAR_FACE,EYE_TRACKING',
+    link: 'http://localhost:5174/verify.html?flow=AADHAAR_FACE%2CEYE_TRACKING&pid=FLOW-EMP02',
+    status: 'published',
+    created_at: 'Opened Yesterday',
+    themeColor: '#0f766e'
+  },
+  {
+    pid: 'FLOW-TAX03',
+    name: 'Vendor Tax & PAN Audit',
+    modules: ['PAN Verification (OCR)', 'Human Review Queue'],
+    flowParams: 'PAN,HUMAN_REVIEW',
+    link: 'http://localhost:5174/verify.html?flow=PAN%2CHUMAN_REVIEW&pid=FLOW-TAX03',
+    status: 'published',
+    created_at: 'Opened Nov 12, 2026',
+    themeColor: '#0284c7'
+  },
+  {
+    pid: 'FLOW-BIO04',
+    name: 'High-Risk Biometric Liveness',
+    modules: ['PAN & Face Verification', 'Eye Tracking & Attention', 'Human Review Queue'],
+    flowParams: 'PAN_FACE,EYE_TRACKING,HUMAN_REVIEW',
+    link: 'http://localhost:5174/verify.html?flow=PAN_FACE%2CEYE_TRACKING%2CHUMAN_REVIEW&pid=FLOW-BIO04',
+    status: 'published',
+    created_at: 'Opened Nov 8, 2026',
+    themeColor: '#d97706'
+  }
+];
+
 function SignedAssetImage({ file, style, placeholderText }) {
   const [signedUrl, setSignedUrl] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -146,7 +189,7 @@ export default function App() {
   const [currentPid, setCurrentPid] = useState(null);
   const [publishStep, setPublishStep] = useState('ready'); // 'ready' (saved, ready to publish) | 'published' (live, link shareable)
 
-  const publishForm = () => {
+  const publishForm = async () => {
     setPublishStep('published');
     if (currentPid) {
       setSavedPipelines(prev => {
@@ -158,6 +201,23 @@ export default function App() {
         } catch (e) {}
         return updated;
       });
+
+      // Sync published status to Supabase
+      try {
+        const target = savedPipelines.find(p => p.pid === currentPid);
+        const meta = {
+          ...(target || {}),
+          pid: currentPid,
+          status: 'published',
+          updated_at: new Date().toISOString()
+        };
+        await supabase.from('verifications').update({
+          overall_status: 'SUCCESS',
+          metadata: meta
+        }).eq('session_id', `pipeline_${currentPid}`);
+      } catch (sbErr) {
+        console.warn("Could not publish status to Supabase:", sbErr);
+      }
     }
   };
 
@@ -253,45 +313,6 @@ export default function App() {
     let localVers = [];
     let localPipes = [];
 
-    const DEFAULT_PREBUILT_PIPELINES = [
-      {
-        pid: 'FLOW-ADH01',
-        name: 'Aadhaar eKYC Onboarding',
-        modules: ['Aadhaar & Face Verification', 'PAN Verification (OCR)'],
-        flowParams: 'AADHAAR_FACE,PAN',
-        link: 'http://localhost:5174/verify.html?flow=AADHAAR_FACE%2CPAN&pid=FLOW-ADH01',
-        created_at: 'Opened 10:45 AM',
-        themeColor: '#673ab7'
-      },
-      {
-        pid: 'FLOW-EMP02',
-        name: 'Employee Background Check',
-        modules: ['Aadhaar & Face Verification', 'Eye Tracking & Attention'],
-        flowParams: 'AADHAAR_FACE,EYE_TRACKING',
-        link: 'http://localhost:5174/verify.html?flow=AADHAAR_FACE%2CEYE_TRACKING&pid=FLOW-EMP02',
-        created_at: 'Opened Yesterday',
-        themeColor: '#0f766e'
-      },
-      {
-        pid: 'FLOW-TAX03',
-        name: 'Vendor Tax & PAN Audit',
-        modules: ['PAN Verification (OCR)', 'Human Review Queue'],
-        flowParams: 'PAN,HUMAN_REVIEW',
-        link: 'http://localhost:5174/verify.html?flow=PAN%2CHUMAN_REVIEW&pid=FLOW-TAX03',
-        created_at: 'Opened Nov 12, 2026',
-        themeColor: '#0284c7'
-      },
-      {
-        pid: 'FLOW-BIO04',
-        name: 'High-Risk Biometric Liveness',
-        modules: ['PAN & Face Verification', 'Eye Tracking & Attention', 'Human Review Queue'],
-        flowParams: 'PAN_FACE,EYE_TRACKING,HUMAN_REVIEW',
-        link: 'http://localhost:5174/verify.html?flow=PAN_FACE%2CEYE_TRACKING%2CHUMAN_REVIEW&pid=FLOW-BIO04',
-        created_at: 'Opened Nov 8, 2026',
-        themeColor: '#d97706'
-      }
-    ];
-
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
         const savedStats = localStorage.getItem('verifyyy_admin_stats');
@@ -350,30 +371,81 @@ export default function App() {
 
   const fetchSupabaseData = async () => {
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const headers = {};
-      if (sessionData?.session?.access_token) {
-        headers['Authorization'] = `Bearer ${sessionData.session.access_token}`;
+      let rows = null;
+      // 1. Query Supabase directly
+      const { data: dbRows, error: dbErr } = await supabase
+        .from('verifications')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!dbErr && Array.isArray(dbRows)) {
+        rows = dbRows;
+      } else {
+        // Fallback to backend API if needed
+        try {
+          const { data: sessionData } = await supabase.auth.getSession();
+          const headers = {};
+          if (sessionData?.session?.access_token) {
+            headers['Authorization'] = `Bearer ${sessionData.session.access_token}`;
+          }
+          const resp = await fetch(`${API_BASE_URL}/api/v1/supabase/list`, {
+            headers,
+            signal: (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) ? AbortSignal.timeout(2000) : undefined
+          });
+          const data = await resp.json();
+          if (data.status === 'success' && Array.isArray(data.data)) {
+            rows = data.data;
+          }
+        } catch (e) {}
       }
 
-      const resp = await fetch(`${API_BASE_URL}/api/v1/supabase/list`, { headers });
-      const data = await resp.json();
-      if (data.status === 'success' && Array.isArray(data.data)) {
-        const rows = data.data;
+      if (rows && Array.isArray(rows)) {
         setRawSupabaseRows(rows);
 
-        const mappedVers = rows.map((r, idx) => {
-          const isMatched = (r.face_match_verified === true || r.overall_status === 'SUCCESS');
-          const isFailed = (r.overall_status === 'FAILED');
+        // 2. Separate saved pipeline forms from applicant verification submissions
+        const pipelineRecords = rows.filter(r => r.document_type === 'FORM_PIPELINE' || (r.session_id && r.session_id.startsWith('pipeline_')));
+        const applicantRecords = rows.filter(r => r.document_type !== 'FORM_PIPELINE' && (!r.session_id || !r.session_id.startsWith('pipeline_')));
+
+        // 3. Hydrate savedPipelines from Supabase
+        if (pipelineRecords.length > 0) {
+          const cloudPipes = pipelineRecords.map(r => {
+            const meta = r.metadata || {};
+            const cleanLink = (meta.link || '').replace(/\/verify\.html\/+verify\.html/g, '/verify.html');
+            return {
+              pid: meta.pid || r.session_id.replace(/^pipeline_/, ''),
+              name: meta.name || r.extracted_name || 'Untitled form',
+              description: meta.description || '',
+              fields: meta.fields || [],
+              modules: meta.modules || [],
+              flowParams: meta.flowParams || '',
+              link: cleanLink,
+              status: meta.status || (r.overall_status === 'SUCCESS' ? 'published' : 'draft'),
+              created_at: r.created_at ? new Date(r.created_at).toLocaleDateString() : 'Recently',
+              themeColor: meta.themeColor || '#7248B9'
+            };
+          });
+
+          setSavedPipelines(cloudPipes);
+          try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+              localStorage.setItem('verifyyy_saved_pipelines', JSON.stringify(cloudPipes));
+            }
+          } catch (e) {}
+        }
+
+        // 4. Map applicant submissions
+        const mappedVers = applicantRecords.map((r, idx) => {
+          const isMatched = (r.face_match_verified === true || r.overall_status === 'SUCCESS' || r.overall_status === 'APPROVED');
+          const isFailed = (r.overall_status === 'FAILED' || r.overall_status === 'REJECTED');
           
           return {
             id: r.session_id ? `APP-${r.session_id.substr(0, 6).toUpperCase()}` : `APP-00${idx + 1}`,
             session_id: r.session_id,
-            user: r.extracted_name || r.id_number || `User-${idx + 1}`,
+            user: r.extracted_name || r.id_number || `Applicant-${idx + 1}`,
             id_number: r.id_number || 'N/A',
             doc_type: (r.document_type || 'ID').toUpperCase(),
             date: r.created_at ? new Date(r.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-            status: isMatched ? 'APPROVED' : (isFailed ? 'REJECTED' : 'APPROVED'),
+            status: isMatched ? 'APPROVED' : (isFailed ? 'REJECTED' : 'PENDING'),
             matched: isMatched,
             extracted_face_url: r.extracted_face_url || null,
             live_holder_face_url: r.live_holder_face_url || null,
@@ -381,28 +453,37 @@ export default function App() {
           };
         });
 
-        setRecentVerifications(mappedVers);
+        if (mappedVers.length > 0) {
+          setRecentVerifications(mappedVers);
+        }
 
-        // Populate manual review queue with unmatched / flagged items
-        const unmatchedItems = mappedVers.filter(v => !v.matched || v.rawRow.overall_status === 'NEEDS_REVIEW');
-        setReviewQueue(unmatchedItems.length > 0 ? unmatchedItems : [
-          { id: "APP-004", user: "michael.j@example.com", id_number: "8645 3432 5198", doc_type: "AADHAAR", date: "2026-10-08", reason: "Low Confidence Face Match", status: "NEEDS_REVIEW" },
-          { id: "APP-005", user: "sarah.w@example.com", id_number: "TJZPS8325D", doc_type: "PAN", date: "2026-10-08", reason: "Unmatched Face Vectors", status: "NEEDS_REVIEW" },
-        ]);
+        // 5. Populate manual review queue with items requiring review
+        const reviewItems = applicantRecords.filter(r => 
+          r.overall_status === 'MANUAL_REVIEW' || 
+          r.overall_status === 'NEEDS_REVIEW' || 
+          (!r.face_match_verified && r.overall_status !== 'SUCCESS' && r.overall_status !== 'APPROVED')
+        );
 
-        const completedCount = rows.length;
-        setStats(prev => {
-          const updated = {
-            ...prev,
-            verifications_completed: Math.max(prev.verifications_completed, completedCount)
-          };
-          try {
-            if (typeof window !== 'undefined' && window.localStorage) {
-              localStorage.setItem('verifyyy_admin_stats', JSON.stringify(updated));
-            }
-          } catch (e) {}
-          return updated;
-        });
+        if (reviewItems.length > 0) {
+          setReviewQueue(reviewItems.map(r => ({
+            id: r.session_id ? `APP-${r.session_id.substr(0, 6).toUpperCase()}` : `APP-${r.id}`,
+            session_id: r.session_id,
+            user: r.extracted_name || r.id_number || 'Applicant',
+            id_number: r.id_number || 'N/A',
+            doc_type: (r.document_type || 'ID').toUpperCase(),
+            date: r.created_at ? new Date(r.created_at).toISOString().split('T')[0] : 'Today',
+            reason: r.overall_status === 'MANUAL_REVIEW' ? 'Flagged for Human Review' : 'Biometric / OCR Verification Incomplete',
+            status: 'NEEDS_REVIEW',
+            rawRow: r
+          })));
+        }
+
+        // 6. Live Supabase database stats
+        setStats(prev => ({
+          pipelines_built: Math.max(pipelineRecords.length, prev.pipelines_built, DEFAULT_PREBUILT_PIPELINES.length),
+          links_generated: Math.max(pipelineRecords.filter(p => (p.metadata?.status === 'published' || p.overall_status === 'SUCCESS')).length, prev.links_generated),
+          verifications_completed: applicantRecords.filter(r => r.overall_status === 'SUCCESS' || r.overall_status === 'APPROVED' || r.face_match_verified).length
+        }));
       }
     } catch (err) {
       console.warn("Supabase live fetch error:", err);
@@ -630,6 +711,23 @@ export default function App() {
       }
     } catch (e) {}
 
+    // Persist form creation to Supabase database
+    try {
+      const { error: sbErr } = await supabase.from('verifications').upsert({
+        session_id: `pipeline_${pid}`,
+        document_type: 'FORM_PIPELINE',
+        extracted_name: formTitle || 'Untitled form',
+        overall_status: 'PENDING',
+        metadata: {
+          ...newPipelineObj,
+          type: 'FORM_PIPELINE'
+        }
+      }, { onConflict: 'session_id' });
+      if (sbErr) console.warn("Supabase upsert warning:", sbErr.message);
+    } catch (sbErr) {
+      console.warn("Could not save pipeline to Supabase:", sbErr);
+    }
+
     setSavedPipelines(prev => {
       const exists = prev.some(p => p.pid === pid);
       const updated = exists
@@ -668,7 +766,7 @@ export default function App() {
     }
   };
 
-  const handleReviewAction = (action, item) => {
+  const handleReviewAction = async (action, item) => {
     const target = item || selectedReview;
     if (!target) return;
 
@@ -676,6 +774,19 @@ export default function App() {
     setReviewQueue(prev => prev.filter(v => v.id !== target.id));
     setReviewModalVisible(false);
     setSelectedReview(null);
+
+    // Persist review decision to Supabase
+    try {
+      if (target.session_id) {
+        await supabase.from('verifications').update({
+          overall_status: action === 'APPROVE' ? 'SUCCESS' : 'REJECTED',
+          face_match_verified: action === 'APPROVE',
+          updated_at: new Date().toISOString()
+        }).eq('session_id', target.session_id);
+      }
+    } catch (e) {
+      console.warn("Could not update review status in Supabase:", e);
+    }
   };
 
   const handleCreateBlankForm = () => {
@@ -738,7 +849,7 @@ export default function App() {
     setActiveTab('builder');
   };
 
-  const handleDeletePipeline = (pidToDelete) => {
+  const handleDeletePipeline = async (pidToDelete) => {
     setSavedPipelines(prev => {
       const updated = prev.filter(item => item.pid !== pidToDelete);
       try {
@@ -749,6 +860,13 @@ export default function App() {
       return updated;
     });
     setActiveMenuPid(null);
+
+    // Delete pipeline form from Supabase
+    try {
+      await supabase.from('verifications').delete().eq('session_id', `pipeline_${pidToDelete}`);
+    } catch (e) {
+      console.warn("Could not delete pipeline from Supabase:", e);
+    }
   };
 
   // --- Render 1: Dashboard (Google Forms Hub) ---

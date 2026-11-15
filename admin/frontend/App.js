@@ -151,6 +151,28 @@ export default function App() {
   const [activeMenuPid, setActiveMenuPid] = useState(null);
   const [showTemplateGallery, setShowTemplateGallery] = useState(true);
 
+  // --- Form & Pipeline Builder State ---
+  const [formTitle, setFormTitle] = useState('Untitled form');
+  const [formDescription, setFormDescription] = useState('Please provide your required information before proceeding to identity verification.');
+  const [formFields, setFormFields] = useState([
+    {
+      id: 'q-name',
+      title: 'Full Legal Name',
+      type: 'short_answer',
+      required: true,
+      options: []
+    },
+    {
+      id: 'q-email',
+      title: 'Work Email Address',
+      type: 'short_answer',
+      required: true,
+      options: []
+    }
+  ]);
+  const [activeFieldId, setActiveFieldId] = useState('q-name');
+  const [formPreviewVisible, setFormPreviewVisible] = useState(false);
+
   const copyToClipboard = (text) => {
     if (!text) return;
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
@@ -442,10 +464,85 @@ export default function App() {
     dragOverIndex !== draggedIndex &&
     dragOverIndex !== draggedIndex + 1;
 
-  const generateLink = async () => {
-    if (pipeline.length === 0) return;
+  // --- Form Fields Management Helpers ---
+  const addField = (type = 'short_answer', presetTitle = '') => {
+    const newId = `q-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
+    const newField = {
+      id: newId,
+      title: presetTitle || '',
+      type: type,
+      required: false,
+      options: ['multiple_choice', 'checkboxes', 'dropdown'].includes(type) ? ['Option 1'] : []
+    };
+    setFormFields(prev => [...prev, newField]);
+    setActiveFieldId(newId);
+  };
 
-    const flowParams = pipeline.map(m => m.id).join(',');
+  const updateField = (id, key, val) => {
+    setFormFields(prev => prev.map(f => {
+      if (f.id !== id) return f;
+      const updated = { ...f, [key]: val };
+      if (key === 'type' && ['multiple_choice', 'checkboxes', 'dropdown'].includes(val) && (!f.options || f.options.length === 0)) {
+        updated.options = ['Option 1'];
+      }
+      return updated;
+    }));
+  };
+
+  const deleteField = (id) => {
+    setFormFields(prev => {
+      const next = prev.filter(f => f.id !== id);
+      return next.length > 0 ? next : [{ id: `q-${Date.now()}`, title: 'Untitled Question', type: 'short_answer', required: false, options: [] }];
+    });
+  };
+
+  const duplicateField = (id) => {
+    const target = formFields.find(f => f.id === id);
+    if (!target) return;
+    const copy = {
+      ...target,
+      id: `q-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      title: target.title ? `${target.title} (Copy)` : 'Untitled Question (Copy)',
+      options: target.options ? [...target.options] : []
+    };
+    const idx = formFields.findIndex(f => f.id === id);
+    const updated = [...formFields];
+    updated.splice(idx + 1, 0, copy);
+    setFormFields(updated);
+    setActiveFieldId(copy.id);
+  };
+
+  const addOption = (fieldId) => {
+    setFormFields(prev => prev.map(f => {
+      if (f.id !== fieldId) return f;
+      const opts = f.options || [];
+      return { ...f, options: [...opts, `Option ${opts.length + 1}`] };
+    }));
+  };
+
+  const updateOption = (fieldId, optIdx, val) => {
+    setFormFields(prev => prev.map(f => {
+      if (f.id !== fieldId) return f;
+      const opts = [...(f.options || [])];
+      opts[optIdx] = val;
+      return { ...f, options: opts };
+    }));
+  };
+
+  const deleteOption = (fieldId, optIdx) => {
+    setFormFields(prev => prev.map(f => {
+      if (f.id !== fieldId) return f;
+      const opts = (f.options || []).filter((_, i) => i !== optIdx);
+      return { ...f, options: opts.length > 0 ? opts : ['Option 1'] };
+    }));
+  };
+
+  const generateLink = async () => {
+    if (pipeline.length === 0 && formFields.length === 0) return;
+
+    const moduleIds = pipeline.map(m => m.id);
+    const flowParts = formFields.length > 0 ? ['FORM', ...moduleIds] : moduleIds;
+    const flowParams = flowParts.join(',');
     const pid = `FLOW-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
 
     const origin = VERIFY_BASE_URL || ((typeof window !== 'undefined' && window.location && window.location.hostname && isDev)
@@ -462,7 +559,8 @@ export default function App() {
       const tokResp = await fetch(`${API_BASE_URL}/api/v1/auth/applicant_session`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ pid, flow: flowParams })
+        body: JSON.stringify({ pid, flow: flowParams }),
+        signal: (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) ? AbortSignal.timeout(2000) : undefined
       });
       const tokData = await tokResp.json();
       if (tokData.applicant_token) {
@@ -480,12 +578,26 @@ export default function App() {
 
     const newPipelineObj = {
       pid: pid,
-      name: `Pipeline (${pipeline.map(m => m.id).join(', ')})`,
+      name: formTitle || `Pipeline (${pipeline.map(m => m.id).join(', ')})`,
+      description: formDescription,
+      fields: formFields,
       modules: pipeline.map(m => m.name),
       flowParams: flowParams,
       link: link,
       created_at: new Date().toISOString().split('T')[0],
+      themeColor: '#673ab7',
     };
+
+    // Store form fields in localStorage for applicant runner
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.setItem(`verifyyy_form_data_${pid}`, JSON.stringify({
+          title: formTitle,
+          description: formDescription,
+          fields: formFields
+        }));
+      }
+    } catch (e) {}
 
     setSavedPipelines(prev => {
       const updated = [newPipelineObj, ...prev];
@@ -530,6 +642,25 @@ export default function App() {
   };
 
   const handleCreateBlankForm = () => {
+    setFormTitle('Untitled form');
+    setFormDescription('Please provide your required information before proceeding to identity verification.');
+    setFormFields([
+      {
+        id: `q-${Date.now()}-1`,
+        title: 'Full Legal Name',
+        type: 'short_answer',
+        required: true,
+        options: []
+      },
+      {
+        id: `q-${Date.now()}-2`,
+        title: 'Work Email Address',
+        type: 'short_answer',
+        required: true,
+        options: []
+      }
+    ]);
+    setActiveFieldId(`q-${Date.now()}-1`);
     setPipeline([]);
     setActiveTab('builder');
   };
@@ -545,7 +676,19 @@ export default function App() {
 
   const handleEditPipeline = (p) => {
     if (!p) return;
-    const ids = p.flowParams ? p.flowParams.split(',') : [];
+    setFormTitle(p.name || 'Untitled form');
+    setFormDescription(p.description || '');
+    if (p.fields && Array.isArray(p.fields) && p.fields.length > 0) {
+      setFormFields(p.fields);
+      setActiveFieldId(p.fields[0].id);
+    } else {
+      setFormFields([
+        { id: `q-${Date.now()}-1`, title: 'Full Legal Name', type: 'short_answer', required: true, options: [] },
+        { id: `q-${Date.now()}-2`, title: 'Work Email Address', type: 'short_answer', required: true, options: [] }
+      ]);
+      setActiveFieldId(`q-${Date.now()}-1`);
+    }
+    const ids = p.flowParams ? p.flowParams.split(',').filter(x => x !== 'FORM') : [];
     const mods = ids.map(id => {
       const m = availableModules.find(item => item.id === id);
       return m ? { ...m, uniqueId: `${m.id}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}` } : null;
@@ -873,267 +1016,490 @@ export default function App() {
     );
   };
 
-  // --- Render 2: Pipeline Builder ---
-  const renderBuilder = () => (
-    <View style={{ flexDirection: isWeb ? 'row' : 'column', gap: 32 }}>
-        <View style={[styles.card, { flex: 1 }]}>
-            <Text style={styles.cardTitle}>Available Modules</Text>
-            <Text style={{color: COLORS.textMuted, marginBottom: 20}}>Click to add to your pipeline.</Text>
-            
-            {availableModules.map(mod => (
-                <TouchableOpacity key={mod.id} style={styles.moduleItem} onPress={() => addModuleToPipeline(mod)}>
-                    <View style={{flex: 1}}>
-                        <Text style={styles.moduleName}>{mod.name}</Text>
-                        <Text style={styles.moduleDesc}>{mod.desc}</Text>
-                    </View>
-                    <Text style={{fontSize: 24, color: COLORS.primary}}>+</Text>
-                </TouchableOpacity>
-            ))}
+  // --- Render 2: Form & Pipeline Builder ---
+  const renderBuilder = () => {
+    const FIELD_TYPES = [
+      { id: 'short_answer', label: 'Short answer', icon: '📝' },
+      { id: 'paragraph', label: 'Paragraph', icon: '📄' },
+      { id: 'multiple_choice', label: 'Multiple choice', icon: '🔘' },
+      { id: 'checkboxes', label: 'Checkboxes', icon: '☑️' },
+      { id: 'dropdown', label: 'Dropdown', icon: '▾' },
+      { id: 'date', label: 'Date', icon: '📅' },
+      { id: 'file_upload', label: 'File upload', icon: '📁' }
+    ];
+
+    return (
+      <View style={{ width: '100%', maxWidth: 960, alignSelf: 'center', paddingBottom: 60 }}>
+        {/* Top Builder Action Bar */}
+        <View style={styles.fbTopBar}>
+          <TouchableOpacity
+            style={styles.fbBackBtn}
+            onPress={() => setActiveTab('dashboard')}
+          >
+            <Text style={{ fontSize: 14, color: '#5f6368', fontWeight: '600' }}>← Back to Dashboard</Text>
+          </TouchableOpacity>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <TouchableOpacity
+              style={styles.btnOutline}
+              onPress={() => setFormPreviewVisible(true)}
+            >
+              <Text style={styles.btnOutlineText}>Preview Form 👁️</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.btn, { backgroundColor: '#7248B9' }]}
+              onPress={generateLink}
+              testID="save-deploy-btn"
+            >
+              <Text style={styles.btnText}>Save & Deploy Form 🚀</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        <View style={[styles.card, { flex: 2 }]}>
-            {/* Header */}
-            <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16}}>
-                <Text style={styles.cardTitle}>Your Pipeline Canvas</Text>
-                {pipeline.length > 1 && (
-                    <View style={{flexDirection: 'row', alignItems: 'center', gap: 6,
-                        backgroundColor: 'rgba(45,212,191,0.1)', paddingHorizontal: 10,
-                        paddingVertical: 4, borderRadius: 20}}>
-                        <Text style={{fontSize: 12}}>✋</Text>
-                        <Text style={{fontSize: 11, color: COLORS.primary, fontWeight: '600'}}>
-                            Drag to reorder
-                        </Text>
+        {/* 1. Google Forms Header Card */}
+        <View style={styles.fbHeaderCard}>
+          <View style={styles.fbHeaderStripe} />
+          <View style={styles.fbHeaderBody}>
+            <TextInput
+              style={styles.fbTitleInput}
+              value={formTitle}
+              onChangeText={setFormTitle}
+              placeholder="Untitled form"
+              placeholderTextColor="#70757a"
+            />
+            <TextInput
+              style={styles.fbDescInput}
+              value={formDescription}
+              onChangeText={setFormDescription}
+              placeholder="Form description"
+              placeholderTextColor="#70757a"
+              multiline
+            />
+          </View>
+        </View>
+
+        {/* 2. Custom Form Fields List */}
+        <View style={{ marginTop: 16, gap: 16 }}>
+          {formFields.map((field, fIdx) => {
+            const isActive = activeFieldId === field.id;
+            return (
+              <View
+                key={field.id}
+                style={[styles.fbFieldCard, isActive && styles.fbFieldCardActive]}
+              >
+                {/* Active Indicator Strip */}
+                {isActive && <View style={styles.fbActiveStrip} />}
+
+                <View style={styles.fbFieldCardContent}>
+                  {/* Row 1: Question Title & Type Selector */}
+                  <View style={styles.fbFieldRowTop}>
+                    <TextInput
+                      style={styles.fbQuestionInput}
+                      value={field.title}
+                      onFocus={() => setActiveFieldId(field.id)}
+                      onChangeText={(val) => updateField(field.id, 'title', val)}
+                      placeholder={`Question ${fIdx + 1}`}
+                      placeholderTextColor="#70757a"
+                    />
+
+                    {/* Field Type Selector */}
+                    <View style={styles.fbTypeSelectorWrap}>
+                      <select
+                        value={field.type}
+                        onChange={(e) => updateField(field.id, 'type', e.target.value)}
+                        style={{
+                          padding: '8px 12px',
+                          borderRadius: '6px',
+                          border: '1px solid #dadce0',
+                          backgroundColor: '#f8f9fa',
+                          color: '#202124',
+                          fontWeight: '600',
+                          fontSize: '13px',
+                          cursor: 'pointer',
+                          outline: 'none'
+                        }}
+                      >
+                        {FIELD_TYPES.map(t => (
+                          <option key={t.id} value={t.id}>{t.icon} {t.label}</option>
+                        ))}
+                      </select>
                     </View>
-                )}
-            </View>
+                  </View>
 
-            {/* Canvas area */}
-            <View style={[
-                styles.pipelineCanvas,
-                draggedIndex !== null && {
-                    borderColor: 'rgba(45,212,191,0.6)',
-                    backgroundColor: 'rgba(240,253,250,0.9)',
-                }
-            ]}>
-                {pipeline.length === 0 ? (
-                    <View style={styles.canvasEmpty}>
-                        <Text style={{fontSize: 32, marginBottom: 8}}>📋</Text>
-                        <Text style={{color: COLORS.textMuted, textAlign: 'center', fontWeight: '600'}}>
-                            Your pipeline is empty
-                        </Text>
-                        <Text style={{color: COLORS.textMuted, textAlign: 'center', fontSize: 12, marginTop: 4}}>
-                            Click modules on the left to add them
-                        </Text>
-                    </View>
-                ) : (
-                    <div style={{ width: '100%' }}>
-                        {/* Inject hover CSS once */}
-                        <style>{`
-                            .pipe-card { transition: box-shadow 0.15s ease, transform 0.1s ease, opacity 0.15s ease; }
-                            .pipe-card:hover:not(.pipe-dragging) { box-shadow: 0 6px 20px rgba(15,118,110,0.15) !important; transform: translateY(-1px); }
-                            .pipe-remove:hover { background: rgba(239,68,68,0.2) !important; transform: scale(1.1); }
-                            .pipe-remove { transition: background 0.15s ease, transform 0.15s ease; }
-                        `}</style>
+                  {/* Row 2: Dynamic Answer Preview & Option Editors */}
+                  <View style={styles.fbAnswerArea}>
+                    {field.type === 'short_answer' && (
+                      <View style={styles.fbMockShortAnswer}>
+                        <Text style={{ color: '#80868b', fontSize: 13 }}>Short-answer text</Text>
+                      </View>
+                    )}
 
-                        {pipeline.map((mod, index) => (
-                            <React.Fragment key={mod.uniqueId}>
+                    {field.type === 'paragraph' && (
+                      <View style={styles.fbMockParagraph}>
+                        <Text style={{ color: '#80868b', fontSize: 13 }}>Long-answer text</Text>
+                      </View>
+                    )}
 
-                                {/* ── Drop indicator line before this card ── */}
-                                {_showDropBefore(index) && (
-                                    <div style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 6,
-                                        margin: '4px 0',
-                                    }}>
-                                        <div style={{ width: 8, height: 8, borderRadius: 4, background: '#0f766e', flexShrink: 0 }} />
-                                        <div style={{ flex: 1, height: 2, background: 'linear-gradient(90deg, #0f766e, #2dd4bf)', borderRadius: 1, boxShadow: '0 0 6px rgba(15,118,110,0.4)' }} />
-                                        <div style={{ width: 8, height: 8, borderRadius: 4, background: '#2dd4bf', flexShrink: 0 }} />
-                                    </div>
-                                )}
-
-                                {/* ── Draggable card ── */}
-                                <div
-                                    className={`pipe-card${draggedIndex === index ? ' pipe-dragging' : ''}`}
-                                    draggable={true}
-                                    onDragStart={(e) => _onDragStart(e, index)}
-                                    onDragOver={(e) => _onDragOver(e, index)}
-                                    onDrop={(e) => _onDrop(e, index)}
-                                    onDragEnd={_onDragEnd}
-                                    style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 12,
-                                        background: draggedIndex === index
-                                            ? 'rgba(240,253,250,0.6)'
-                                            : '#fff',
-                                        opacity: draggedIndex === index ? 0.3 : 1,
-                                        border: draggedIndex === index
-                                            ? '2px dashed #2dd4bf'
-                                            : '1.5px solid rgba(45,212,191,0.3)',
-                                        borderLeft: draggedIndex === index
-                                            ? '2px dashed #2dd4bf'
-                                            : '4px solid #0f766e',
-                                        borderRadius: 12,
-                                        padding: '14px 16px 14px 12px',
-                                        cursor: draggedIndex !== null ? 'grabbing' : 'grab',
-                                        userSelect: 'none',
-                                        boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-                                        boxSizing: 'border-box',
-                                        width: '100%',
-                                        marginBottom: 0,
-                                    }}
-                                >
-                                    {/* ── 2×3 dot grip handle ── */}
-                                    <div style={{
-                                        display: 'grid',
-                                        gridTemplateColumns: '4px 4px',
-                                        gridTemplateRows: '4px 4px 4px',
-                                        gap: 3,
-                                        cursor: 'grab',
-                                        flexShrink: 0,
-                                        padding: '2px 4px',
-                                        opacity: 0.35,
-                                    }}>
-                                        {[0,1,2,3,4,5].map(i => (
-                                            <div key={i} style={{ width: 4, height: 4, borderRadius: 2, background: '#475569' }} />
-                                        ))}
-                                    </div>
-
-                                    {/* ── Step badge (gradient circle) ── */}
-                                    <div style={{
-                                        minWidth: 30,
-                                        height: 30,
-                                        borderRadius: 15,
-                                        background: 'linear-gradient(135deg, #0f766e 0%, #2dd4bf 100%)',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        flexShrink: 0,
-                                        boxShadow: '0 2px 6px rgba(15,118,110,0.3)',
-                                    }}>
-                                        <span style={{
-                                            color: '#fff',
-                                            fontSize: 12,
-                                            fontWeight: 800,
-                                            lineHeight: 1,
-                                            fontFamily: 'system-ui, sans-serif',
-                                        }}>{index + 1}</span>
-                                    </div>
-
-                                    {/* ── Module name + description ── */}
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{
-                                            fontWeight: 700,
-                                            color: '#0f172a',
-                                            fontSize: 14,
-                                            lineHeight: '20px',
-                                            fontFamily: 'system-ui, -apple-system, sans-serif',
-                                            whiteSpace: 'nowrap',
-                                            overflow: 'hidden',
-                                            textOverflow: 'ellipsis',
-                                        }}>{mod.name}</div>
-                                        {mod.desc && (
-                                            <div style={{
-                                                color: '#94a3b8',
-                                                fontSize: 11,
-                                                marginTop: 2,
-                                                lineHeight: '16px',
-                                                fontFamily: 'system-ui, -apple-system, sans-serif',
-                                                whiteSpace: 'nowrap',
-                                                overflow: 'hidden',
-                                                textOverflow: 'ellipsis',
-                                            }}>{mod.desc}</div>
-                                        )}
-                                    </div>
-
-                                    {/* ── Remove button ── */}
-                                    <button
-                                        className="pipe-remove"
-                                        onClick={(e) => { e.stopPropagation(); removeModuleFromPipeline(mod.uniqueId); }}
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                        style={{
-                                            width: 30,
-                                            height: 30,
-                                            borderRadius: 15,
-                                            border: 'none',
-                                            background: 'rgba(239,68,68,0.08)',
-                                            color: '#ef4444',
-                                            fontSize: 20,
-                                            fontWeight: 700,
-                                            cursor: 'pointer',
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            flexShrink: 0,
-                                            lineHeight: 1,
-                                            paddingBottom: 1,
-                                        }}
-                                    >×</button>
-                                </div>
-
-                                {/* ── Flow arrow connector (only while NOT dragging) ── */}
-                                {index < pipeline.length - 1 && draggedIndex === null && (
-                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '2px auto' }}>
-                                        <div style={{ width: 2, height: 14, background: 'linear-gradient(to bottom, rgba(45,212,191,0.4), #0f766e)' }} />
-                                        <div style={{
-                                            width: 0, height: 0,
-                                            borderLeft: '5px solid transparent',
-                                            borderRight: '5px solid transparent',
-                                            borderTop: '7px solid #0f766e',
-                                        }} />
-                                    </div>
-                                )}
-
-                            </React.Fragment>
+                    {['multiple_choice', 'checkboxes', 'dropdown'].map(ct => ct === field.type && (
+                      <View key={ct} style={{ width: '100%', gap: 8 }}>
+                        {(field.options || ['Option 1']).map((opt, oIdx) => (
+                          <View key={oIdx} style={styles.fbOptionRow}>
+                            <Text style={{ fontSize: 15, color: '#5f6368', marginRight: 6 }}>
+                              {field.type === 'multiple_choice' ? '🔘' : field.type === 'checkboxes' ? '☑️' : `${oIdx + 1}.`}
+                            </Text>
+                            <TextInput
+                              style={styles.fbOptionInput}
+                              value={opt}
+                              onFocus={() => setActiveFieldId(field.id)}
+                              onChangeText={(val) => updateOption(field.id, oIdx, val)}
+                              placeholder={`Option ${oIdx + 1}`}
+                              placeholderTextColor="#70757a"
+                            />
+                            {(field.options || []).length > 1 && (
+                              <TouchableOpacity
+                                onPress={() => deleteOption(field.id, oIdx)}
+                                style={{ padding: 4 }}
+                              >
+                                <Text style={{ color: '#5f6368', fontSize: 16 }}>✕</Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
                         ))}
 
-                        {/* ── Drop indicator after the last card ── */}
-                        {draggedIndex !== null &&
-                         dragOverIndex === pipeline.length &&
-                         dragOverIndex !== draggedIndex &&
-                         dragOverIndex !== draggedIndex + 1 && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '4px 0' }}>
-                                <div style={{ width: 8, height: 8, borderRadius: 4, background: '#0f766e', flexShrink: 0 }} />
-                                <div style={{ flex: 1, height: 2, background: 'linear-gradient(90deg, #0f766e, #2dd4bf)', borderRadius: 1, boxShadow: '0 0 6px rgba(15,118,110,0.4)' }} />
-                                <div style={{ width: 8, height: 8, borderRadius: 4, background: '#2dd4bf', flexShrink: 0 }} />
-                            </div>
-                        )}
+                        <TouchableOpacity
+                          style={styles.fbAddOptionBtn}
+                          onPress={() => addOption(field.id)}
+                        >
+                          <Text style={{ color: '#7248B9', fontWeight: '600', fontSize: 13 }}>+ Add option</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
 
-                        {/* ── Invisible bottom drop zone (drop onto empty space below cards) ── */}
-                        {draggedIndex !== null && (
-                            <div
-                                style={{ height: 32, width: '100%' }}
-                                onDragOver={(e) => {
-                                    e.preventDefault();
-                                    const dest = pipeline.length;
-                                    if (dragOverIndexRef.current !== dest) {
-                                        dragOverIndexRef.current = dest;
-                                        setDragOverIndex(dest);
-                                    }
-                                }}
-                                onDrop={(e) => _onDrop(e, pipeline.length - 1)}
-                            />
-                        )}
-                    </div>
-                )}
-            </View>
+                    {field.type === 'date' && (
+                      <View style={styles.fbMockDate}>
+                        <Text style={{ color: '#80868b', fontSize: 13 }}>📅 Month, day, year</Text>
+                      </View>
+                    )}
 
-            <View style={styles.actionArea}>
-                <TouchableOpacity style={styles.btnOutline} onPress={() => setPipeline([])}>
-                    <Text style={styles.btnOutlineText}>Clear Canvas</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                    style={[styles.btn, pipeline.length === 0 && {opacity: 0.5}]} 
-                    disabled={pipeline.length === 0}
-                    onPress={generateLink}
-                >
-                    <Text style={styles.btnText}>Generate Verification Link 🚀</Text>
-                </TouchableOpacity>
-            </View>
+                    {field.type === 'file_upload' && (
+                      <View style={styles.fbMockFileUpload}>
+                        <Text style={{ color: '#7248B9', fontSize: 13, fontWeight: '600' }}>📁 Applicant document / image upload</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Row 3: Card Actions Toolbar */}
+                  <View style={styles.fbFieldFooter}>
+                    <TouchableOpacity
+                      style={styles.fbToolBtn}
+                      onPress={() => duplicateField(field.id)}
+                      title="Duplicate"
+                    >
+                      <Text style={{ fontSize: 15 }}>📄</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.fbToolBtn}
+                      onPress={() => deleteField(field.id)}
+                      title="Delete"
+                    >
+                      <Text style={{ fontSize: 15 }}>🗑️</Text>
+                    </TouchableOpacity>
+
+                    <View style={styles.fbToolDivider} />
+
+                    <TouchableOpacity
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                      onPress={() => updateField(field.id, 'required', !field.required)}
+                    >
+                      <Text style={{ fontSize: 13, color: '#5f6368', fontWeight: '500' }}>Required</Text>
+                      <View style={[styles.fbSwitchTrack, field.required && styles.fbSwitchTrackActive]}>
+                        <View style={[styles.fbSwitchThumb, field.required && styles.fbSwitchThumbActive]} />
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            );
+          })}
         </View>
-    </View>
-  );
+
+        {/* 3. Add Field Buttons Toolbar */}
+        <View style={styles.fbAddBar}>
+          <TouchableOpacity
+            style={styles.fbAddPrimaryBtn}
+            onPress={() => addField('short_answer')}
+          >
+            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>+ Add Question</Text>
+          </TouchableOpacity>
+
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+            <Text style={{ fontSize: 12, color: '#5f6368', fontWeight: '600' }}>Quick Presets:</Text>
+            <TouchableOpacity style={styles.fbChipBtn} onPress={() => addField('short_answer', 'Full Legal Name')}>
+              <Text style={styles.fbChipText}>+ Full Name</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.fbChipBtn} onPress={() => addField('short_answer', 'Work Email Address')}>
+              <Text style={styles.fbChipText}>+ Work Email</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.fbChipBtn} onPress={() => addField('short_answer', 'Phone Number')}>
+              <Text style={styles.fbChipText}>+ Phone</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.fbChipBtn} onPress={() => addField('short_answer', 'Government / Employee ID')}>
+              <Text style={styles.fbChipText}>+ ID Number</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.fbChipBtn} onPress={() => addField('file_upload', 'Proof of Address / Document')}>
+              <Text style={styles.fbChipText}>+ Document Upload</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* 4. ATTACH VERIFICATION PIPELINE SECTION */}
+        <View style={styles.fbPipelineSection}>
+          <View style={styles.fbPipelineHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={{ fontSize: 22 }}>🛡️</Text>
+              <View>
+                <Text style={styles.fbPipelineTitle}>Attach Identity Verification Pipeline</Text>
+                <Text style={{ fontSize: 13, color: '#5f6368', marginTop: 2 }}>
+                  Connect automated biometric checks, document OCR, and liveness to run after form submission.
+                </Text>
+              </View>
+            </View>
+            <View style={styles.fbBadgeCount}>
+              <Text style={styles.fbBadgeCountText}>{pipeline.length} Modules Attached</Text>
+            </View>
+          </View>
+
+          <View style={{ flexDirection: isWeb ? 'row' : 'column', gap: 20, marginTop: 16 }}>
+            {/* Left: Available Modules */}
+            <View style={[styles.card, { flex: 1, padding: 18 }]}>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: '#202124', marginBottom: 4 }}>
+                Available Verification Modules
+              </Text>
+              <Text style={{ fontSize: 12, color: '#5f6368', marginBottom: 12 }}>
+                Click (+) to attach to this form's flow.
+              </Text>
+
+              {availableModules.map(mod => {
+                const isAttached = pipeline.some(p => p.id === mod.id);
+                return (
+                  <TouchableOpacity
+                    key={mod.id}
+                    style={[styles.moduleItem, isAttached && { borderColor: '#7248B9', backgroundColor: 'rgba(114, 72, 185, 0.04)' }]}
+                    onPress={() => {
+                      if (!isAttached) {
+                        addModuleToPipeline(mod);
+                      }
+                    }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.moduleName, isAttached && { color: '#7248B9' }]}>{mod.name}</Text>
+                      <Text style={styles.moduleDesc}>{mod.desc}</Text>
+                    </View>
+                    <Text style={{ fontSize: 18, fontWeight: 'bold', color: isAttached ? '#10b981' : '#7248B9' }}>
+                      {isAttached ? '✓' : '+'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Right: Attached Pipeline Canvas */}
+            <View style={[styles.card, { flex: 1.2, padding: 18 }]}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#202124' }}>
+                  Configured Flow Sequence
+                </Text>
+                {pipeline.length > 1 && (
+                  <Text style={{ fontSize: 11, color: '#7248B9', fontWeight: '600' }}>✋ Drag to reorder</Text>
+                )}
+              </View>
+
+              {/* Step 1: Form Questions */}
+              <View style={styles.fbFixedFlowStep}>
+                <View style={styles.fbFixedStepBadge}>
+                  <Text style={{ color: '#fff', fontSize: 11, fontWeight: '800' }}>1</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#202124' }}>
+                    📋 Application Form ({formFields.length} Custom Fields)
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#5f6368' }}>
+                    Applicant completes questions before verification
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 12, color: '#10b981', fontWeight: '700' }}>Fixed First</Text>
+              </View>
+
+              {/* Down connector arrow */}
+              <View style={{ alignItems: 'center', marginVertical: 4 }}>
+                <Text style={{ color: '#94a3b8', fontSize: 14 }}>↓</Text>
+              </View>
+
+              {/* Step 2..N: Attached Verification Modules */}
+              <View style={styles.pipelineCanvas}>
+                {pipeline.length === 0 ? (
+                  <View style={styles.canvasEmpty}>
+                    <Text style={{ fontSize: 24, marginBottom: 6 }}>🛡️</Text>
+                    <Text style={{ color: '#5f6368', fontSize: 13, fontWeight: '600', textAlign: 'center' }}>
+                      No verification modules attached yet
+                    </Text>
+                    <Text style={{ color: '#94a3b8', fontSize: 11, textAlign: 'center', marginTop: 2 }}>
+                      Click (+) on the left modules (e.g. Aadhaar, Face Match, PAN) to attach them.
+                    </Text>
+                  </View>
+                ) : (
+                  <div style={{ width: '100%' }}>
+                    {pipeline.map((mod, index) => (
+                      <div
+                        key={mod.uniqueId}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10,
+                          backgroundColor: '#fff',
+                          border: '1.5px solid rgba(114, 72, 185, 0.3)',
+                          borderLeft: '4px solid #7248B9',
+                          borderRadius: 8,
+                          padding: '10px 14px',
+                          marginBottom: 8,
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
+                        }}
+                      >
+                        <div style={{
+                          width: 24,
+                          height: 24,
+                          borderRadius: 12,
+                          backgroundColor: '#7248B9',
+                          color: '#fff',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 11,
+                          fontWeight: '800'
+                        }}>
+                          {index + 2}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 700, fontSize: 13, color: '#202124' }}>{mod.name}</div>
+                          <div style={{ fontSize: 11, color: '#5f6368' }}>{mod.desc}</div>
+                        </div>
+                        <button
+                          onClick={() => removeModuleFromPipeline(mod.uniqueId)}
+                          style={{
+                            border: 'none',
+                            background: 'rgba(239,68,68,0.1)',
+                            color: '#ef4444',
+                            borderRadius: '50%',
+                            width: 24,
+                            height: 24,
+                            cursor: 'pointer',
+                            fontWeight: 'bold',
+                            lineHeight: 1
+                          }}
+                        >×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* 5. Bottom Save Action Floating Footer */}
+        <View style={styles.fbBottomActionCard}>
+          <View>
+            <Text style={{ fontSize: 15, fontWeight: '700', color: '#202124' }}>Ready to launch this form?</Text>
+            <Text style={{ fontSize: 12, color: '#5f6368' }}>
+              Includes {formFields.length} custom questions and {pipeline.length} automated verification steps.
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.btn, { backgroundColor: '#7248B9', paddingHorizontal: 32 }]}
+            onPress={generateLink}
+            testID="save-deploy-bottom-btn"
+          >
+            <Text style={styles.btnText}>Save & Deploy Form 🚀</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Form Interactive Preview Modal */}
+        <Modal visible={formPreviewVisible} transparent={true} animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { maxWidth: 680, maxHeight: '90%' }]}>
+              <ScrollView style={{ width: '100%' }}>
+                {/* Preview Banner */}
+                <View style={{ backgroundColor: '#673ab7', height: 8, borderTopLeftRadius: 12, borderTopRightRadius: 12, width: '100%' }} />
+                <View style={{ padding: 24 }}>
+                  <Text style={{ fontSize: 22, fontWeight: '800', color: '#202124', marginBottom: 6 }}>
+                    {formTitle || 'Untitled form'}
+                  </Text>
+                  <Text style={{ fontSize: 14, color: '#5f6368', marginBottom: 20 }}>
+                    {formDescription || 'Please provide your details below and complete the identity verification flow.'}
+                  </Text>
+
+                  {/* Form Questions */}
+                  <View style={{ gap: 16 }}>
+                    {formFields.map((f, idx) => (
+                      <View key={f.id} style={{ borderWidth: 1, borderColor: '#dadce0', borderRadius: 8, padding: 16, backgroundColor: '#fafafa' }}>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#202124', marginBottom: 8 }}>
+                          {f.title || `Question ${idx + 1}`}
+                          {f.required && <Text style={{ color: '#d93025' }}> *</Text>}
+                        </Text>
+                        {f.type === 'paragraph' ? (
+                          <TextInput placeholder="Your answer" multiline style={{ borderBottomWidth: 1, borderBottomColor: '#dadce0', paddingVertical: 6, minHeight: 60 }} editable={false} />
+                        ) : ['multiple_choice', 'checkboxes', 'dropdown'].includes(f.type) ? (
+                          <View style={{ gap: 6 }}>
+                            {(f.options || ['Option 1']).map((opt, oi) => (
+                              <View key={oi} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <Text>{f.type === 'multiple_choice' ? '🔘' : '☑️'}</Text>
+                                <Text style={{ fontSize: 13, color: '#3c4043' }}>{opt}</Text>
+                              </View>
+                            ))}
+                          </View>
+                        ) : f.type === 'date' ? (
+                          <Text style={{ color: '#5f6368', fontSize: 13 }}>📅 dd/mm/yyyy</Text>
+                        ) : f.type === 'file_upload' ? (
+                          <Text style={{ color: '#7248B9', fontSize: 13 }}>📁 Upload document file</Text>
+                        ) : (
+                          <TextInput placeholder="Your answer" style={{ borderBottomWidth: 1, borderBottomColor: '#dadce0', paddingVertical: 6 }} editable={false} />
+                        )}
+                      </View>
+                    ))}
+                  </View>
+
+                  {/* Attached Verification Steps Summary */}
+                  {pipeline.length > 0 && (
+                    <View style={{ marginTop: 24, padding: 16, backgroundColor: '#f5f3ff', borderRadius: 8, borderWidth: 1, borderColor: '#ddd6fe' }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#7248B9', marginBottom: 6 }}>
+                        🛡️ Attached Automated Verification Steps (Run After Submission):
+                      </Text>
+                      {pipeline.map((p, pi) => (
+                        <Text key={p.uniqueId || pi} style={{ fontSize: 12, color: '#4c1d95', marginVertical: 2 }}>
+                          {pi + 1}. {p.name}
+                        </Text>
+                      ))}
+                    </View>
+                  )}
+
+                  <View style={{ marginTop: 24, flexDirection: 'row', justifyContent: 'flex-end', gap: 12 }}>
+                    <TouchableOpacity
+                      style={styles.btnOutline}
+                      onPress={() => setFormPreviewVisible(false)}
+                    >
+                      <Text style={styles.btnOutlineText}>Close Preview</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      </View>
+    );
+  };
 
   // --- Render 3: Manage Links (Pipelines Manager) ---
   const renderManageLinks = () => (
@@ -2213,5 +2579,304 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '700',
+  },
+  // --- Google Forms-Style Field & Pipeline Builder Styles ---
+  fbTopBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingTop: 10,
+  },
+  fbBackBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    backgroundColor: '#f1f3f4',
+    cursor: 'pointer',
+  },
+  fbHeaderCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#dadce0',
+    overflow: 'hidden',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
+  },
+  fbHeaderStripe: {
+    height: 10,
+    backgroundColor: '#7248B9',
+    width: '100%',
+  },
+  fbHeaderBody: {
+    padding: 24,
+  },
+  fbTitleInput: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#202124',
+    borderBottomWidth: 1,
+    borderBottomColor: '#dadce0',
+    paddingBottom: 8,
+    marginBottom: 12,
+    outlineStyle: 'none',
+  },
+  fbDescInput: {
+    fontSize: 14,
+    color: '#5f6368',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f3f4',
+    paddingVertical: 6,
+    outlineStyle: 'none',
+  },
+  fbFieldCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#dadce0',
+    position: 'relative',
+    overflow: 'hidden',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
+  },
+  fbFieldCardActive: {
+    borderColor: '#7248B9',
+    borderWidth: 2,
+    boxShadow: '0 2px 8px rgba(114, 72, 185, 0.15)',
+  },
+  fbActiveStrip: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    bottom: 0,
+    width: 6,
+    backgroundColor: '#7248B9',
+    zIndex: 2,
+  },
+  fbFieldCardContent: {
+    padding: 20,
+  },
+  fbFieldRowTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 16,
+    marginBottom: 16,
+  },
+  fbQuestionInput: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#202124',
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 4,
+    borderBottomWidth: 2,
+    borderBottomColor: '#7248B9',
+    outlineStyle: 'none',
+  },
+  fbTypeSelectorWrap: {
+    minWidth: 180,
+  },
+  fbAnswerArea: {
+    paddingVertical: 12,
+    marginBottom: 16,
+  },
+  fbMockShortAnswer: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#dadce0',
+    borderStyle: 'dotted',
+    width: '50%',
+    paddingVertical: 8,
+  },
+  fbMockParagraph: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#dadce0',
+    borderStyle: 'dotted',
+    width: '80%',
+    paddingVertical: 16,
+  },
+  fbOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  fbOptionInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#202124',
+    borderBottomWidth: 1,
+    borderBottomColor: '#dadce0',
+    paddingVertical: 6,
+    outlineStyle: 'none',
+  },
+  fbAddOptionBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    alignSelf: 'flex-start',
+    cursor: 'pointer',
+  },
+  fbMockDate: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#dadce0',
+    borderRadius: 4,
+    width: '40%',
+    backgroundColor: '#f8f9fa',
+  },
+  fbMockFileUpload: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#dadce0',
+    borderStyle: 'dashed',
+    borderRadius: 6,
+    backgroundColor: '#f8f9fa',
+    alignItems: 'center',
+  },
+  fbFieldFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    borderTopWidth: 1,
+    borderTopColor: '#f1f3f4',
+    paddingTop: 14,
+    gap: 14,
+  },
+  fbToolBtn: {
+    padding: 8,
+    borderRadius: 20,
+    cursor: 'pointer',
+  },
+  fbToolDivider: {
+    width: 1,
+    height: 22,
+    backgroundColor: '#dadce0',
+    marginHorizontal: 4,
+  },
+  fbSwitchTrack: {
+    width: 36,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#dadce0',
+    justifyContent: 'center',
+    paddingHorizontal: 2,
+    cursor: 'pointer',
+  },
+  fbSwitchTrackActive: {
+    backgroundColor: '#7248B9',
+  },
+  fbSwitchThumb: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+  },
+  fbSwitchThumbActive: {
+    alignSelf: 'flex-end',
+  },
+  fbAddBar: {
+    marginTop: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 12,
+    padding: 14,
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#dadce0',
+    boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
+  },
+  fbAddPrimaryBtn: {
+    backgroundColor: '#7248B9',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 6,
+    cursor: 'pointer',
+  },
+  fbChipBtn: {
+    backgroundColor: '#f1f3f4',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    cursor: 'pointer',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  fbChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#3c4043',
+  },
+  fbPipelineSection: {
+    marginTop: 32,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#dadce0',
+    padding: 20,
+    boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
+  },
+  fbPipelineHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f3f4',
+  },
+  fbPipelineTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#202124',
+  },
+  fbBadgeCount: {
+    backgroundColor: 'rgba(114, 72, 185, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(114, 72, 185, 0.3)',
+  },
+  fbBadgeCountText: {
+    color: '#7248B9',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  fbFixedFlowStep: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderLeftWidth: 4,
+    borderLeftColor: '#7248B9',
+    borderRadius: 8,
+    padding: 12,
+  },
+  fbFixedStepBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#7248B9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fbBottomActionCard: {
+    marginTop: 28,
+    padding: 20,
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#dadce0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
   },
 });

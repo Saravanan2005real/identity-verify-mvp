@@ -19,6 +19,7 @@ const moduleKeys = flowString.split(',').map(m => m.trim().toUpperCase()).filter
 
 // Module Definition Map
 const MODULE_NAMES = {
+    "FORM": "Application Form",
     "PAN_FACE": "PAN & Face Verification",
     "AADHAAR_FACE": "Aadhaar & Face Verification",
     "PAN": "PAN Card OCR",
@@ -80,6 +81,9 @@ function renderCurrentStep() {
     const currentModule = moduleKeys[currentStepIndex];
 
     switch (currentModule) {
+        case 'FORM':
+            renderFormFieldsStep();
+            break;
         case 'PAN_FACE':
         case 'AADHAAR_FACE':
         case 'PAN':
@@ -96,6 +100,97 @@ function renderCurrentStep() {
             renderDocFaceStep('PAN_FACE');
             break;
     }
+}
+
+// -------------------------------------------------------------
+// MODULE: Custom Application Form Fields
+// -------------------------------------------------------------
+function renderFormFieldsStep() {
+    let savedData = null;
+    try {
+        const raw = localStorage.getItem('verifyyy_form_data_' + pipelineId);
+        if (raw) savedData = JSON.parse(raw);
+    } catch(e) {}
+
+    const title = (savedData && savedData.title) || 'Application Form';
+    const desc = (savedData && savedData.description) || 'Please provide your required information before proceeding to identity verification.';
+    const fields = (savedData && savedData.fields && savedData.fields.length) ? savedData.fields : [
+        { id: 'f1', title: 'Full Legal Name', type: 'short_answer', required: true },
+        { id: 'f2', title: 'Work Email Address', type: 'short_answer', required: true }
+    ];
+
+    contentEl.innerHTML = `
+        <div style="text-align:left; max-width:680px; margin:0 auto;">
+            <div style="background:#fff; border-top:8px solid #673ab7; border-radius:12px; padding:24px; margin-bottom:20px; box-shadow:0 1px 3px rgba(60,64,67,0.1); border:1px solid #dadce0;">
+                <h2 style="margin:0 0 8px; font-size:1.6rem; color:#202124;">${title}</h2>
+                <p style="margin:0; color:#5f6368; font-size:0.95rem;">${desc}</p>
+            </div>
+
+            <form id="applicant-custom-form" onsubmit="event.preventDefault(); window.submitApplicantForm();">
+                ${fields.map((f, i) => `
+                    <div style="background:#fff; border-radius:12px; padding:20px 24px; margin-bottom:16px; box-shadow:0 1px 3px rgba(60,64,67,0.1); border:1px solid #dadce0;">
+                        <label style="display:block; font-weight:600; margin-bottom:10px; color:#202124; font-size:1rem;">
+                            ${f.title || `Question ${i + 1}`}
+                            ${f.required ? '<span style="color:#d93025;"> *</span>' : ''}
+                        </label>
+                        ${renderFieldInputHtml(f)}
+                    </div>
+                `).join('')}
+
+                <div style="text-align:right; margin-top:24px;">
+                    <button type="submit" class="btn" style="background:#673ab7; color:#fff; padding:12px 28px; border-radius:24px; font-weight:700; font-size:1rem; cursor:pointer; border:none; box-shadow:0 2px 6px rgba(103,58,183,0.3);">
+                        Continue to Verification Steps →
+                    </button>
+                </div>
+            </form>
+        </div>
+    `;
+
+    window.submitApplicantForm = function() {
+        currentStepIndex++;
+        renderCurrentStep();
+    };
+}
+
+function renderFieldInputHtml(f) {
+    if (f.type === 'paragraph') {
+        return `<textarea style="width:100%; box-sizing:border-box; border:1px solid #dadce0; border-radius:8px; padding:10px 12px; font-family:inherit; min-height:80px;" placeholder="Your answer" ${f.required ? 'required' : ''}></textarea>`;
+    }
+    if (f.type === 'multiple_choice') {
+        const opts = (f.options && f.options.length) ? f.options : ['Option 1'];
+        return opts.map((opt, oi) => `
+            <div style="margin:8px 0; display:flex; align-items:center; gap:8px;">
+                <input type="radio" name="${f.id}" id="${f.id}_${oi}" value="${opt}" ${f.required && oi === 0 ? 'required' : ''}>
+                <label for="${f.id}_${oi}" style="color:#3c4043; cursor:pointer;">${opt}</label>
+            </div>
+        `).join('');
+    }
+    if (f.type === 'checkboxes') {
+        const opts = (f.options && f.options.length) ? f.options : ['Option 1'];
+        return opts.map((opt, oi) => `
+            <div style="margin:8px 0; display:flex; align-items:center; gap:8px;">
+                <input type="checkbox" name="${f.id}" id="${f.id}_${oi}" value="${opt}">
+                <label for="${f.id}_${oi}" style="color:#3c4043; cursor:pointer;">${opt}</label>
+            </div>
+        `).join('');
+    }
+    if (f.type === 'dropdown') {
+        const opts = (f.options && f.options.length) ? f.options : ['Option 1'];
+        return `
+            <select style="width:100%; box-sizing:border-box; border:1px solid #dadce0; border-radius:8px; padding:10px 12px; font-family:inherit; background:#fff;" ${f.required ? 'required' : ''}>
+                <option value="">Choose an option</option>
+                ${opts.map(opt => `<option value="${opt}">${opt}</option>`).join('')}
+            </select>
+        `;
+    }
+    if (f.type === 'date') {
+        return `<input type="date" style="border:1px solid #dadce0; border-radius:8px; padding:10px 12px; font-family:inherit;" ${f.required ? 'required' : ''} />`;
+    }
+    if (f.type === 'file_upload') {
+        return `<input type="file" style="width:100%; padding:8px 0;" ${f.required ? 'required' : ''} />`;
+    }
+    // Default short_answer
+    return `<input type="text" style="width:100%; box-sizing:border-box; border:none; border-bottom:1.5px solid #dadce0; padding:8px 0; font-size:1rem; outline:none;" placeholder="Your answer" ${f.required ? 'required' : ''} />`;
 }
 
 // -------------------------------------------------------------

@@ -143,6 +143,23 @@ export default function App() {
   const [generatedLink, setGeneratedLink] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [currentPid, setCurrentPid] = useState(null);
+  const [publishStep, setPublishStep] = useState('ready'); // 'ready' (saved, ready to publish) | 'published' (live, link shareable)
+
+  const publishForm = () => {
+    setPublishStep('published');
+    if (currentPid) {
+      setSavedPipelines(prev => {
+        const updated = prev.map(p => p.pid === currentPid ? { ...p, status: 'published' } : p);
+        try {
+          if (typeof window !== 'undefined' && window.localStorage) {
+            localStorage.setItem('verifyyy_saved_pipelines', JSON.stringify(updated));
+          }
+        } catch (e) {}
+        return updated;
+      });
+    }
+  };
 
   // --- Google Forms Hub State ---
   const [formSearchQuery, setFormSearchQuery] = useState('');
@@ -175,8 +192,9 @@ export default function App() {
 
   const copyToClipboard = (text) => {
     if (!text) return;
+    const cleanText = typeof text === 'string' ? text.replace(/\/verify\.html\/+verify\.html/g, '/verify.html') : text;
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      navigator.clipboard.writeText(text);
+      navigator.clipboard.writeText(cleanText);
       setLinkCopied(true);
       setTimeout(() => setLinkCopied(false), 2500);
     }
@@ -286,7 +304,11 @@ export default function App() {
         if (savedP) {
           const parsed = JSON.parse(savedP);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            localPipes = parsed;
+            localPipes = parsed.map(p => ({
+              ...p,
+              link: (p.link || '').replace(/\/verify\.html\/+verify\.html/g, '/verify.html'),
+              status: p.status || 'published'
+            }));
           }
         }
       }
@@ -543,11 +565,17 @@ export default function App() {
     const moduleIds = pipeline.map(m => m.id);
     const flowParts = formFields.length > 0 ? ['FORM', ...moduleIds] : moduleIds;
     const flowParams = flowParts.join(',');
-    const pid = `FLOW-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+    const pid = currentPid || `FLOW-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
 
-    const origin = VERIFY_BASE_URL || ((typeof window !== 'undefined' && window.location && window.location.hostname && isDev)
+    const rawOrigin = VERIFY_BASE_URL || ((typeof window !== 'undefined' && window.location && window.location.hostname && isDev)
       ? `${window.location.protocol}//${window.location.hostname}:5174`
       : (isDev ? 'http://localhost:5174' : ''));
+
+    let cleanOrigin = rawOrigin;
+    while (/\/+verify\.html\/?$/i.test(cleanOrigin)) {
+      cleanOrigin = cleanOrigin.replace(/\/+verify\.html\/?$/i, '');
+    }
+    cleanOrigin = cleanOrigin.replace(/\/+$/, '');
 
     let applicantToken = '';
     try {
@@ -571,9 +599,11 @@ export default function App() {
     }
 
     const tokenQuery = applicantToken ? `&applicant_token=${encodeURIComponent(applicantToken)}` : '';
-    const link = `${origin}/verify.html?flow=${encodeURIComponent(flowParams)}&pid=${pid}${tokenQuery}`;
+    const link = `${cleanOrigin}/verify.html?flow=${encodeURIComponent(flowParams)}&pid=${pid}${tokenQuery}`;
     setLinkCopied(false);
     setGeneratedLink(link);
+    setCurrentPid(pid);
+    setPublishStep('ready');
     setModalVisible(true);
 
     const newPipelineObj = {
@@ -584,8 +614,9 @@ export default function App() {
       modules: pipeline.map(m => m.name),
       flowParams: flowParams,
       link: link,
+      status: 'draft',
       created_at: new Date().toISOString().split('T')[0],
-      themeColor: '#673ab7',
+      themeColor: '#7248B9',
     };
 
     // Store form fields in localStorage for applicant runner
@@ -600,7 +631,10 @@ export default function App() {
     } catch (e) {}
 
     setSavedPipelines(prev => {
-      const updated = [newPipelineObj, ...prev];
+      const exists = prev.some(p => p.pid === pid);
+      const updated = exists
+        ? prev.map(p => p.pid === pid ? { ...newPipelineObj, status: p.status || 'draft' } : p)
+        : [newPipelineObj, ...prev];
       try {
         if (typeof window !== 'undefined' && window.localStorage) {
           localStorage.setItem('verifyyy_saved_pipelines', JSON.stringify(updated));
@@ -625,7 +659,10 @@ export default function App() {
   };
 
   const openGeneratedLink = (targetUrl) => {
-    const url = targetUrl || generatedLink;
+    let url = targetUrl || generatedLink;
+    if (url && typeof url === 'string') {
+      url = url.replace(/\/verify\.html\/+verify\.html/g, '/verify.html');
+    }
     if (typeof window !== 'undefined' && window.open) {
       window.open(url, '_blank');
     }
@@ -642,6 +679,8 @@ export default function App() {
   };
 
   const handleCreateBlankForm = () => {
+    setCurrentPid(null);
+    setPublishStep('ready');
     setFormTitle('Untitled form');
     setFormDescription('Please provide your required information before proceeding to identity verification.');
     setFormFields([
@@ -676,6 +715,8 @@ export default function App() {
 
   const handleEditPipeline = (p) => {
     if (!p) return;
+    setCurrentPid(p.pid);
+    setPublishStep(p.status === 'published' ? 'published' : 'ready');
     setFormTitle(p.name || 'Untitled form');
     setFormDescription(p.description || '');
     if (p.fields && Array.isArray(p.fields) && p.fields.length > 0) {
@@ -884,6 +925,18 @@ export default function App() {
                             <Text style={styles.gfCardOpenedText} numberOfLines={1}>
                               {p.created_at ? (p.created_at.startsWith('Opened') ? p.created_at : `Opened ${p.created_at}`) : 'Opened recently'}
                             </Text>
+                            <View style={{
+                              paddingHorizontal: 6,
+                              paddingVertical: 1,
+                              borderRadius: 4,
+                              backgroundColor: p.status === 'published' ? '#ecfdf5' : '#fffbeb',
+                              borderWidth: 1,
+                              borderColor: p.status === 'published' ? '#a7f3d0' : '#fde68a'
+                            }}>
+                              <Text style={{ fontSize: 9, fontWeight: '700', color: p.status === 'published' ? '#059669' : '#b45309' }}>
+                                {p.status === 'published' ? '🟢 Live' : '🟡 Draft'}
+                              </Text>
+                            </View>
                           </View>
 
                           {/* 3-dots Action Menu Button */}
@@ -1052,7 +1105,7 @@ export default function App() {
               onPress={generateLink}
               testID="save-deploy-btn"
             >
-              <Text style={styles.btnText}>Save & Deploy Form 🚀</Text>
+              <Text style={styles.btnText}>Save Form 💾</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1411,7 +1464,7 @@ export default function App() {
         {/* 5. Bottom Save Action Floating Footer */}
         <View style={styles.fbBottomActionCard}>
           <View>
-            <Text style={{ fontSize: 15, fontWeight: '700', color: '#202124' }}>Ready to launch this form?</Text>
+            <Text style={{ fontSize: 15, fontWeight: '700', color: '#202124' }}>Ready to save and publish this form?</Text>
             <Text style={{ fontSize: 12, color: '#5f6368' }}>
               Includes {formFields.length} custom questions and {pipeline.length} automated verification steps.
             </Text>
@@ -1421,7 +1474,7 @@ export default function App() {
             onPress={generateLink}
             testID="save-deploy-bottom-btn"
           >
-            <Text style={styles.btnText}>Save & Deploy Form 🚀</Text>
+            <Text style={styles.btnText}>Save & Review for Publish 🚀</Text>
           </TouchableOpacity>
         </View>
 
@@ -1712,42 +1765,112 @@ export default function App() {
           {activeTab === 'review' && renderReviewQueue()}
       </ScrollView>
 
-      {/* Generated Link Modal */}
+      {/* Save & Publish Form Modal */}
       <Modal visible={modalVisible} transparent={true} animationType="fade">
           <View style={styles.modalOverlay}>
-              <View style={styles.modalContent}>
-                  <Text style={styles.modalTitle}>Pipeline Link Ready! 🎉</Text>
-                  <Text style={{color: COLORS.textMuted, textAlign: 'center', marginBottom: 20}}>
-                      Your custom verification flow link has been generated. Anyone opening this link will execute your configured pipeline steps in sequence.
-                  </Text>
-                  <View style={styles.linkBox}>
-                      <Text
-                        selectable={true}
-                        style={styles.linkText}
-                        onPress={() => copyToClipboard(generatedLink)}
-                      >
-                        {generatedLink}
+              <View style={[styles.modalContent, { maxWidth: 560 }]}>
+                  {publishStep === 'ready' ? (
+                    <View style={{ width: '100%', alignItems: 'center' }}>
+                      <Text style={{ fontSize: 36, marginBottom: 8 }}>💾</Text>
+                      <Text style={styles.modalTitle}>Form Saved Successfully!</Text>
+                      <Text style={{ color: COLORS.textMuted, textAlign: 'center', marginBottom: 18, fontSize: 13, lineHeight: 18 }}>
+                        Your questions and verification pipeline are saved to your dashboard. Publish this form to activate it and generate your live shareable link.
                       </Text>
-                  </View>
-                  
-                  <View style={{flexDirection: 'row', gap: 10, width: '100%', marginBottom: 12}}>
-                      <TouchableOpacity
-                        style={[styles.btn, {flex: 1, backgroundColor: linkCopied ? '#059669' : '#0f766e', marginBottom: 0}]}
-                        onPress={() => copyToClipboard(generatedLink)}
-                      >
-                          <Text style={styles.btnText}>{linkCopied ? 'Copied! ✓' : '📋 Copy Link'}</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.btn, {flex: 1, backgroundColor: '#0f766e', marginBottom: 0}]}
-                        onPress={() => openGeneratedLink()}
-                      >
-                          <Text style={styles.btnText}>Open Flow 🚀</Text>
-                      </TouchableOpacity>
-                  </View>
 
-                  <TouchableOpacity style={styles.btnOutline} onPress={() => setModalVisible(false)}>
-                      <Text style={styles.btnOutlineText}>Close</Text>
-                  </TouchableOpacity>
+                      {/* Summary Configuration Card */}
+                      <View style={{
+                        width: '100%',
+                        backgroundColor: '#f8fafc',
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: '#e2e8f0',
+                        padding: 16,
+                        marginBottom: 20
+                      }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                          <Text style={{ fontWeight: '700', fontSize: 16, color: '#1e293b', flex: 1, marginRight: 8 }} numberOfLines={1}>
+                            {formTitle || 'Untitled form'}
+                          </Text>
+                          <View style={{ backgroundColor: '#fef3c7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12, borderWidth: 1, borderColor: '#fde68a' }}>
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#b45309' }}>🟡 Draft (Saved)</Text>
+                          </View>
+                        </View>
+
+                        <View style={{ gap: 8 }}>
+                          <Text style={{ fontSize: 12, color: '#64748b' }}>
+                            📋 <Text style={{ fontWeight: '600', color: '#334155' }}>Custom Questions:</Text> {formFields.length} Field(s)
+                          </Text>
+                          <Text style={{ fontSize: 12, color: '#64748b' }}>
+                            🛡️ <Text style={{ fontWeight: '600', color: '#334155' }}>Identity Modules:</Text> {pipeline.length > 0 ? pipeline.map(m => m.name).join(' ➔ ') : 'Direct form submission (No identity modules)'}
+                          </Text>
+                          <Text style={{ fontSize: 12, color: '#64748b' }}>
+                            🆔 <Text style={{ fontWeight: '600', color: '#334155' }}>Pipeline ID:</Text> {currentPid}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Publish CTA Button */}
+                      <TouchableOpacity
+                        style={[styles.btn, { width: '100%', backgroundColor: '#7248B9', marginBottom: 10 }]}
+                        onPress={publishForm}
+                        testID="publish-now-btn"
+                      >
+                        <Text style={styles.btnText}>🚀 Publish Form Now</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[styles.btnOutline, { width: '100%' }]}
+                        onPress={() => setModalVisible(false)}
+                      >
+                        <Text style={styles.btnOutlineText}>Keep as Draft & Close</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <View style={{ width: '100%', alignItems: 'center' }}>
+                      <Text style={{ fontSize: 36, marginBottom: 8 }}>🎉</Text>
+                      <Text style={styles.modalTitle}>Form Published & Live!</Text>
+                      <Text style={{ color: COLORS.textMuted, textAlign: 'center', marginBottom: 14, fontSize: 13, lineHeight: 18 }}>
+                        Your verification flow is officially published and live. Share this link with applicants to collect responses and execute your identity verification pipeline.
+                      </Text>
+
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 16 }}>
+                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10b981' }} />
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#10b981' }}>Live & Accepting Submissions</Text>
+                      </View>
+
+                      {/* Clean Shareable Link Box */}
+                      <View style={[styles.linkBox, { width: '100%', backgroundColor: '#f1f5f9', padding: 12, borderRadius: 6, borderWidth: 1, borderColor: '#cbd5e1', marginBottom: 16 }]}>
+                        <Text
+                          selectable={true}
+                          style={[styles.linkText, { fontSize: 12, color: '#0f172a', wordBreak: 'break-all' }]}
+                          onPress={() => copyToClipboard(generatedLink)}
+                        >
+                          {generatedLink}
+                        </Text>
+                      </View>
+                      
+                      <View style={{ flexDirection: 'row', gap: 10, width: '100%', marginBottom: 12 }}>
+                        <TouchableOpacity
+                          style={[styles.btn, { flex: 1, backgroundColor: linkCopied ? '#059669' : '#7248B9', marginBottom: 0 }]}
+                          onPress={() => copyToClipboard(generatedLink)}
+                          testID="copy-link-btn"
+                        >
+                          <Text style={styles.btnText}>{linkCopied ? 'Copied! ✓' : '📋 Copy Share Link'}</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.btn, { flex: 1, backgroundColor: '#0f766e', marginBottom: 0 }]}
+                          onPress={() => openGeneratedLink(generatedLink)}
+                          testID="open-flow-btn"
+                        >
+                          <Text style={styles.btnText}>Open Flow 🚀</Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      <TouchableOpacity style={[styles.btnOutline, { width: '100%' }]} onPress={() => setModalVisible(false)}>
+                        <Text style={styles.btnOutlineText}>Done</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
               </View>
           </View>
       </Modal>

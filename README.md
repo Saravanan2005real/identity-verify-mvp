@@ -18,6 +18,8 @@
 - [Executive Overview](#executive-overview)
   - [Core Problems Solved](#core-problems-solved)
 - [Key Features & Innovations](#key-features--innovations)
+  - [📋 Google Forms-Style Verification Studio & Dynamic Question Builder](#-google-forms-style-verification-studio--dynamic-question-builder)
+  - [🚀 Two-Phase Form Lifecycle (Save ➔ Review ➔ Publish ➔ Share Link)](#-two-phase-form-lifecycle-save--review--publish--share-link)
   - [🪪 Universal Document Classification & Dual-Pass OCR](#-universal-document-classification--dual-pass-ocr)
   - [👤 Three-Tier Cascaded Deep Face Recognition](#-three-tier-cascaded-deep-face-recognition)
   - [👁️ Biometric Liveness & Attention Tracking](#️-biometric-liveness--attention-tracking)
@@ -25,6 +27,7 @@
   - [🏢 Enterprise Client Admin Portal & Authentication](#-enterprise-client-admin-portal--authentication)
   - [👑 Centralized Superadmin Governance](#-centralized-superadmin-governance)
   - [🌐 Cloud Persistence & Dual-Mode Token Revocation](#-cloud-persistence--dual-mode-token-revocation)
+  - [☁️ Direct Supabase Cloud Database Synchronization](#️-direct-supabase-cloud-database-synchronization)
   - [🛡️ Automated Data Retention & Asset Purging](#️-automated-data-retention--asset-purging)
 - [System Architecture & Visual Diagrams](#system-architecture--visual-diagrams)
   - [1. High-Level Architecture Diagram](#1-high-level-architecture-diagram)
@@ -96,6 +99,25 @@ Modern digital enterprises (fintechs, neobanks, crypto exchanges, gig economy ma
 
 ## Key Features & Innovations
 
+### 📋 Google Forms-Style Verification Studio & Dynamic Question Builder
+- **Minimalist Studio Hub:** Clean, focused interface inspired by Google Forms. Displays strictly the **Blank form** (`+`) creator card under *"Start a new form"* and previously created pipelines under *"Recent forms"*, stripping out unnecessary clutter.
+- **Interactive Question Creator:** Build rich custom application forms with full field customization:
+  - **Supported Field Types:** Short answer (`📝`), Paragraph (`📄`), Multiple choice (`🔘`), Checkboxes (`☑️`), Dropdown (`▾`), Date (`📅`), and Document / File Upload (`📁`).
+  - **Dynamic Options Editor:** Add, modify, or remove options in real time.
+  - **Question Controls:** Individual Required switches, Duplicate (`📄`), and Delete (`🗑️`) controls per card.
+  - **Quick Preset Chips:** One-click shortcuts for standard onboarding questions: `+ Full Name`, `+ Work Email`, `+ Phone`, `+ ID Number`, and `+ Document Upload`.
+- **Integrated Verification Pipeline Attachment:** Attach automated identity verification modules (biometrics, liveness, Aadhaar OCR, PAN OCR, Human Review) directly underneath the form fields. The custom application form acts as **Fixed Step 1** followed by sequential verification steps.
+- **Live Form Preview:** Modal preview to inspect and test the applicant's exact questionnaire experience before deploying.
+
+### 🚀 Two-Phase Form Lifecycle (Save ➔ Review ➔ Publish ➔ Share Link)
+- **Phase 1: Form Save & Draft Management:** Clicking *"Save Form 💾"* validates and saves the form schema and verification pipeline to the cloud and marks the record as `🟡 Draft (Saved)`. An inspection dialog presents a configuration breakdown (total custom fields, attached modules, and pipeline ID) with options to keep as draft or proceed.
+- **Phase 2: Publish & Live Link Sharing:** Clicking *"🚀 Publish Form Now"* promotes the pipeline to `🟢 Published & Live` in the database. The system generates a clean, single-path shareable URL:
+  ```
+  http://localhost:5174/verify.html?flow=FORM,AADHAAR_FACE,PAN&pid=FLOW-XXXXXX
+  ```
+- **One-Click Share Actions:** Direct *"📋 Copy Share Link"* with instant visual feedback and *"Open Flow 🚀"* to launch the applicant flow in a new browser tab.
+- **Status Badges:** All saved forms on the dashboard show dynamic status indicators (`🟢 Live` vs `🟡 Draft`), allowing administrators to republish, unpublish, or edit pipelines on demand.
+
 ### 🪪 Universal Document Classification & Dual-Pass OCR
 - **Supported Identity Documents:** Indian Aadhaar (Front/Back/e-Aadhaar), Permanent Account Number (PAN) Card, Voter ID, Driver's License, and International Passports.
 - **Image Quality Pre-Flight Guard:** Fast Laplacian variance blur filter (rejects images with blur variance `< 100.0`) and high-specular glare detection to ensure OCR readability before pipeline processing.
@@ -147,6 +169,13 @@ flowchart LR
 ### 🌐 Cloud Persistence & Dual-Mode Token Revocation
 - **Supabase PostgreSQL Cloud DB:** Multi-tenant database schema equipped with Row-Level Security (RLS) policies, foreign key tenant boundaries, and composite unique constraints (`(tenant_id, session_id)`).
 - **Dual-Mode Token Revocation Engine:** In-memory LRU cache for ultra-fast local checking with automated fallback to Supabase cloud persistence for distributed multi-instance clusters.
+
+### ☁️ Direct Supabase Cloud Database Synchronization
+- **End-to-End Form & Pipeline Persistence:** Every form created in the Admin Dashboard is persisted directly to Supabase (`public.verifications` table with `document_type = 'FORM_PIPELINE'`). Metadata includes question arrays, validation rules, attached verification modules, and publish state.
+- **Applicant Form Delivery from Cloud:** When an applicant visits a verification link from any device or network, the runner (`verify.html` / `verify.js`) fetches the latest published questionnaire schema directly from the Supabase REST API.
+- **Bi-Directional Submission Recording:** Upon completion, applicant responses, OCR-extracted fields, and biometric similarity scores are recorded in real-time in Supabase.
+- **Cloud-Synced Manual Review Queue:** Low-confidence or flagged submissions automatically populate the admin review queue. Reviewer decisions (`APPROVED` / `REJECTED`) update Supabase records instantly.
+- **Real-Time Dashboard Telemetry:** Pipeline counts, published link metrics, and completed verification stats are calculated live from Supabase PostgreSQL tables.
 
 ### 🛡️ Automated Data Retention & Asset Purging
 - **GDPR & DPDP Compliance:** Configurable data retention policies (default: 30 days) to prevent perpetual PII storage.
@@ -579,10 +608,18 @@ identity-verify-mvp/
 - **Implementation:** `products/ocr_engine/engine.py` (Flask microservice).
 
 ### 3. Interactive Verification Flow Runner (`verify.html` / `verify.js`)
-- **Primary Roles:** Modular, multi-step HTML5 applicant onboarding interface. Reads URL parameters (`?pipeline=aadhaar,pan,facematch...`), dynamically renders progress stepper indicators, coordinates webcam capture, guides applicants through document uploads, and submits payloads to the backend with applicant session tokens.
+- **Primary Roles:** Modular, multi-step HTML5 applicant onboarding interface. Reads URL parameters (`?flow=FORM,AADHAAR_FACE,PAN&pid=FLOW-XXXXXX`), fetches custom questionnaire definitions directly from Supabase, dynamically renders progress stepper indicators, coordinates webcam capture, guides applicants through document uploads, and submits payloads to the backend with applicant session tokens.
+- **Form Execution:** When `FORM` is specified in the flow, dynamically renders custom questionnaire fields (short answers, paragraphs, multiple choice, checkboxes, dropdowns, dates, file uploads) before seamlessly advancing the applicant to subsequent identity verification stages.
+- **Cloud Submission:** Saves applicant responses and completion results directly to the Supabase database.
 
 ### 4. Client Admin Portal (Port 8082)
-- **Primary Roles:** Enterprise client management console. Features visual drag-and-drop pipeline reordering, one-click shareable verification link generation, live applicant verification audit table, and side-by-side face audit modal.
+- **Primary Roles:** Enterprise client management console and verification studio.
+  - **Google Forms-Style Studio:** Uncluttered dashboard with a single *"Blank form"* (`+`) creation card and *"Recent forms"* gallery.
+  - **Interactive Question Builder:** Visual form builder with rich question types (short answer, paragraph, multiple choice, checkboxes, dropdown, date, file upload), question duplicate/delete, and required toggles.
+  - **Pipeline Attachment:** Attach biometric and automated modules (Aadhaar OCR, PAN OCR, Face Match, Eye Tracking, Human Review) below custom form fields.
+  - **Form Lifecycle & Live Sharing:** Two-phase Save ➔ Review for Publish ➔ Publish workflow generating clean, sanitized applicant links.
+  - **Supabase Cloud Sync:** Real-time persistence for all forms, pipeline definitions, applicant runs, review decisions, and dashboard telemetry.
+  - **Manual Review Queue:** Side-by-side inspection of reference document face crops vs. live selfie captures with one-click approval/rejection persisted to Supabase.
 - **Authentication:** Dual-mode sign-in: Work Email & Password or Passwordless 8-Digit Email OTP with auto-advancing inputs, one-click clipboard paste (`[📋 Paste Code]`), and Google OAuth 2.0 SSO.
 - **Implementation:** `admin/frontend/App.js` & `SignInScreen.js` (React Native Web / Expo 52).
 
@@ -898,23 +935,33 @@ Expected response:
 
 ## Verification Flow Runner & Dynamic Pipelines
 
-### Visual Canvas Usage
+### Google Forms Studio & Visual Canvas Workflow
 1. Open the Client Admin Portal at `http://localhost:8082`.
 2. Sign in using Email/Password, 8-Digit Email OTP, or Google OAuth.
-3. Click **Pipeline Builder** in the top navigation bar.
-4. Click modules from **Available Modules** to append them to your pipeline canvas.
-5. **Drag and Rearrange:** Click and hold any module card in **Your Pipeline Canvas** and drag it up or down. A dashed insertion marker indicates the exact drop position. Release to swap module order instantly. Step numbers update automatically.
-6. Click **Generate Verification Link 🚀** to copy the customized parameterized verification link.
+3. On the Home Screen, click **Blank form (+)** under *"Start a new form"*.
+4. **Build Custom Questions:**
+   - Configure Form Title and Description.
+   - Add questions and choose field types: Short answer, Paragraph, Multiple choice, Checkboxes, Dropdown, Date, or File upload.
+   - Use quick presets (`+ Full Name`, `+ Work Email`, `+ Phone`, etc.) for standard compliance fields.
+   - Toggle **Required**, or duplicate/delete questions.
+5. **Attach Verification Pipeline:**
+   - Click `(+)` on Available Verification Modules (e.g., Aadhaar & Face Match, PAN OCR, Eye Tracking, Human Review) to attach them to the pipeline.
+   - Reorder modules dynamically on the sequence canvas.
+6. **Save & Publish Lifecycle:**
+   - Click **Save Form 💾** to persist configuration to Supabase as a Draft.
+   - Click **🚀 Publish Form Now** in the confirmation dialog to activate the live flow.
+   - Copy the generated shareable verification link or click **Open Flow 🚀** to test immediately.
 
 ### Dynamic URL Structure
 ```
-http://localhost:5174/verify.html?pid=FLOW-9182&pipeline=pan,aadhaar,pan_face&return_url=https%3A%2F%2Fexample.com%2Fcallback
+http://localhost:5174/verify.html?flow=FORM,AADHAAR_FACE,PAN&pid=FLOW-FI9NRJ
 ```
 
 ### Supported Flow Modules
 
 | Module ID | Display Title | Capabilities & Description |
 |:---|:---|:---|
+| `FORM` | Application Form | Custom questionnaire (short answer, paragraph, multiple choice, checkboxes, dropdown, date, file upload) persisted and delivered via Supabase |
 | `aadhaar` | Aadhaar Verification | Document capture, perspective rectification, UIDAI 8-digit masking |
 | `pan` | PAN Verification | Document capture, PAN format regex validation, Name/DOB extraction |
 | `aadhaar_face` | Aadhaar & Face Match | Aadhaar OCR combined with live webcam selfie and SFace 128-D match |

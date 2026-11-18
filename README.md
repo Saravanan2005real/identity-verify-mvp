@@ -187,7 +187,7 @@ flowchart LR
 
 ### 1. High-Level Architecture Diagram
 
-![Verifyyy System Architecture Diagram](architecture_diagram.svg)
+![Verifyyy System Architecture Diagram](docs/diagrams/architecture_diagram.svg)
 
 <details>
 <summary>Click to view Mermaid Architecture Source</summary>
@@ -254,7 +254,7 @@ graph TB
 
 ### 2. End-to-End Verification Sequence
 
-![End-to-End Verification Sequence Diagram](diagram_2_sequence.svg)
+![End-to-End Verification Sequence Diagram](docs/diagrams/diagram_2_sequence.svg)
 
 <details>
 <summary>Click to view Mermaid Sequence Source</summary>
@@ -300,7 +300,7 @@ sequenceDiagram
 
 ### 3. Dynamic Pipeline Builder & Runner Flow
 
-![Dynamic Pipeline Builder and Runner Flow Diagram](diagram_3_pipeline_builder.svg)
+![Dynamic Pipeline Builder and Runner Flow Diagram](docs/diagrams/diagram_3_pipeline_builder.svg)
 
 <details>
 <summary>Click to view Mermaid Flowchart Source</summary>
@@ -341,7 +341,7 @@ graph LR
 
 ### 4. Multi-Tier AI Face Match & Fallback Decision Logic
 
-![Multi-Tier AI Face Match and Fallback Decision Logic Diagram](diagram_4_face_match_decision.svg)
+![Multi-Tier AI Face Match and Fallback Decision Logic Diagram](docs/diagrams/diagram_4_face_match_decision.svg)
 
 <details>
 <summary>Click to view Mermaid Decision Tree Source</summary>
@@ -380,7 +380,7 @@ flowchart TD
 
 ### 5. Multi-Modal Liveness & Anti-Spoofing Architecture
 
-![Multi-Modal Liveness and Anti-Spoofing Architecture Diagram](diagram_5_liveness_antispoof.svg)
+![Multi-Modal Liveness and Anti-Spoofing Architecture Diagram](docs/diagrams/diagram_5_liveness_antispoof.svg)
 
 <details>
 <summary>Click to view Mermaid Liveness Architecture Source</summary>
@@ -432,7 +432,7 @@ flowchart TD
 
 ### 6. Supabase Entity-Relationship & Cloud Sync Architecture
 
-![Supabase Entity-Relationship and Cloud Sync Architecture Diagram](diagram_6_supabase_er.svg)
+![Supabase Entity-Relationship and Cloud Sync Architecture Diagram](docs/diagrams/diagram_6_supabase_er.svg)
 
 <details>
 <summary>Click to view Mermaid ER Diagram Source</summary>
@@ -509,57 +509,74 @@ erDiagram
 ```
 identity-verify-mvp/
 ├── README.md                                # Definitive Architecture & Operational Guide
-├── architecture_diagram.svg                 # System Architecture Diagram (SVG)
-├── diagram_2_sequence.svg                   # End-to-End Sequence Diagram (SVG)
-├── diagram_3_pipeline_builder.svg           # Dynamic Pipeline Builder & Runner Diagram (SVG)
-├── diagram_4_face_match_decision.svg        # Multi-Tier Face Match Logic Diagram (SVG)
-├── diagram_5_liveness_antispoof.svg         # Multi-Modal Liveness Anti-Spoof Diagram (SVG)
-├── diagram_6_supabase_er.svg                # Supabase ER & Cloud Sync Diagram (SVG)
+├── index.html                               # Root Navigation Hub & Service Portal
+├── start_all.bat                            # One-Click Windows Launcher for All 4 Microservices
+├── start_all.sh                             # One-Click Linux/macOS Launcher for All 4 Microservices
 ├── docker-compose.yml                       # Multi-Container Production Compose Manifest
-├── package.json                             # Root Workspace Configuration
+├── supabase_schema.sql                      # Supabase Table DDL, RLS Policies & Indexes
 ├── vercel.json                              # Static Gateway Deployment Rewrites
+├── pytest.ini                               # Automated Security Test Configuration
+├── .env.example                             # Environment Template for Cloud Credentials
+├── .gitignore                               # Clean Git Configuration
+├── .dockerignore                            # Container Build Exclusions
 │
 ├── admin/                                   # Client Admin Portal Subsystem
 │   └── frontend/                            # React Native Web Client Management Portal (Port 8082)
 │       ├── .env.example                     # Client Admin Environment Template
-│       ├── App.js                           # Pipeline Builder Canvas & Live Audit Center
+│       ├── App.js                           # Google Forms Studio, Pipeline Builder & Live Audit
 │       ├── SignInScreen.js                  # Dual-Mode Auth (Password + 8-Digit Email OTP + Google)
 │       ├── package.json                     # Frontend Dependencies (Expo 52, React Native Web 0.21)
-│       ├── supabase.js                      # Supabase JS Client & Auth Provider
+│       ├── README.md                        # Admin Portal Documentation & Setup Guide
+│       ├── lib/
+│       │   └── supabase.js                  # Shared Supabase Client & Session Provider
 │       ├── scripts/
 │       │   └── check-env.js                 # Pre-Build Environment Validator Guard
 │       └── src/services/
 │           ├── auth.js                      # Supabase Auth Service (Signup redirect & OTP fallback)
 │           └── googleAuth.js                # Google OAuth SSO Authentication Helper
 │
+├── docs/                                    # System Documentation, Visual Assets & Reports
+│   ├── README.md                            # Documentation Overview & Asset Index
+│   ├── diagrams/                            # High-Resolution SVG System Architecture Diagrams
+│   │   ├── architecture_diagram.svg         # High-Level System Architecture Diagram
+│   │   ├── diagram_2_sequence.svg           # End-to-End Verification Sequence Diagram
+│   │   ├── diagram_3_pipeline_builder.svg   # Dynamic Pipeline Builder & Runner Flow
+│   │   ├── diagram_4_face_match_decision.svg# Multi-Tier Face Match Decision Logic
+│   │   ├── diagram_5_liveness_antispoof.svg # Multi-Modal Liveness & Anti-Spoofing Architecture
+│   │   └── diagram_6_supabase_er.svg        # Supabase ER & Cloud Sync Schema
+│   └── reports/                             # Formal Security & Compliance Audit Reports
+│       ├── Verifyyy_Security_Architecture_and_Remediation_Report.docx # Security Audit Report
+│       └── generate_security_report_docx.py # Automated Report Generator Script
+│
 ├── migrations/                              # Database Schema DDL & Hardened RLS Migrations
+│   ├── README.md                            # Database Migration Index & Instructions
 │   ├── 20261024_000001_harden_rls_and_multi_tenancy.sql
 │   ├── 20261025_000002_revocation_table_and_orphan_strategy.sql
 │   └── 20261026_000003_composite_unique_tenant_session.sql
 │
-├── model_cache/                             # Pre-Trained Machine Learning Models
-│   ├── sface.onnx                           # SFace 128-D Deep Neural Net (Cosine Distance)
-│   ├── FSRCNN_x2.pb                         # Super-Resolution Neural Net for Blurry Crops
-│   └── haarcascade_frontalface_default.xml  # Classical Haar Cascade Detector Fallback
-│
 ├── products/                                # Verification Gateway & Runner Subsystem (Port 5174)
+│   ├── README.md                            # Products Gateway & Client Applications Guide
 │   ├── index.html                           # Landing Page & Service Navigation Hub
 │   ├── serve_5174.py                        # Python Gateway Server (Static Server + Reverse Proxy)
 │   ├── nginx.conf                           # High-Performance Nginx Gateway Configuration
 │   ├── verify.html                          # Parameterized Verification Flow Runner (Dynamic Stepper)
 │   ├── verify.js                            # Modular Stepper Engine & Multi-Modal Orchestrator
 │   ├── style.css                            # Verification Flow Responsive UI Theme
+│   ├── signin.html / .js / .css             # Standalone Client Portal Authentication Interface
 │   ├── demo_ocr_face.html / .js             # Standalone OCR & Face Verification Demo
 │   ├── demo_eye_tracking.html / .js         # Standalone WebGazer Eye Tracking Demo
 │   ├── demo_audio_liveness.html / .js       # Standalone Voice / Audio Liveness Demo
 │   ├── webgazer.js                          # WebGazer In-Browser 9-Point Gaze Calibration
+│   ├── ocr_uploads/                         # Ephemeral Runtime Storage Cache (.gitkeep)
 │   │
 │   ├── eye_tracking_module/                 # Gaze Analysis & Calibration Backend (Port 5002)
-│   │   ├── app.py                           # FastAPI Gaze Estimation & Quadrant Tracking Service
+│   │   ├── README.md                        # Eye Tracking Module Documentation
+│   │   ├── main.py                          # FastAPI Gaze Estimation & Quadrant Tracking Service
 │   │   ├── requirements.txt                 # Eye Tracking Dependencies
 │   │   └── Dockerfile                       # Container Definition for Gaze Service
 │   │
 │   └── ocr_engine/                          # AI OCR, Face Engine & Security Backend (Port 5001)
+│       ├── README.md                        # AI OCR Engine Documentation & Architecture
 │       ├── .env.example                     # Backend Security Environment Template
 │       ├── engine.py                        # Core Flask Microservice & Verification Endpoints
 │       ├── auth_validator.py                # Security & Cryptographic Validation Layer
@@ -567,32 +584,41 @@ identity-verify-mvp/
 │       ├── cleanup_assets.py                # Standalone Cron Retention Cleanup Script
 │       ├── supabase_client.py               # Supabase PostgreSQL Integration & RLS Sync
 │       ├── download_sface.py                # Automated Neural Model Downloader
-│       ├── python_service.py                # Computer Vision Pipeline Helpers
 │       ├── quality.py                       # Image Quality Assessment (Laplacian Blur & Glare)
-│       ├── inproc.py                        # In-Process AI Inference Worker
-│       ├── google_vision.py                 # Google Cloud Vision Fallback Provider
-│       ├── azure.py                         # Azure Cognitive Services OCR Provider
-│       ├── mock.py                          # Mock OCR Provider for CI / Sandbox Testing
-│       ├── provider.py                      # Abstract OCR Provider Interface
-│       ├── requirements.txt                 # Python Dependencies (OpenCV, PaddleOCR, PyTorch)
+│       ├── sface.onnx                       # SFace 128-D Deep Neural Net (Cosine Distance)
+│       ├── FSRCNN_x2.pb                     # Super-Resolution Neural Net for Blurry Crops
+│       ├── requirements.txt                 # Python Dependencies (OpenCV, PaddleOCR)
 │       └── Dockerfile                       # Container Definition for AI OCR Engine
 │
 ├── superadmin/                              # Superadmin Platform Subsystem
 │   ├── backend/                             # Master Platform Governance API (Port 8000)
+│   │   ├── README.md                        # Superadmin Backend Documentation & API Guide
 │   │   ├── .env.example                     # Superadmin Backend Environment Template
 │   │   ├── main.py                          # FastAPI Superadmin Management Server
 │   │   ├── auth_validator.py                # JWT Bearer Authentication & Role Enforcement
+│   │   ├── database.py                      # SQLAlchemy Models & SQLite / Postgres Connection
+│   │   ├── superadmin.db                    # Local SQLite Database
 │   │   └── requirements.txt                 # FastAPI & Pydantic Dependencies
 │   │
 │   └── frontend/                            # Superadmin Control Center UI (Port 8081)
+│       ├── README.md                        # Superadmin Frontend Documentation
 │       ├── .env.example                     # Superadmin Frontend Environment Template
 │       ├── App.js                           # React Native Web Master Governance Console
+│       ├── SignInScreen.js                  # Master Control Login (Email/Pass, OTP, Google SSO)
+│       ├── AccessRestrictedScreen.js        # Unauthorized Access Warning Interface
 │       ├── package.json                     # Dependencies (Expo 52, React Native Web 0.21)
-│       └── scripts/
-│           └── check-env.js                 # Pre-Build Environment Validator Guard
+│       ├── lib/
+│       │   └── supabase.js                  # Shared Supabase Client & Session Provider
+│       ├── scripts/
+│       │   └── check-env.js                 # Pre-Build Environment Validator Guard
+│       └── src/services/
+│           ├── accessControl.js             # Role Validation & Access Control Service
+│           ├── auth.js                      # Superadmin Auth Service
+│           └── googleAuth.js                # Google OAuth SSO Helper
 │
 └── tests/                                   # Comprehensive Security & Functional Test Suite
-    └── test_security_controls.py            # 100 Automated Security & Cryptographic Unit Tests
+    ├── README.md                            # Test Execution Guide & Matrix
+    └── test_security_controls.py            # Automated Security & Cryptographic Unit Tests
 ```
 
 ---

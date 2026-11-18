@@ -1525,6 +1525,11 @@ export default function App() {
                     {pipeline.map((mod, index) => (
                       <div
                         key={mod.uniqueId}
+                        draggable={true}
+                        onDragStart={(e) => _onDragStart(e, index)}
+                        onDragOver={(e) => _onDragOver(e, index)}
+                        onDrop={(e) => _onDrop(e, index)}
+                        onDragEnd={_onDragEnd}
                         style={{
                           display: 'flex',
                           alignItems: 'center',
@@ -1535,6 +1540,7 @@ export default function App() {
                           borderRadius: 8,
                           padding: '10px 14px',
                           marginBottom: 8,
+                          cursor: 'grab',
                           boxShadow: '0 1px 3px rgba(0,0,0,0.06)'
                         }}
                       >

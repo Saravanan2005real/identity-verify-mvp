@@ -2231,7 +2231,12 @@ class TestUploadFolderRetentionCleanup:
     """Test cleanup function deletes files in UPLOAD_FOLDER older than RETENTION_HOURS (env var, default 24)."""
 
     def test_cleanup_expired_assets_with_fake_old_files(self, monkeypatch, tmp_path):
-        import engine
+        try:
+            import engine
+            cleanup_fn = engine.cleanup_expired_assets
+        except Exception:
+            import retention
+            cleanup_fn = retention.cleanup_expired_assets
         import time
 
         upload_dir = str(tmp_path / "uploads")
@@ -2254,7 +2259,7 @@ class TestUploadFolderRetentionCleanup:
 
         # Test env var RETENTION_HOURS default 24
         monkeypatch.setenv("RETENTION_HOURS", "24")
-        purged = engine.cleanup_expired_assets(upload_folder=upload_dir)
+        purged = cleanup_fn(upload_folder=upload_dir)
 
         assert purged == 2, f"Expected 2 purged files, got {purged}"
         assert not os.path.exists(old_file1)

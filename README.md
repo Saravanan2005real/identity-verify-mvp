@@ -111,9 +111,13 @@ Modern digital enterprises (fintechs, neobanks, crypto exchanges, gig economy ma
 
 ### 🚀 Two-Phase Form Lifecycle (Save ➔ Review ➔ Publish ➔ Share Link)
 - **Phase 1: Form Save & Draft Management:** Clicking *"Save Form 💾"* validates and saves the form schema and verification pipeline to the cloud and marks the record as `🟡 Draft (Saved)`. An inspection dialog presents a configuration breakdown (total custom fields, attached modules, and pipeline ID) with options to keep as draft or proceed.
-- **Phase 2: Publish & Live Link Sharing:** Clicking *"🚀 Publish Form Now"* promotes the pipeline to `🟢 Published & Live` in the database. The system generates a clean, single-path shareable URL:
+- **Phase 2: Publish & Live Link Sharing:** Clicking *"🚀 Publish Form Now"* promotes the pipeline to `🟢 Published & Live` in the database. The system generates a clean, cryptographically bound shareable URL containing an HMAC applicant session token:
   ```
-  http://localhost:5174/verify.html?flow=FORM,AADHAAR_FACE,PAN&pid=FLOW-XXXXXX
+  http://localhost:5174/verify.html?flow=FORM,AADHAAR_FACE,PAN_FACE&pid=FLOW-XXXXXX&applicant_token=eyJhbGciOiJI...
+  ```
+  Or for public internet sharing:
+  ```
+  https://shaggy-bees-lay.loca.lt/verify.html?flow=FORM,AADHAAR_FACE,PAN_FACE&pid=FLOW-XXXXXX&applicant_token=eyJhbGciOiJI...
   ```
 - **One-Click Share Actions:** Direct *"📋 Copy Share Link"* with instant visual feedback and *"Open Flow 🚀"* to launch the applicant flow in a new browser tab.
 - **Status Badges:** All saved forms on the dashboard show dynamic status indicators (`🟢 Live` vs `🟡 Draft`), allowing administrators to republish, unpublish, or edit pipelines on demand.
@@ -229,7 +233,7 @@ graph TB
 
     subgraph StorageTier ["6. Persistence and Cloud Synchronization Tier"]
         SupabaseCloud["Supabase Cloud PostgreSQL<br/>- Table: verifications<br/>- Row Level Security RLS Isolation<br/>- B-Tree Indexes on session_id and id_number<br/>- Extracted and Live Selfie Asset URLs"]:::data
-        LocalDB["Local Fallback Tier - 100% Offline Resilience<br/>- SQLite Database superadmin.db<br/>- Ephemeral Asset Directory ocr_uploads/<br/>- Automated Retention Cleanup Worker"]:::data
+        LocalDB["Local Fallback Tier - 100% Offline Resilience<br/>- SQLite / PostgreSQL Engine<br/>- Ephemeral Asset Directory ocr_uploads/<br/>- Automated Retention Cleanup Worker"]:::data
     end
 
     %% User Interactions
@@ -597,7 +601,6 @@ identity-verify-mvp/
 │   │   ├── main.py                          # FastAPI Superadmin Management Server
 │   │   ├── auth_validator.py                # JWT Bearer Authentication & Role Enforcement
 │   │   ├── database.py                      # SQLAlchemy Models & SQLite / Postgres Connection
-│   │   ├── superadmin.db                    # Local SQLite Database
 │   │   └── requirements.txt                 # FastAPI & Pydantic Dependencies
 │   │
 │   └── frontend/                            # Superadmin Control Center UI (Port 8081)
@@ -719,14 +722,14 @@ The platform enforces a zero-trust security architecture designed to prevent una
 
 ## Port & Service Routing Matrix
 
-| Port | Service Component | Technology Stack | Key Endpoints / Responsibility |
-|:---:|:---|:---|:---|
-| **5001** | AI OCR & Face Biometrics Engine | Python / Flask / PyTorch / ONNX | `/api/v1/ocr`, `/api/v1/live_verify`, `/api/v1/assets/serve`, `/api/v1/auth/applicant_session` |
-| **5002** | Eye Tracking & Gaze Service | Python / FastAPI / WebGazer | `/api/v1/eye/calibrate`, `/api/v1/eye/estimate`, `/api/v1/eye/attention_score` |
-| **5174** | Products Gateway & Flow Runner | Python HTTP Server / Nginx | Reverse proxy for `/api/v1/`, serves `verify.html`, `demo_*.html`, static JS/CSS |
-| **8000** | Superadmin Backend API | Python / FastAPI / Pydantic | `/api/v1/admin/tenants`, `/api/v1/admin/services`, `/api/v1/admin/metrics` |
-| **8081** | Superadmin Management Portal | Expo 52 / React Native Web | Master platform control console for multi-tenant governance |
-| **8082** | Client Admin Portal | Expo 52 / React Native Web | Pipeline Builder Canvas, Link Generator, Audit Verification Center |
+| Port | Service Component | Technology Stack | Local URL | Public Tunnel URL | Key Endpoints / Responsibility |
+|:---:|:---|:---|:---|:---|:---|
+| **5001** | AI OCR & Face Biometrics Engine | Python / Flask / PyTorch / ONNX | `http://localhost:5001` | — | `/api/v1/ocr`, `/api/v1/live_verify`, `/api/v1/assets/serve`, `/api/v1/auth/applicant_session` |
+| **5002** | Eye Tracking & Gaze Service | Python / FastAPI / WebGazer | `http://localhost:5002` | — | `/api/v1/eye/calibrate`, `/api/v1/eye/estimate`, `/api/v1/eye/attention_score` |
+| **5174** | Products Gateway & Flow Runner | Python HTTP Server / Nginx | `http://localhost:5174` | `https://shaggy-bees-lay.loca.lt` | Reverse proxy for `/api/v1/`, serves `verify.html`, `demo_*.html`, static JS/CSS |
+| **8000** | Superadmin Backend API | Python / FastAPI / Pydantic | `http://localhost:8000` | — | `/api/v1/admin/tenants`, `/api/v1/admin/services`, `/api/v1/admin/metrics` |
+| **8081** | Superadmin Management Portal | Expo 52 / React Native Web | `http://localhost:8081` | — | Master platform control console for multi-tenant governance |
+| **8082** | Client Admin Portal | Expo 52 / React Native Web | `http://localhost:8082` | `https://nice-papers-check.loca.lt` | Pipeline Builder Canvas, Link Generator, Audit Verification Center |
 
 ---
 
@@ -980,7 +983,11 @@ Expected response:
 
 ### Dynamic URL Structure
 ```
-http://localhost:5174/verify.html?flow=FORM,AADHAAR_FACE,PAN&pid=FLOW-FI9NRJ
+http://localhost:5174/verify.html?flow=FORM,AADHAAR_FACE,PAN_FACE&pid=FLOW-FI9NRJ&applicant_token=eyJhbGciOiJI...
+```
+Or for public remote access:
+```
+https://shaggy-bees-lay.loca.lt/verify.html?flow=FORM,AADHAAR_FACE,PAN_FACE&pid=FLOW-FI9NRJ&applicant_token=eyJhbGciOiJI...
 ```
 
 ### Supported Flow Modules
@@ -1302,6 +1309,22 @@ pytest tests/test_security_controls.py -m "integ" -v
 ### 6. CORS Errors from Custom Frontends
 - **Cause:** The request origin is missing from `ALLOWED_ORIGINS` in `.env`.
 - **Fix:** Update `ALLOWED_ORIGINS` in `products/ocr_engine/.env` to include your origin (e.g., `http://localhost:8082,http://localhost:5174`). Restart the engine.
+
+### 7. HTTP 401 on Document OCR or Live Face Verification in Flow Runner
+- **Cause:** The applicant session link was accessed without an `&applicant_token=...` parameter, or the server-side applicant session issuance required tenant admin authentication when testing locally.
+- **Fix:** Verifyyy includes an automatic development fallback (`ALLOW_LOCAL_FALLBACK=true` in `APP_ENV=development`) that allows demo sessions on `localhost` and `*.loca.lt` tunnels while keeping production strictly fail-closed. Re-generate the link from the Client Admin Portal or ensure `ALLOW_LOCAL_FALLBACK=true` in `products/ocr_engine/.env`.
+
+### 8. 503 Tunnel Unavailable on Localtunnel
+- **Cause:** Localtunnel assigned a random domain after a server restart, or the tunnel background process was interrupted.
+- **Fix:** Launch localtunnel with fixed subdomains:
+  ```bash
+  # Client Admin Portal
+  npx localtunnel --port 8082 --subdomain nice-papers-check
+
+  # Products Gateway & Verification Runner
+  npx localtunnel --port 5174 --subdomain shaggy-bees-lay
+  ```
+  If prompted for an Endpoint IP / Password, use your machine's public IPv4 (fetch via `curl https://loca.lt/mytunnelpassword`).
 
 ---
 

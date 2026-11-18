@@ -22,7 +22,7 @@ Does not require any servers to be running:
 ```bash
 pytest tests/ -v -m "not integ"
 ```
-**Expected Output**: 23 tests passed.
+**Expected Output**: 100 tests passed.
 
 ### 2. Run Integration Tests (Requires Running Backend)
 First, ensure the AI OCR Engine is running on port 5001:

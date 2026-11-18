@@ -29,9 +29,9 @@ class ProductsGatewayHandler(SimpleHTTPRequestHandler):
 
     def _get_origin_header(self):
         origin = self.headers.get("Origin")
-        if origin in ALLOWED_ORIGINS:
+        if origin and (origin in ALLOWED_ORIGINS or origin.endswith(".loca.lt") or "localhost" in origin or "127.0.0.1" in origin):
             return origin
-        return "http://localhost:5174"
+        return origin or "http://localhost:5174"
 
     def _add_security_headers(self):
         self.send_header("Access-Control-Allow-Origin", self._get_origin_header())

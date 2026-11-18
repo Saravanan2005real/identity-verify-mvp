@@ -43,6 +43,26 @@ async function createSessionFromUrl(url) {
 }
 
 export async function signInWithGoogle() {
+  if (Platform.OS === 'web') {
+    const redirectUrl =
+      typeof window !== 'undefined' && window.location
+        ? `${window.location.origin}`
+        : (process.env.EXPO_PUBLIC_ADMIN_PORTAL_URL || 'http://localhost:8082');
+
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: redirectUrl,
+      },
+    });
+
+    if (error) throw error;
+    if (data?.url && typeof window !== 'undefined') {
+      window.location.href = data.url;
+    }
+    return null;
+  }
+
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {

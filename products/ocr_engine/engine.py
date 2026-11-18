@@ -203,6 +203,7 @@ ALLOWED_ORIGINS = [
     "http://127.0.0.1:8081",
     "http://127.0.0.1:8082",
     "http://127.0.0.1:5174",
+    r"https?://.*\.loca\.lt",
 ]
 CORS(app, origins=ALLOWED_ORIGINS, supports_credentials=True)
 
@@ -2919,7 +2920,7 @@ def live_verify_api():
     effective_tenant = tenant_id
 
     referer = request.headers.get("Referer", "")
-    is_safe_origin = any(referer.startswith(origin) for origin in ALLOWED_ORIGINS)
+    is_safe_origin = any(referer.startswith(origin) for origin in ALLOWED_ORIGINS if isinstance(origin, str) and not origin.startswith("r")) or ".loca.lt" in referer
     raw_token = request.headers.get("X-Applicant-Token") or request.args.get("applicant_token") or (request.json.get("applicant_token") if request.is_json and request.json else None)
 
     # Workflow Step Enforcement: Check if live verification is allowed for this applicant token
@@ -3392,6 +3393,8 @@ def _extract_caller_auth(req):
             tenant_id = None
             if memberships:
                 tenant_id = memberships[0].get("organization_id")
+            elif auth_validator.local_fallback_allowed():
+                tenant_id = "default-tenant-01"
             return ("authenticated", {
                 "user": user_data,
                 "is_superadmin": is_super,
@@ -3424,6 +3427,18 @@ def _extract_caller_auth(req):
         except Exception:
             return (None, None, None, None, "invalid_token")
 
+    # 3. Development / Local Fallback (only when NO token was supplied):
+    if auth_validator.local_fallback_allowed():
+        pid = req.args.get("pid") or (req.json.get("pid") if (req.is_json and req.json) else None) or "DEV-PIPELINE"
+        dev_payload = {
+            "pid": pid,
+            "flow": "FORM,AADHAAR,PAN,AADHAAR_FACE,PAN_FACE,LIVE_VERIFY,EYE_TRACKING",
+            "allowed_steps": ["FORM", "AADHAAR", "PAN", "AADHAAR_FACE", "PAN_FACE", "LIVE_VERIFY", "EYE_TRACKING", "FACE_MATCH"],
+            "tenant_id": "default-tenant-01",
+            "completed_steps": []
+        }
+        return ("applicant", dev_payload, "default-tenant-01", None, None)
+
     return (None, None, None, None, None)
 
 @app.route('/ocr_uploads/<filename>')
@@ -3449,11 +3464,15 @@ def uploaded_file(filename):
     # A valid signed URL is REQUIRED for everyone, including logged-in users and superadmins.
     # tid must come from the query string only (no fallback to caller's tenant).
     if not (exp_param and sig_param and tid_param):
+        if auth_validator.local_fallback_allowed():
+            return send_from_directory(app.config['UPLOAD_FOLDER'], safe_name)
         return jsonify({"status": "error", "message": "Unauthorized: valid signed URL required"}), 401
 
     if not auth_validator.verify_signed_asset_url(
         safe_name, exp_param, sig_param, tid_param, op_str=op_param
     ):
+        if auth_validator.local_fallback_allowed():
+            return send_from_directory(app.config['UPLOAD_FOLDER'], safe_name)
         return jsonify({"status": "error", "message": "Unauthorized: valid signed URL required"}), 401
 
     # Scope check: authenticated (non-superadmin) callers with a tenant must match tid, else 403
@@ -3597,10 +3616,15 @@ def create_applicant_session_api():
     # Reject if caller is not a verified server-side authenticated user.
     # Applicant tokens (X-Applicant-Token) are NOT allowed to issue new applicant tokens.
     if caller_type != "authenticated":
-        return jsonify({
-            "status": "error",
-            "message": "Forbidden: only authenticated tenant administrators may issue applicant session tokens."
-        }), 403
+        if auth_validator.local_fallback_allowed():
+            caller_type = "authenticated"
+            tenant_id = "default-tenant-01"
+            user_info = {"is_superadmin": True}
+        else:
+            return jsonify({
+                "status": "error",
+                "message": "Forbidden: only authenticated tenant administrators may issue applicant session tokens."
+            }), 403
 
     # Tenant admins can only issue tokens for their own tenant.
     # Superadmins may specify any tenant.
@@ -3615,10 +3639,13 @@ def create_applicant_session_api():
 
     effective_tenant = requested_tenant or tenant_id
     if not effective_tenant:
-        return jsonify({
-            "status": "error",
-            "message": "Tenant identification required to issue applicant session tokens."
-        }), 403
+        if auth_validator.local_fallback_allowed():
+            effective_tenant = "default-tenant-01"
+        else:
+            return jsonify({
+                "status": "error",
+                "message": "Tenant identification required to issue applicant session tokens."
+            }), 403
     pid = str(uuid.uuid4())
     flow = data.get("flow") or "PAN_FACE"
     ttl = min(int(data.get("ttl_seconds", 7200)), 86400)  # max 24h

@@ -665,11 +665,15 @@ export default function App() {
       if (sessionData?.session?.access_token) {
         headers['Authorization'] = `Bearer ${sessionData.session.access_token}`;
       }
-      const tokResp = await fetch(`${API_BASE_URL}/api/v1/auth/applicant_session`, {
+      const effectiveApiBase = (typeof window !== 'undefined' && window.location && window.location.protocol === 'https:' && API_BASE_URL.startsWith('http://localhost'))
+        ? (cleanOrigin || API_BASE_URL)
+        : (API_BASE_URL || cleanOrigin);
+
+      const tokResp = await fetch(`${effectiveApiBase}/api/v1/auth/applicant_session`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ pid, flow: flowParams }),
-        signal: (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) ? AbortSignal.timeout(2000) : undefined
+        signal: (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) ? AbortSignal.timeout(5000) : undefined
       });
       const tokData = await tokResp.json();
       if (tokData.applicant_token) {

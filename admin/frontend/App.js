@@ -267,6 +267,8 @@ export default function App() {
   ]);
   const [formFields, setFormFields] = useState([]);
   const [activeFieldId, setActiveFieldId] = useState('q-name');
+  const [hoveredGapIndex, setHoveredGapIndex] = useState(null);
+  const [openInserterIndex, setOpenInserterIndex] = useState(null);
   const [formPreviewVisible, setFormPreviewVisible] = useState(false);
   const [previewActivePageIndex, setPreviewActivePageIndex] = useState(0);
 
@@ -572,6 +574,7 @@ export default function App() {
         desc: mDef.desc,
         icon: mDef.id.includes('PAN') ? '🛡️' : mDef.id.includes('AADHAAR') ? '🆔' : mDef.id.includes('EYE') ? '👁️' : '👤'
       };
+      setActiveFieldId(newBlock.id);
     } else if (kind === 'page_break') {
       newBlock = {
         id: `pb-${Date.now()}-${uid}`,
@@ -579,13 +582,19 @@ export default function App() {
         title: payload.title || 'Next Page Section',
         desc: payload.desc || 'Applicant will advance to the next page here.'
       };
+      setActiveFieldId(newBlock.id);
     }
     if (!newBlock) return;
 
     setFlowBlocks(prev => {
-      if (insertAtIndex !== null && insertAtIndex >= 0 && insertAtIndex <= prev.length) {
+      let targetIndex = insertAtIndex;
+      if (targetIndex === null && activeFieldId) {
+        const aIdx = prev.findIndex(b => b.id === activeFieldId);
+        if (aIdx !== -1) targetIndex = aIdx + 1;
+      }
+      if (targetIndex !== null && targetIndex >= 0 && targetIndex <= prev.length) {
         const copy = [...prev];
-        copy.splice(insertAtIndex, 0, newBlock);
+        copy.splice(targetIndex, 0, newBlock);
         return copy;
       }
       return [...prev, newBlock];
@@ -1856,8 +1865,60 @@ export default function App() {
                         )}
                       </div>
 
-                      {/* Required Toggle */}
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
+                      {/* Card Footer Bar: Add Below & Required Toggle */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, borderTop: '1px solid #f1f5f9', paddingTop: 10, flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 11, fontWeight: '700', color: '#64748b' }}>+ Add Below:</span>
+                          <button
+                            type="button"
+                            onClick={() => addBlock('question', { type: 'short_answer', title: 'New Question' }, index + 1)}
+                            style={{
+                              background: '#f8fafc',
+                              border: '1px solid #cbd5e1',
+                              borderRadius: 12,
+                              padding: '3px 8px',
+                              fontSize: 11,
+                              fontWeight: 600,
+                              color: '#334155',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            + Question
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => addBlock('module', { moduleId: 'AADHAAR_FACE' }, index + 1)}
+                            style={{
+                              background: '#f5f3ff',
+                              border: '1px solid #ddd6fe',
+                              borderRadius: 12,
+                              padding: '3px 8px',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              color: '#7248B9',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            🛡️ + Module
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => addBlock('page_break', { title: `Page ${pageNumber + 1} Section` }, index + 1)}
+                            style={{
+                              background: '#f0fdfa',
+                              border: '1px solid #99f6e4',
+                              borderRadius: 12,
+                              padding: '3px 8px',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              color: '#0f766e',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            📄 + Section
+                          </button>
+                        </div>
+
                         <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, color: '#475569', fontWeight: 600 }}>
                           <input
                             type="checkbox"
@@ -1917,6 +1978,59 @@ export default function App() {
                         <span style={{ fontSize: 12, color: '#cbd5e1' }}>•</span>
                         <span style={{ fontSize: 12, color: '#4c1d95', fontWeight: 600 }}>✓ Anti-Spoof Liveness</span>
                       </div>
+
+                      {/* Module Card Footer */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, borderTop: '1px solid #f5f3ff', paddingTop: 8, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 11, fontWeight: '700', color: '#64748b' }}>+ Add Below:</span>
+                        <button
+                          type="button"
+                          onClick={() => addBlock('question', { type: 'short_answer', title: 'New Question' }, index + 1)}
+                          style={{
+                            background: '#f8fafc',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: 12,
+                            padding: '3px 8px',
+                            fontSize: 11,
+                            fontWeight: 600,
+                            color: '#334155',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          + Question
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => addBlock('module', { moduleId: 'PAN_FACE' }, index + 1)}
+                          style={{
+                            background: '#f5f3ff',
+                            border: '1px solid #ddd6fe',
+                            borderRadius: 12,
+                            padding: '3px 8px',
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: '#7248B9',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          🛡️ + Module
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => addBlock('page_break', { title: `Page ${pageNumber + 1} Section` }, index + 1)}
+                          style={{
+                            background: '#f0fdfa',
+                            border: '1px solid #99f6e4',
+                            borderRadius: 12,
+                            padding: '3px 8px',
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: '#0f766e',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          📄 + Section
+                        </button>
+                      </div>
                     </div>
                   )}
 
@@ -1946,73 +2060,259 @@ export default function App() {
                       <div style={{ fontSize: 12, color: '#0f766e', background: 'rgba(15, 118, 110, 0.08)', padding: '8px 12px', borderRadius: 6 }}>
                         ℹ️ Section Break: Questions and modules above this break appear on Page {pageNumber}. Everything below advances to Page {pageNumber + 1}.
                       </div>
+
+                      {/* Page Break Card Footer */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, borderTop: '1px solid #f0fdfa', paddingTop: 8, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 11, fontWeight: '700', color: '#0f766e' }}>+ Add to this section:</span>
+                        <button
+                          type="button"
+                          onClick={() => addBlock('question', { type: 'short_answer', title: 'New Question' }, index + 1)}
+                          style={{
+                            background: '#ffffff',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: 12,
+                            padding: '3px 8px',
+                            fontSize: 11,
+                            fontWeight: 600,
+                            color: '#334155',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          + Question
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => addBlock('module', { moduleId: 'AADHAAR_FACE' }, index + 1)}
+                          style={{
+                            background: '#f5f3ff',
+                            border: '1px solid #ddd6fe',
+                            borderRadius: 12,
+                            padding: '3px 8px',
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: '#7248B9',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          🛡️ + Module
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
 
-                {/* Inline Inserter between cards: + Question | + Verification | + Page Break */}
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 6,
-                  padding: '6px 0',
-                  flexWrap: 'wrap'
-                }}>
-                  <div style={{ height: 1, flex: '1 1 20px', minWidth: 20, backgroundColor: '#e2e8f0' }} />
-                  <button
-                    type="button"
-                    onClick={() => addBlock('question', { type: 'short_answer', title: 'New Question' }, index + 1)}
-                    style={{
-                      background: '#ffffff',
-                      border: '1px solid #cbd5e1',
-                      borderRadius: 14,
-                      padding: '4px 10px',
-                      fontSize: 11,
-                      fontWeight: 600,
-                      color: '#475569',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    + Question here
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => addBlock('module', { moduleId: 'AADHAAR_FACE' }, index + 1)}
-                    style={{
-                      background: '#f5f3ff',
-                      border: '1px solid #ddd6fe',
-                      borderRadius: 14,
-                      padding: '4px 10px',
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: '#7248B9',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    🛡️ + Verification here
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => addBlock('page_break', { title: `Page ${pageNumber + 1} Section` }, index + 1)}
-                    style={{
-                      background: '#f0fdfa',
-                      border: '1px solid #99f6e4',
-                      borderRadius: 14,
-                      padding: '4px 10px',
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: '#0f766e',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    📄 + Page Break here
-                  </button>
-                  <div style={{ height: 1, flex: '1 1 20px', minWidth: 20, backgroundColor: '#e2e8f0' }} />
+                {/* Clean Inserter Line between cards (Notion / Google Forms style - clean & uncluttered) */}
+                <div
+                  onMouseEnter={() => setHoveredGapIndex(index)}
+                  onMouseLeave={() => setHoveredGapIndex(null)}
+                  style={{
+                    position: 'relative',
+                    height: (hoveredGapIndex === index || openInserterIndex === index) ? 36 : 8,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 0.15s ease',
+                    margin: '2px 0'
+                  }}
+                >
+                  {/* Subtle hairline only shown when hovered or opened */}
+                  <div style={{
+                    position: 'absolute',
+                    left: 20,
+                    right: 20,
+                    height: 1.5,
+                    backgroundColor: '#7248B9',
+                    opacity: (hoveredGapIndex === index || openInserterIndex === index) ? 0.35 : 0,
+                    transition: 'opacity 0.15s ease'
+                  }} />
+
+                  {/* Clean Mini Inserter Bar shown on hover or when clicked */}
+                  {(hoveredGapIndex === index || openInserterIndex === index) ? (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      backgroundColor: '#ffffff',
+                      padding: '3px 10px',
+                      borderRadius: 20,
+                      border: '1.5px solid #7248B9',
+                      boxShadow: '0 2px 8px rgba(114, 72, 185, 0.25)',
+                      zIndex: 10
+                    }}>
+                      <button
+                        type="button"
+                        onClick={() => { addBlock('question', { type: 'short_answer', title: 'New Question' }, index + 1); setOpenInserterIndex(null); }}
+                        style={{
+                          background: '#ffffff',
+                          border: '1px solid #cbd5e1',
+                          borderRadius: 12,
+                          padding: '3px 9px',
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: '#334155',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        + Question
+                      </button>
+
+                      <div style={{ display: 'inline-flex', alignItems: 'center' }}>
+                        <select
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              const mod = availableModules.find(m => m.id === e.target.value);
+                              if (mod) addBlock('module', mod, index + 1);
+                              e.target.value = '';
+                              setOpenInserterIndex(null);
+                            }
+                          }}
+                          defaultValue=""
+                          style={{
+                            padding: '3px 8px',
+                            borderRadius: 12,
+                            border: '1px solid #ddd6fe',
+                            backgroundColor: '#f5f3ff',
+                            color: '#7248B9',
+                            fontWeight: 700,
+                            fontSize: '11px',
+                            cursor: 'pointer',
+                            outline: 'none'
+                          }}
+                        >
+                          <option value="" disabled>🛡️ + Module ▾</option>
+                          {availableModules.map(m => (
+                            <option key={m.id} value={m.id}>{m.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => { addBlock('page_break', { title: `Page ${pageNumber + 1} Section` }, index + 1); setOpenInserterIndex(null); }}
+                        style={{
+                          background: '#f0fdfa',
+                          border: '1px solid #99f6e4',
+                          borderRadius: 12,
+                          padding: '3px 9px',
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: '#0f766e',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        📄 + Section
+                      </button>
+                    </div>
+                  ) : (
+                    /* Subtle + dot that appears on hover or tap */
+                    <div
+                      onClick={() => setOpenInserterIndex(openInserterIndex === index ? null : index)}
+                      title="Insert element here"
+                      style={{
+                        width: 18,
+                        height: 18,
+                        borderRadius: 9,
+                        backgroundColor: '#ffffff',
+                        border: '1px solid #cbd5e1',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        opacity: 0.2,
+                        transition: 'all 0.15s ease'
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.2'; }}
+                    >
+                      <span style={{ fontSize: 11, color: '#64748b', fontWeight: 'bold', lineHeight: '11px' }}>+</span>
+                    </div>
+                  )}
                 </div>
               </div>
             );
           })}
+
+          {/* Clean dashed Add-Element card at the bottom of the canvas */}
+          <div style={{
+            marginTop: 8,
+            padding: '16px 20px',
+            borderRadius: 12,
+            border: '2px dashed #cbd5e1',
+            backgroundColor: '#f8fafc',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 12
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 20 }}>➕</span>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: '#334155' }}>Add Next Element to Flow</div>
+                <div style={{ fontSize: 12, color: '#64748b' }}>Insert a new question, verification step, or page break</div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => addBlock('question', { type: 'short_answer', title: 'New Question' })}
+                style={{
+                  backgroundColor: '#7248B9',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 8,
+                  padding: '8px 14px',
+                  fontWeight: 700,
+                  fontSize: 13,
+                  cursor: 'pointer'
+                }}
+              >
+                + Add Question
+              </button>
+              <select
+                onChange={(e) => {
+                  if (e.target.value) {
+                    const mod = availableModules.find(m => m.id === e.target.value);
+                    if (mod) addBlock('module', mod);
+                    e.target.value = '';
+                  }
+                }}
+                defaultValue=""
+                style={{
+                  padding: '7px 12px',
+                  borderRadius: 8,
+                  border: '1.5px solid #7248B9',
+                  backgroundColor: '#ffffff',
+                  color: '#7248B9',
+                  fontWeight: 700,
+                  fontSize: 13,
+                  cursor: 'pointer',
+                  outline: 'none'
+                }}
+              >
+                <option value="" disabled>🛡️ + Add Verification Module ▾</option>
+                {availableModules.map(m => (
+                  <option key={m.id} value={m.id}>🛡️ {m.name}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => addBlock('page_break', { title: `Page ${pages.length + 1} Section` })}
+                style={{
+                  backgroundColor: '#0f766e',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 8,
+                  padding: '8px 14px',
+                  fontWeight: 700,
+                  fontSize: 13,
+                  cursor: 'pointer'
+                }}
+              >
+                📄 + Page Break
+              </button>
+            </div>
+          </div>
 
           {/* Drop indicator after last card */}
           {_showDropBefore(flowBlocks.length) && (

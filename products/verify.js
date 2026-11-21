@@ -293,7 +293,8 @@ function renderCustomizablePage(pIdx) {
                     </div>
                 `;
             } else {
-                // Document upload & live face verification (Fast, model-free data collection)
+                // Document upload & optional live face verification
+                const isFace = modId.includes('FACE');
                 html += `
                     <!-- Part 1: Document Upload -->
                     <div id="substep-upload-${block.id}" style="background:#f8fafc; border-radius:8px; padding:16px; margin-bottom:16px; border:1px solid #e2e8f0;">
@@ -307,6 +308,7 @@ function renderCustomizablePage(pIdx) {
                         <div id="upload-preview-${block.id}" class="hidden"></div>
                     </div>
 
+                    ${isFace ? `
                     <!-- Part 2: Live Face Verification -->
                     <div id="substep-live-${block.id}" class="hidden" style="background:#f8fafc; border-radius:8px; padding:16px; border:1px solid #e2e8f0;">
                         <h4 style="margin:0 0 8px; color:#7248B9; text-align:left; font-size:1.05rem;">
@@ -325,6 +327,7 @@ function renderCustomizablePage(pIdx) {
                         </div>
                         <div id="live-preview-${block.id}" class="hidden"></div>
                     </div>
+                    ` : ''}
                 `;
             }
 
@@ -416,6 +419,7 @@ function attachCustomModuleListeners(block) {
 
     // Document & Live Face verification (Immediate, model-free attachment)
     const isPan = modId.includes('PAN');
+    const isFace = modId.includes('FACE');
     const docLabel = isPan ? 'PAN Card' : 'Aadhaar Card';
 
     const fileInput = document.getElementById(`runner-doc-file-${block.id}`);
@@ -449,12 +453,27 @@ function attachCustomModuleListeners(block) {
                         `;
                         uploadPreview.classList.remove('hidden');
                     }
-                    if (substepLive) {
+                    if (isFace && substepLive) {
                         substepLive.classList.remove('hidden');
                         await startWebcamStreamForVideo(videoEl);
                         setTimeout(() => {
                             substepLive.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                         }, 100);
+                    } else if (!isFace) {
+                        window.__moduleVerificationStatus[block.id] = {
+                            verified: true,
+                            status: 'PASSED',
+                            details: `${docLabel} photo securely attached`
+                        };
+                        verificationResults.push({
+                            module: modId,
+                            status: 'PASSED',
+                            details: `${docLabel} photo securely attached`
+                        });
+                        const badge = document.getElementById(`status-badge-${block.id}`);
+                        if (badge) {
+                            badge.innerHTML = '<span class="badge badge-success">✓ COMPLETED</span>';
+                        }
                     }
                 };
                 reader.readAsDataURL(file);
@@ -586,12 +605,13 @@ function validateAndSaveCurrentPage(page) {
     for (const block of (page.blocks || [])) {
         if (block.kind === 'module') {
             const modId = block.moduleId || '';
-            // If it's a document/face verification module, verify document and selfie are attached
+            // If it's a document/face verification module, verify requirements
             if (modId.includes('FACE') || modId.includes('PAN') || modId.includes('AADHAAR')) {
+                const isFace = modId.includes('FACE');
                 const hasDoc = !!window.__uploadedDocuments[block.id];
                 const hasSelfie = !!window.__capturedSelfies[block.id];
-                if (!hasDoc || !hasSelfie) {
-                    const missing = !hasDoc && !hasSelfie ? 'attach your document photo and capture your live selfie' : (!hasDoc ? 'attach your document photo' : 'capture your live selfie photo');
+                if (!hasDoc || (isFace && !hasSelfie)) {
+                    const missing = !hasDoc ? 'attach your document photo' : 'capture your live selfie photo';
                     alert(`Please ${missing} for "${block.name}" before continuing.`);
                     const card = document.getElementById(`card-block-${block.id}`);
                     if (card) {

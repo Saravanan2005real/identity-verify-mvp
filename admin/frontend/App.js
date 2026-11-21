@@ -774,9 +774,12 @@ export default function App() {
     const flowParams = flowParts.length > 0 ? flowParts.join(',') : 'FORM,AADHAAR_FACE';
     const pid = currentPid || `FLOW-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
 
-    const rawOrigin = VERIFY_BASE_URL || ((typeof window !== 'undefined' && window.location && window.location.hostname && isDev)
+    const isLocalhostHost = typeof window !== 'undefined' && window.location && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+    const rawOrigin = isLocalhostHost
       ? `${window.location.protocol}//${window.location.hostname}:5174`
-      : (isDev ? 'http://localhost:5174' : ''));
+      : (VERIFY_BASE_URL || ((typeof window !== 'undefined' && window.location && window.location.hostname && isDev)
+        ? `${window.location.protocol}//${window.location.hostname}:5174`
+        : (isDev ? 'http://localhost:5174' : '')));
 
     let cleanOrigin = rawOrigin;
     while (/\/+verify\.html\/?$/i.test(cleanOrigin)) {

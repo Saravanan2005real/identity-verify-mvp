@@ -883,21 +883,6 @@ export default function App() {
     });
   };
 
-    setStats(prev => {
-      const updated = {
-        ...prev,
-        pipelines_built: prev.pipelines_built + 1,
-        links_generated: prev.links_generated + 1
-      };
-      try {
-        if (typeof window !== 'undefined' && window.localStorage) {
-          localStorage.setItem('verifyyy_admin_stats', JSON.stringify(updated));
-        }
-      } catch (e) {}
-      return updated;
-    });
-  };
-
   const openGeneratedLink = (targetUrl) => {
     let url = targetUrl || generatedLink;
     if (url && typeof url === 'string') {

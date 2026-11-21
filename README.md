@@ -19,6 +19,7 @@
   - [Core Problems Solved](#core-problems-solved)
 - [Key Features & Innovations](#key-features--innovations)
   - [📋 Google Forms-Style Verification Studio & Interactive Flow Canvas](#-google-forms-style-verification-studio--interactive-flow-canvas)
+  - [📁 Comprehensive Form Management & Submission Inspector (3-Dots Menu & Manual Review)](#-comprehensive-form-management--submission-inspector-3-dots-menu--manual-review)
   - [⚡ Decoupled AI Architecture: Fast Employee Intake & Admin Local AI Execution](#-decoupled-ai-architecture-fast-employee-intake--admin-local-ai-execution)
   - [🚀 Two-Phase Form Lifecycle (Save ➔ Review ➔ Publish ➔ Share Link)](#-two-phase-form-lifecycle-save--review--publish--share-link)
   - [🪪 Universal Document Classification & Dual-Pass OCR](#-universal-document-classification--dual-pass-ocr)
@@ -113,6 +114,32 @@ Modern digital enterprises (fintechs, neobanks, crypto exchanges, gig economy ma
 - **Multi-Device Responsiveness:** Fully responsive across mobile, tablet, and desktop displays with sticky builder controls, minimum 16px touch-friendly inputs, adaptive card wrapping, and drag-and-drop handles.
 - **Live Form Preview:** Modal preview to inspect and test the applicant's exact questionnaire experience before deploying.
 
+### 📁 Comprehensive Form Management & Submission Inspector (3-Dots Menu & Manual Review)
+- **Contextual 3-Dots Action Menu on Recent Forms:**
+  - Clicking the three vertical dots (`⋮`) on any form card in the Recent Forms grid or list surfaces:
+    - **📁 Manage Form:** Opens the dedicated per-form management dashboard.
+    - **⚖️ Manual Review:** Deep-links directly to the compliance audit queue filtered for this form's submissions.
+    - **🚀 Open / Test Form:** Immediately launches the candidate verification flow in a new browser tab.
+    - **📋 Copy Link:** Copies the cryptographically bound candidate link to the clipboard.
+    - **✏️ Edit in Builder:** Re-opens the form and pipeline canvas in the interactive editor.
+    - **🗑️ Delete Form:** Safely removes the form and its metadata.
+- **Per-Link Candidate Submissions Table:**
+  - Automatically isolates and displays submissions received specifically through that form's unique `pipelineId` (`FLOW-XXXXXX`).
+  - Lists candidate name/email, session ID, document type, submission date, and overall verification result badge (`✓ APPROVED`, `⚖️ NEEDS REVIEW`, `❌ REJECTED`).
+  - Clear empty state guiding administrators to copy and share the link when no submissions have arrived yet.
+- **Integrated Submission Inspector & Manual Review Modal:**
+  - **Form Questions & Answers:** Displays all custom question responses submitted by the employee (e.g., Full Legal Name, Work Email, Employee ID).
+  - **Side-by-Side Photo Previews:** Full-resolution preview of attached ID document photo and live webcam selfie.
+  - **"⚡ Run Local AI Verification (OCR & Face Match)":** Runs PaddleOCR document parsing and ArcFace 512-D facial biometric match on demand via the local engine (`http://localhost:5001`).
+  - **Real-Time AI Output Cards:**
+    - Document OCR details (ID number, Name on ID, Date of Birth).
+    - Biometric match confidence percentage (e.g., `96% Match`), verification verdict, and liveness check.
+  - **1-Click Audit Decision:** Administrators can approve or reject the submission instantly, updating the database and dashboard metrics in real time.
+- **Pure OCR vs Combined Biometric Module Flexibility:**
+  - Pure OCR modules (`PAN`, `AADHAAR`) allow document upload without requiring live selfies, while combined modules (`PAN_FACE`, `AADHAAR_FACE`) require both document and live selfie.
+- **Localhost & LAN Network Auto-Detection:**
+  - Links generated from the admin portal default directly to `http://localhost:5174` or LAN IP `http://192.168.1.x:5174` so links work immediately across local PCs, laptops, and mobile devices on the same Wi-Fi without reliance on fragile external tunnels.
+
 ### ⚡ Decoupled AI Architecture: Fast Employee Intake & Admin Local AI Execution
 - **Zero Model Overhead on Applicant Flow:**
   - Heavy AI model loading (OCR & ArcFace) is decoupled from the employee client.
@@ -137,9 +164,10 @@ Modern digital enterprises (fintechs, neobanks, crypto exchanges, gig economy ma
   ```
   http://localhost:5174/verify.html?flow=FORM,AADHAAR_FACE,PAN_FACE&pid=FLOW-XXXXXX&applicant_token=eyJhbGciOiJI...
   ```
-  Or for public internet sharing:
+  Or for local network (mobile/tablet on same Wi-Fi) or domain sharing:
   ```
-  https://shaggy-bees-lay.loca.lt/verify.html?flow=FORM,AADHAAR_FACE,PAN_FACE&pid=FLOW-XXXXXX&applicant_token=eyJhbGciOiJI...
+  http://192.168.1.13:5174/verify.html?flow=FORM,AADHAAR_FACE,PAN_FACE&pid=FLOW-XXXXXX&applicant_token=eyJhbGciOiJI...
+  https://verify.yourdomain.com/verify.html?flow=FORM,AADHAAR_FACE,PAN_FACE&pid=FLOW-XXXXXX&applicant_token=eyJhbGciOiJI...
   ```
 - **One-Click Share Actions:** Direct *"📋 Copy Share Link"* with instant visual feedback and *"Open Flow 🚀"* to launch the applicant flow in a new browser tab.
 - **Status Badges:** All saved forms on the dashboard show dynamic status indicators (`🟢 Live` vs `🟡 Draft`), allowing administrators to republish, unpublish, or edit pipelines on demand.

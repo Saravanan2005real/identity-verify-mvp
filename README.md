@@ -18,7 +18,8 @@
 - [Executive Overview](#executive-overview)
   - [Core Problems Solved](#core-problems-solved)
 - [Key Features & Innovations](#key-features--innovations)
-  - [📋 Google Forms-Style Verification Studio & Dynamic Question Builder](#-google-forms-style-verification-studio--dynamic-question-builder)
+  - [📋 Google Forms-Style Verification Studio & Interactive Flow Canvas](#-google-forms-style-verification-studio--interactive-flow-canvas)
+  - [⚡ Decoupled AI Architecture: Fast Employee Intake & Admin Local AI Execution](#-decoupled-ai-architecture-fast-employee-intake--admin-local-ai-execution)
   - [🚀 Two-Phase Form Lifecycle (Save ➔ Review ➔ Publish ➔ Share Link)](#-two-phase-form-lifecycle-save--review--publish--share-link)
   - [🪪 Universal Document Classification & Dual-Pass OCR](#-universal-document-classification--dual-pass-ocr)
   - [👤 Three-Tier Cascaded Deep Face Recognition](#-three-tier-cascaded-deep-face-recognition)
@@ -99,15 +100,36 @@ Modern digital enterprises (fintechs, neobanks, crypto exchanges, gig economy ma
 
 ## Key Features & Innovations
 
-### 📋 Google Forms-Style Verification Studio & Dynamic Question Builder
+### 📋 Google Forms-Style Verification Studio & Interactive Flow Canvas
 - **Minimalist Studio Hub:** Clean, focused interface inspired by Google Forms. Displays strictly the **Blank form** (`+`) creator card under *"Start a new form"* and previously created pipelines under *"Recent forms"*, stripping out unnecessary clutter.
+- **Any-Order Customizability:** Questions, identity verification modules, and page breaks can be interleaved in **any custom sequence on the same page or across multiple pages**. No longer restricted to rigid "form first, then pipeline" structures — admins can ask 2 questions, insert a PAN & Face verification module, ask 2 more questions, add an Aadhaar verification module, insert page breaks, etc.
+- **Clean, True Blank Form:** Creating a new form or clicking **Blank form** starts completely fresh (1 single Untitled Question, 0 modules, 1 page) without hardcoded or unwanted preset questions or verification modules.
+- **Intuitive Notion-Style Inserters:** Hovering between cards smoothly reveals contextual quick-insert buttons (`+ Question here`, `🛡️ + Verification here`, `📄 + Page Break here`) along with active card quick-action buttons, eliminating repetitive inline clutter.
 - **Interactive Question Creator:** Build rich custom application forms with full field customization:
   - **Supported Field Types:** Short answer (`📝`), Paragraph (`📄`), Multiple choice (`🔘`), Checkboxes (`☑️`), Dropdown (`▾`), Date (`📅`), and Document / File Upload (`📁`).
   - **Dynamic Options Editor:** Add, modify, or remove options in real time.
   - **Question Controls:** Individual Required switches, Duplicate (`📄`), and Delete (`🗑️`) controls per card.
   - **Quick Preset Chips:** One-click shortcuts for standard onboarding questions: `+ Full Name`, `+ Work Email`, `+ Phone`, `+ ID Number`, and `+ Document Upload`.
-- **Integrated Verification Pipeline Attachment:** Attach automated identity verification modules (biometrics, liveness, Aadhaar OCR, PAN OCR, Human Review) directly underneath the form fields. The custom application form acts as **Fixed Step 1** followed by sequential verification steps.
+- **Multi-Device Responsiveness:** Fully responsive across mobile, tablet, and desktop displays with sticky builder controls, minimum 16px touch-friendly inputs, adaptive card wrapping, and drag-and-drop handles.
 - **Live Form Preview:** Modal preview to inspect and test the applicant's exact questionnaire experience before deploying.
+
+### ⚡ Decoupled AI Architecture: Fast Employee Intake & Admin Local AI Execution
+- **Zero Model Overhead on Applicant Flow:**
+  - Heavy AI model loading (OCR & ArcFace) is decoupled from the employee client.
+  - **Instant Document Attachment:** Selecting or capturing an Aadhaar or PAN photo immediately renders a high-res thumbnail preview (`✓ Document Attached`) using client-side Data URLs without executing heavy OCR or showing technical errors to employees.
+  - **Instant Live Selfie Capture:** Clicking **"📸 Capture Selfie Photo"** captures the frame from the webcam canvas immediately (`✓ Live Selfie Photo Captured`) without running heavy ArcFace models in the applicant's browser or showing biometric match scores.
+  - **Instant Gaze Activity:** Eye tracking calibration activity completes in 1 second.
+  - **Swift Multi-Page Navigation:** Modules mark status `✓ COMPLETED` instantly so employees can swiftly move to the next page or submit the form.
+  - **Polite Confirmation Screen:** Employees see a clean, friendly confirmation (`🎉 Submission Received! Thank you for participating.`) without technical scorecards, error codes, or debug JSON.
+  - **Reliable Data Ingestion:** Form responses, document photos, and live selfies are securely ingested into Supabase and cached in local storage.
+- **On-Demand Admin Local AI Verification:**
+  - Employee submissions arrive directly in the **Manual Review Queue** (`Review & Run AI ⚡`).
+  - **Submission Inspector Modal:**
+    - Displays all submitted employee form answers (Name, Email, etc.).
+    - Displays attached document photo and live webcam selfie photo side-by-side.
+    - **"⚡ Run Local AI Verification (OCR & Face Match)"**: Executes PaddleOCR and ArcFace locally on the admin machine on demand (port 5001).
+    - **Instant AI Output Display:** Extracted ID number, name, DOB, ArcFace match confidence score (e.g., `96%`), and liveness status.
+    - **1-Click Decision:** Admin can approve or reject the applicant with a single click, immediately updating Supabase and live dashboard metrics.
 
 ### 🚀 Two-Phase Form Lifecycle (Save ➔ Review ➔ Publish ➔ Share Link)
 - **Phase 1: Form Save & Draft Management:** Clicking *"Save Form 💾"* validates and saves the form schema and verification pipeline to the cloud and marks the record as `🟡 Draft (Saved)`. An inspection dialog presents a configuration breakdown (total custom fields, attached modules, and pipeline ID) with options to keep as draft or proceed.
@@ -266,37 +288,34 @@ graph TB
 ```mermaid
 sequenceDiagram
     autonumber
-    actor User as Applicant
+    actor Employee as Applicant / Employee
     participant Gateway as Gateway (Port 5174)
     participant UI as Flow Runner (verify.html)
-    participant OCR as OCR and Biometrics Engine (Port 5001)
-    participant AI as SFace and ArcFace Models
-    participant Cloud as Supabase Cloud DB
+    participant Cloud as Supabase Cloud DB & Local Cache
     actor Admin as Client Admin (Port 8082)
+    participant LocalAI as Local AI Engine (Port 5001)
 
-    User->>Gateway: Access Verification Link (/verify.html?pid=FLOW-01&pipeline=pan,aadhaar,pan_face)
-    Gateway-->>User: Serve Runner UI and dynamic pipeline stepper
+    Employee->>Gateway: Access Verification Link (/verify.html?pid=FLOW-01&flow=FORM,PAN_FACE...)
+    Gateway-->>Employee: Serve Dynamic Customizable Flow Runner
     
-    User->>UI: Upload Document Image (Aadhaar / PAN)
-    UI->>OCR: POST /api/v1/ocr (Multipart Form-Data + Applicant Session Token)
-    Note over OCR: 1. Verify token signature, expiry, and module permission<br/>2. Image Quality Assessment (Laplacian blur and glare)<br/>3. Dual-pass OCR field extraction<br/>4. Unwarped RetinaFace face crop extraction<br/>5. Generate tenant-scoped HMAC signed asset URL
-    OCR-->>UI: Return extracted fields (Name, DOB, ID) + HMAC Signed Face Crop URL
-    UI-->>User: Display extracted data for applicant confirmation
+    Employee->>UI: Fill Questions & Attach Document Photo (Aadhaar / PAN)
+    Note over UI: Instant Thumbnail Preview (✓ Document Attached)<br/>Zero model download or client-side OCR delay
 
-    User->>UI: Launch Live Camera for Selfie and Liveness Check
-    UI->>OCR: POST /api/v1/live_verify (Base64 Live Frame + Reference Crop Path + Session Token)
-    OCR->>AI: Compare Live Selfie vs Reference ID Face
-    Note over AI: 1. Primary: SFace 128-D ONNX Cosine Similarity<br/>2. Secondary: ArcFace 512-D Angular Loss<br/>3. Fallback: OpenCV Correlation and ORB Matcher
-    AI-->>OCR: Verification Verdict (Match: True, Distance: 0.28, Threshold: 0.67)
+    Employee->>UI: Snap Live Camera Selfie & Complete Activity
+    Note over UI: Instant Canvas Snapshot (✓ Live Selfie Captured)<br/>Zero client-side ArcFace matching or biometric error prompts
 
-    OCR->>Cloud: POST /rest/v1/verifications (Asynchronous upsert)
-    Cloud-->>OCR: 201 Created / 200 Merged
-    OCR-->>UI: Return Final Verdict (SUCCESS / MANUAL_REVIEW)
-    UI-->>User: Display Verification Completed Screen
+    Employee->>UI: Click Complete & Submit Verification
+    UI->>Cloud: POST /rest/v1/verifications (Session ID, answers, document & selfie DataURLs, status: MANUAL_REVIEW)
+    UI-->>Employee: Clean Thank-You Confirmation Screen ("🎉 Submission Received!")
 
-    Admin->>OCR: GET /api/v1/supabase/list
-    OCR-->>Admin: Return Applicant Records and Match Verdicts
-    Admin->>Admin: Review Side-by-Side Crops (ID Crop vs Live Selfie) and One-Click Approval
+    Admin->>Cloud: Fetch Submissions (Manual Review Queue)
+    Cloud-->>Admin: Return Employee Submissions with Form Answers & Attached Photos
+
+    Admin->>Admin: Open Submission Inspector Modal
+    Admin->>LocalAI: Click "⚡ Run Local AI Verification" (POST /api/v1/ocr & /api/v1/live_verify)
+    Note over LocalAI: 1. PaddleOCR extracts ID Number, Name, DOB, and Face Crop<br/>2. ArcFace / SFace computes Biometric Cosine Similarity Score & Liveness
+    LocalAI-->>Admin: Return Extracted ID Data + ArcFace Biometric Match % & Liveness
+    Admin->>Cloud: 1-Click Decision (Approve Applicant / Reject Applicant)
 ```
 </details>
 

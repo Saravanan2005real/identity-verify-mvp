@@ -236,43 +236,19 @@ export default function App() {
 
   // --- Form & Pipeline Builder State ---
   const [formTitle, setFormTitle] = useState('Untitled form');
-  const [formDescription, setFormDescription] = useState('Please provide your required information before proceeding to identity verification.');
+  const [formDescription, setFormDescription] = useState('');
   const [flowBlocks, setFlowBlocks] = useState([
     {
-      id: 'q-name',
+      id: 'q-1',
       kind: 'question',
-      title: 'Full Legal Name',
+      title: 'Untitled Question',
       type: 'short_answer',
-      required: true,
+      required: false,
       options: []
-    },
-    {
-      id: 'q-email',
-      kind: 'question',
-      title: 'Work Email Address',
-      type: 'short_answer',
-      required: true,
-      options: []
-    },
-    {
-      id: 'mod-aadhaar-face',
-      kind: 'module',
-      moduleId: 'AADHAAR_FACE',
-      name: 'Aadhaar & Face Verification',
-      desc: 'Combined Aadhaar Document OCR + Live Face Match & Liveness',
-      icon: '🆔'
-    },
-    {
-      id: 'mod-pan-face',
-      kind: 'module',
-      moduleId: 'PAN_FACE',
-      name: 'PAN & Face Verification',
-      desc: 'Combined PAN Card Document OCR + Live Face Match & Liveness',
-      icon: '🛡️'
     }
   ]);
   const [formFields, setFormFields] = useState([]);
-  const [activeFieldId, setActiveFieldId] = useState('q-name');
+  const [activeFieldId, setActiveFieldId] = useState('q-1');
   const [hoveredGapIndex, setHoveredGapIndex] = useState(null);
   const [openInserterIndex, setOpenInserterIndex] = useState(null);
   const [formPreviewVisible, setFormPreviewVisible] = useState(false);
@@ -1056,43 +1032,20 @@ export default function App() {
     setCurrentPid(null);
     setPublishStep('ready');
     setFormTitle('Untitled form');
-    setFormDescription('Please provide your required information before proceeding to identity verification.');
+    setFormDescription('');
+    const newId = `q-${Date.now()}`;
     const initialBlocks = [
       {
-        id: `q-${Date.now()}-1`,
+        id: newId,
         kind: 'question',
-        title: 'Full Legal Name',
+        title: 'Untitled Question',
         type: 'short_answer',
-        required: true,
+        required: false,
         options: []
-      },
-      {
-        id: `q-${Date.now()}-2`,
-        kind: 'question',
-        title: 'Work Email Address',
-        type: 'short_answer',
-        required: true,
-        options: []
-      },
-      {
-        id: `mod-${Date.now()}-3`,
-        kind: 'module',
-        moduleId: 'AADHAAR_FACE',
-        name: 'Aadhaar & Face Verification',
-        desc: 'Combined Aadhaar Document OCR + Live Face Match & Liveness',
-        icon: '🆔'
-      },
-      {
-        id: `mod-${Date.now()}-4`,
-        kind: 'module',
-        moduleId: 'PAN_FACE',
-        name: 'PAN & Face Verification',
-        desc: 'Combined PAN Card Document OCR + Live Face Match & Liveness',
-        icon: '🛡️'
       }
     ];
     setFlowBlocks(initialBlocks);
-    setActiveFieldId(`q-${Date.now()}-1`);
+    setActiveFieldId(newId);
     setActiveTab('builder');
   };
 

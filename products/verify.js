@@ -1015,7 +1015,6 @@ function renderFinalCompletion() {
     )) || `Applicant ${pipelineId}`;
 
     const submissionPayload = {
-        id: `EMP-${Date.now().toString(36).toUpperCase()}`,
         session_id: `emp_${pipelineId}_${Date.now()}`,
         document_type: docType,
         extracted_name: applicantName,

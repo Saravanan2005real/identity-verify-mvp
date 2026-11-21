@@ -471,18 +471,26 @@ export default function App() {
         const mappedVers = applicantRecords.map((r, idx) => {
           const isMatched = (r.face_match_verified === true || r.overall_status === 'SUCCESS' || r.overall_status === 'APPROVED');
           const isFailed = (r.overall_status === 'FAILED' || r.overall_status === 'REJECTED');
+          const pId = r.metadata?.pipelineId || 
+                      (r.session_id && r.session_id.startsWith('emp_') ? r.session_id.split('_')[1] : null) ||
+                      (r.session_id && r.session_id.includes('FLOW-') ? ('FLOW-' + r.session_id.split('FLOW-')[1].split('_')[0]) : null) ||
+                      '';
           
           return {
             id: r.session_id ? `APP-${r.session_id.substr(0, 6).toUpperCase()}` : `APP-00${idx + 1}`,
             session_id: r.session_id,
-            user: r.extracted_name || r.id_number || `Applicant-${idx + 1}`,
-            id_number: r.id_number || 'N/A',
-            doc_type: (r.document_type || 'ID').toUpperCase(),
-            date: r.created_at ? new Date(r.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-            status: isMatched ? 'APPROVED' : (isFailed ? 'REJECTED' : 'PENDING'),
+            pipeline_id: pId,
+            user: r.extracted_name || (r.metadata?.answers && (r.metadata.answers['Full Legal Name'] || r.metadata.answers['Name'] || r.metadata.answers['Work Email Address'])) || r.id_number || `Applicant-${idx + 1}`,
+            id_number: r.id_number || (r.metadata?.ocr_fields?.id_number || r.metadata?.ocr_fields?.pan_number || r.metadata?.ocr_fields?.aadhaar_number) || 'Pending AI',
+            doc_type: (r.document_type || r.metadata?.document_type || 'ID').toUpperCase(),
+            date: r.created_at ? new Date(r.created_at).toLocaleDateString() : 'Recently',
+            status: isMatched ? 'APPROVED' : (isFailed ? 'REJECTED' : (r.overall_status === 'MANUAL_REVIEW' ? 'NEEDS_REVIEW' : 'PENDING')),
             matched: isMatched,
-            extracted_face_url: r.extracted_face_url || null,
-            live_holder_face_url: r.live_holder_face_url || null,
+            answers: r.metadata?.answers || {},
+            extracted_face_url: r.extracted_face_url || r.metadata?.document_image || null,
+            live_holder_face_url: r.live_holder_face_url || r.metadata?.selfie_image || null,
+            pipeline_results: r.metadata?.pipeline_results || r.metadata?.ai_results || null,
+            reason: r.overall_status === 'MANUAL_REVIEW' ? 'Ready for Local AI Verification' : 'Biometric / OCR Verification Incomplete',
             rawRow: r
           };
         });
@@ -499,20 +507,28 @@ export default function App() {
         );
 
         if (reviewItems.length > 0) {
-          setReviewQueue(reviewItems.map(r => ({
-            id: r.session_id ? `APP-${r.session_id.substr(0, 6).toUpperCase()}` : `APP-${r.id}`,
-            session_id: r.session_id,
-            user: r.extracted_name || r.id_number || 'Applicant',
-            id_number: r.id_number || (r.metadata?.answers ? (r.metadata.answers['Full Legal Name'] || r.metadata.answers['Name'] || 'Pending AI') : 'Pending AI'),
-            doc_type: (r.document_type || 'ID').toUpperCase(),
-            date: r.created_at ? new Date(r.created_at).toISOString().split('T')[0] : 'Today',
-            reason: r.overall_status === 'MANUAL_REVIEW' ? 'Ready for Local AI Verification' : 'Biometric / OCR Verification Incomplete',
-            status: 'NEEDS_REVIEW',
-            extracted_face_url: r.extracted_face_url || r.metadata?.document_image || null,
-            live_holder_face_url: r.live_holder_face_url || r.metadata?.selfie_image || null,
-            answers: r.metadata?.answers || {},
-            rawRow: r
-          })));
+          setReviewQueue(reviewItems.map(r => {
+            const pId = r.metadata?.pipelineId || 
+                        (r.session_id && r.session_id.startsWith('emp_') ? r.session_id.split('_')[1] : null) ||
+                        (r.session_id && r.session_id.includes('FLOW-') ? ('FLOW-' + r.session_id.split('FLOW-')[1].split('_')[0]) : null) ||
+                        '';
+            return {
+              id: r.session_id ? `APP-${r.session_id.substr(0, 6).toUpperCase()}` : `APP-${r.id}`,
+              session_id: r.session_id,
+              pipeline_id: pId,
+              user: r.extracted_name || (r.metadata?.answers && (r.metadata.answers['Full Legal Name'] || r.metadata.answers['Name'] || r.metadata.answers['Work Email Address'])) || r.id_number || 'Applicant',
+              id_number: r.id_number || (r.metadata?.answers ? (r.metadata.answers['Full Legal Name'] || r.metadata.answers['Name'] || 'Pending AI') : 'Pending AI'),
+              doc_type: (r.document_type || r.metadata?.document_type || 'ID').toUpperCase(),
+              date: r.created_at ? new Date(r.created_at).toISOString().split('T')[0] : 'Today',
+              reason: r.overall_status === 'MANUAL_REVIEW' ? 'Ready for Local AI Verification' : 'Biometric / OCR Verification Incomplete',
+              status: 'NEEDS_REVIEW',
+              extracted_face_url: r.extracted_face_url || r.metadata?.document_image || null,
+              live_holder_face_url: r.live_holder_face_url || r.metadata?.selfie_image || null,
+              answers: r.metadata?.answers || {},
+              pipeline_results: r.metadata?.pipeline_results || r.metadata?.ai_results || null,
+              rawRow: r
+            };
+          }));
         }
 
         // 6. Live Supabase database stats
@@ -1131,6 +1147,27 @@ export default function App() {
     setActiveTab('builder');
   };
 
+  const handleOpenManualReviewForPipeline = (p) => {
+    if (!p) return;
+    const pid = p.pid;
+    const matches = recentVerifications.filter(v => {
+      return (
+        v.pipeline_id === pid ||
+        v.session_id?.includes(pid) ||
+        v.rawRow?.metadata?.pipelineId === pid ||
+        v.rawRow?.session_id?.includes(pid)
+      );
+    });
+
+    if (matches.length > 0) {
+      const pending = matches.find(v => v.status === 'NEEDS_REVIEW' || v.status === 'PENDING' || v.status === 'MANUAL REVIEW');
+      setSelectedReview(pending || matches[0]);
+      setReviewModalVisible(true);
+    } else {
+      alert(`No candidate submissions received for "${p.name || p.pid}" yet.\n\nShare your form link with candidates to collect answers and verification documents for manual review.`);
+    }
+  };
+
   const handleDeletePipeline = async (pidToDelete) => {
     setSavedPipelines(prev => {
       const updated = prev.filter(item => item.pid !== pidToDelete);
@@ -1354,6 +1391,22 @@ export default function App() {
                         <View style={styles.gfActionDropdown}>
                           <TouchableOpacity
                             style={styles.gfDropdownItem}
+                            onPress={() => { setSelectedPipeline(p); setPipelineDetailVisible(true); setActiveMenuPid(null); }}
+                          >
+                            <Text style={[styles.gfDropdownItemText, { fontWeight: '700', color: '#7248B9' }]}>📁 Manage Form</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={styles.gfDropdownItem}
+                            onPress={() => { handleOpenManualReviewForPipeline(p); setActiveMenuPid(null); }}
+                          >
+                            <Text style={[styles.gfDropdownItemText, { fontWeight: '700', color: '#b45309' }]}>⚖️ Manual Review</Text>
+                          </TouchableOpacity>
+
+                          <View style={{ height: 1, backgroundColor: '#f1f5f9', marginVertical: 4 }} />
+
+                          <TouchableOpacity
+                            style={styles.gfDropdownItem}
                             onPress={() => { openGeneratedLink(p.link); setActiveMenuPid(null); }}
                           >
                             <Text style={styles.gfDropdownItemText}>🚀 Open / Test Form</Text>
@@ -1371,13 +1424,6 @@ export default function App() {
                             onPress={() => { handleEditPipeline(p); setActiveMenuPid(null); }}
                           >
                             <Text style={styles.gfDropdownItemText}>✏️ Edit in Builder</Text>
-                          </TouchableOpacity>
-
-                          <TouchableOpacity
-                            style={styles.gfDropdownItem}
-                            onPress={() => { setSelectedPipeline(p); setPipelineDetailVisible(true); setActiveMenuPid(null); }}
-                          >
-                            <Text style={styles.gfDropdownItemText}>📊 View Applicants & Stats</Text>
                           </TouchableOpacity>
 
                           <View style={{ height: 1, backgroundColor: '#f1f5f9', marginVertical: 4 }} />
@@ -1432,7 +1478,19 @@ export default function App() {
                       {p.created_at || 'Recently'}
                     </Text>
 
-                    <View style={{ flex: 1.5, flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
+                    <View style={{ flex: 2, flexDirection: 'row', justifyContent: 'flex-end', gap: 6 }}>
+                      <TouchableOpacity
+                        style={[styles.btnSmall, { backgroundColor: '#7248B9' }]}
+                        onPress={() => { setSelectedPipeline(p); setPipelineDetailVisible(true); }}
+                      >
+                        <Text style={[styles.btnSmallText, { color: '#ffffff' }]}>Manage 📁</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.btnSmall, { backgroundColor: '#fef3c7', borderWidth: 1, borderColor: '#fde68a' }]}
+                        onPress={() => handleOpenManualReviewForPipeline(p)}
+                      >
+                        <Text style={[styles.btnSmallText, { color: '#b45309' }]}>Review ⚖️</Text>
+                      </TouchableOpacity>
                       <TouchableOpacity style={styles.btnSmall} onPress={() => openGeneratedLink(p.link)}>
                         <Text style={styles.btnSmallText}>Test 🚀</Text>
                       </TouchableOpacity>
@@ -2880,37 +2938,217 @@ export default function App() {
       {/* Pipeline Analytics & Applicant List Modal */}
       <Modal visible={pipelineDetailVisible} transparent={true} animationType="fade">
           <View style={styles.modalOverlay}>
-              <View style={[styles.modalContent, { maxWidth: 900 }]}>
-                  <Text style={styles.modalTitle}>Pipeline Analytics: {selectedPipeline?.pid}</Text>
-                  <Text style={{color: COLORS.textMuted, textAlign: 'center', marginBottom: 20}}>
-                      Detailed applicant tracking for link: <Text style={{fontFamily: 'monospace', color: COLORS.primary, ...(Platform.OS === 'web' ? { wordBreak: 'break-all', overflowWrap: 'anywhere' } : {})}}>{selectedPipeline?.link}</Text>
-                  </Text>
+              <View style={[styles.modalContent, { maxWidth: 960, maxHeight: '90vh', padding: 22, overflow: 'hidden' }]}>
+                  {(() => {
+                    const selectedPid = selectedPipeline?.pid;
+                    const formSubmissions = recentVerifications.filter(v => {
+                      if (!selectedPid) return true;
+                      return (
+                        v.pipeline_id === selectedPid ||
+                        v.session_id?.includes(selectedPid) ||
+                        v.rawRow?.metadata?.pipelineId === selectedPid ||
+                        v.rawRow?.session_id?.includes(selectedPid)
+                      );
+                    });
 
-                  <View style={{width: '100%', marginBottom: 20}}>
-                    <View style={styles.tableHeader}>
-                      <Text style={[styles.tableCol, { flex: 1.5 }]}>Applicant Name</Text>
-                      <Text style={[styles.tableCol, { flex: 1.5 }]}>Document / ID #</Text>
-                      <Text style={[styles.tableCol, { flex: 1 }]}>Doc Type</Text>
-                      <Text style={[styles.tableCol, { flex: 1 }]}>Face Match</Text>
-                      <Text style={[styles.tableCol, { flex: 1 }]}>Date</Text>
-                    </View>
-
-                    {recentVerifications.map((v, i) => (
-                      <View style={styles.tableRow} key={i}>
-                        <Text style={[styles.tableCell, { flex: 1.5, fontWeight: '700' }]}>{v.user}</Text>
-                        <Text style={[styles.tableCell, { flex: 1.5, color: COLORS.primary, fontFamily: 'monospace' }]}>{v.id_number}</Text>
-                        <Text style={[styles.tableCell, { flex: 1, fontWeight: '600' }]}>{v.doc_type}</Text>
-                        <View style={styles.statusBadge(v.matched ? 'APPROVED' : 'REJECTED')}>
-                          <Text style={styles.statusText(v.matched ? 'APPROVED' : 'REJECTED')}>{v.matched ? 'MATCHED' : 'UNMATCHED'}</Text>
+                    return (
+                      <View style={{ width: '100%' }}>
+                        {/* Modal Header */}
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%', marginBottom: 14 }}>
+                          <View style={{ flex: 1 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                              <Text style={[styles.modalTitle, { textAlign: 'left', marginBottom: 0, fontSize: 18 }]}>
+                                📁 Manage Form: {selectedPipeline?.name || selectedPipeline?.pid || 'Untitled Form'}
+                              </Text>
+                              <View style={{
+                                backgroundColor: selectedPipeline?.status === 'published' ? '#ecfdf5' : '#fffbeb',
+                                borderColor: selectedPipeline?.status === 'published' ? '#a7f3d0' : '#fde68a',
+                                borderWidth: 1,
+                                paddingHorizontal: 8,
+                                paddingVertical: 2,
+                                borderRadius: 6
+                              }}>
+                                <Text style={{ fontSize: 11, fontWeight: '700', color: selectedPipeline?.status === 'published' ? '#059669' : '#b45309' }}>
+                                  {selectedPipeline?.status === 'published' ? '🟢 Live & Published' : '🟡 Draft'}
+                                </Text>
+                              </View>
+                            </View>
+                            <Text style={{ color: COLORS.textMuted, fontSize: 12, marginTop: 4 }}>
+                              Pipeline ID: <Text style={{ fontFamily: 'monospace', fontWeight: '700', color: COLORS.primary }}>{selectedPipeline?.pid}</Text>
+                              {Array.isArray(selectedPipeline?.modules) && selectedPipeline.modules.length > 0 && (
+                                <Text> • Modules: {selectedPipeline.modules.join(', ')}</Text>
+                              )}
+                            </Text>
+                          </View>
+                          <TouchableOpacity
+                            onPress={() => setPipelineDetailVisible(false)}
+                            style={{ padding: 6, borderRadius: 6, backgroundColor: '#f1f5f9' }}
+                          >
+                            <Text style={{ fontSize: 16, color: '#64748b', fontWeight: 'bold' }}>✕</Text>
+                          </TouchableOpacity>
                         </View>
-                        <Text style={[styles.tableCell, { flex: 1, textAlign: 'right' }]}>{v.date}</Text>
-                      </View>
-                    ))}
-                  </View>
 
-                  <TouchableOpacity style={styles.btnOutline} onPress={() => setPipelineDetailVisible(false)}>
-                      <Text style={styles.btnOutlineText}>Close Inspector</Text>
-                  </TouchableOpacity>
+                        {/* Form Quick Action & Share Bar */}
+                        <View style={{
+                          backgroundColor: '#f8fafc',
+                          borderRadius: 10,
+                          borderWidth: 1,
+                          borderColor: '#e2e8f0',
+                          padding: 12,
+                          width: '100%',
+                          marginBottom: 18,
+                          overflow: 'hidden'
+                        }}>
+                          <View style={{
+                            flexDirection: width > 768 ? 'row' : 'column',
+                            alignItems: width > 768 ? 'center' : 'flex-start',
+                            justifyContent: 'space-between',
+                            gap: 10
+                          }}>
+                            <View style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748b', textTransform: 'uppercase', marginBottom: 2 }}>
+                                Candidate Verification Link
+                              </Text>
+                              <Text
+                                style={{
+                                  fontSize: 12,
+                                  fontFamily: 'monospace',
+                                  color: COLORS.primary,
+                                  ...(Platform.OS === 'web' ? { wordBreak: 'break-all', overflowWrap: 'anywhere' } : {})
+                                }}
+                                numberOfLines={1}
+                              >
+                                {selectedPipeline?.link || 'No link generated'}
+                              </Text>
+                            </View>
+                            <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+                              <TouchableOpacity
+                                style={[styles.btnSmall, { backgroundColor: '#7248B9' }]}
+                                onPress={() => copyToClipboard(selectedPipeline?.link)}
+                              >
+                                <Text style={[styles.btnSmallText, { color: '#ffffff' }]}>📋 Copy Link</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={[styles.btnSmall, { backgroundColor: '#0284c7' }]}
+                                onPress={() => openGeneratedLink(selectedPipeline?.link)}
+                              >
+                                <Text style={[styles.btnSmallText, { color: '#ffffff' }]}>🚀 Test Form</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={[styles.btnSmall, { backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#cbd5e1' }]}
+                                onPress={() => { setPipelineDetailVisible(false); handleEditPipeline(selectedPipeline); }}
+                              >
+                                <Text style={[styles.btnSmallText, { color: '#334155' }]}>✏️ Edit in Builder</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={[styles.btnSmall, { backgroundColor: '#fef3c7', borderWidth: 1, borderColor: '#fde68a' }]}
+                                onPress={() => {
+                                  setPipelineDetailVisible(false);
+                                  handleOpenManualReviewForPipeline(selectedPipeline);
+                                }}
+                              >
+                                <Text style={[styles.btnSmallText, { color: '#b45309', fontWeight: '700' }]}>⚖️ Manual Review Queue</Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        </View>
+
+                        {/* Submissions List Header */}
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 10 }}>
+                          <Text style={{ fontSize: 14, fontWeight: '700', color: '#1e293b' }}>
+                            👥 Submissions Received via Link ({formSubmissions.length})
+                          </Text>
+                          <Text style={{ fontSize: 12, color: '#64748b' }}>
+                            Pipeline ID: <Text style={{ fontWeight: '700', color: COLORS.primary }}>{selectedPipeline?.pid}</Text>
+                          </Text>
+                        </View>
+
+                        {/* Submissions Table / Cards */}
+                        <ScrollView style={{ width: '100%', maxHeight: 380 }}>
+                          {formSubmissions.length === 0 ? (
+                            <View style={{ padding: 28, alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0', marginVertical: 4 }}>
+                              <Text style={{ fontSize: 30, marginBottom: 8 }}>📭</Text>
+                              <Text style={{ fontSize: 14, fontWeight: '700', color: '#334155', marginBottom: 4 }}>
+                                No submissions received for this form yet
+                              </Text>
+                              <Text style={{ fontSize: 12, color: '#64748b', textAlign: 'center', maxWidth: 440, marginBottom: 14 }}>
+                                When candidates or employees fill out this form and attach documents, their submitted answers, photos, and verification results will show up here.
+                              </Text>
+                              <TouchableOpacity
+                                style={[styles.btnSmall, { backgroundColor: '#7248B9', paddingHorizontal: 16 }]}
+                                onPress={() => copyToClipboard(selectedPipeline?.link)}
+                              >
+                                <Text style={[styles.btnSmallText, { color: '#fff' }]}>📋 Copy Form Link to Share</Text>
+                              </TouchableOpacity>
+                            </View>
+                          ) : (
+                            <View style={{ width: '100%' }}>
+                              <View style={styles.tableHeader}>
+                                <Text style={[styles.tableCol, { flex: 1.6 }]}>Candidate Name / User</Text>
+                                <Text style={[styles.tableCol, { flex: 1.2 }]}>Document / ID #</Text>
+                                <Text style={[styles.tableCol, { flex: 1 }]}>Doc Type</Text>
+                                <Text style={[styles.tableCol, { flex: 1.2 }]}>Pipeline Result</Text>
+                                <Text style={[styles.tableCol, { flex: 1 }]}>Date</Text>
+                                <Text style={[styles.tableCol, { flex: 1.5, textAlign: 'right' }]}>Actions</Text>
+                              </View>
+
+                              {formSubmissions.map((v, i) => (
+                                <View style={[styles.tableRow, { alignItems: 'center' }]} key={v.id || i}>
+                                  <View style={{ flex: 1.6 }}>
+                                    <Text style={{ fontWeight: '700', color: '#0f172a', fontSize: 13 }} numberOfLines={1}>
+                                      {v.user}
+                                    </Text>
+                                    <Text style={{ fontSize: 11, color: '#64748b', fontFamily: 'monospace' }}>
+                                      {v.session_id ? v.session_id.substr(0, 18) : v.id}
+                                    </Text>
+                                  </View>
+
+                                  <Text style={[styles.tableCell, { flex: 1.2, color: COLORS.primary, fontFamily: 'monospace' }]}>
+                                    {v.id_number || 'Pending AI'}
+                                  </Text>
+
+                                  <Text style={[styles.tableCell, { flex: 1, fontWeight: '600' }]}>
+                                    {v.doc_type || 'ID'}
+                                  </Text>
+
+                                  <View style={{ flex: 1.2 }}>
+                                    <View style={styles.statusBadge(v.status === 'APPROVED' ? 'APPROVED' : (v.status === 'REJECTED' ? 'REJECTED' : 'NEEDS_REVIEW'))}>
+                                      <Text style={styles.statusText(v.status === 'APPROVED' ? 'APPROVED' : (v.status === 'REJECTED' ? 'REJECTED' : 'NEEDS_REVIEW'))}>
+                                        {v.status === 'APPROVED' ? '✓ APPROVED' : (v.status === 'REJECTED' ? '❌ REJECTED' : '⚖️ NEEDS REVIEW')}
+                                      </Text>
+                                    </View>
+                                  </View>
+
+                                  <Text style={[styles.tableCell, { flex: 1, fontSize: 11, color: '#64748b' }]}>
+                                    {v.date}
+                                  </Text>
+
+                                  <View style={{ flex: 1.5, flexDirection: 'row', justifyContent: 'flex-end', gap: 6 }}>
+                                    <TouchableOpacity
+                                      style={[styles.btnSmall, { backgroundColor: '#7248B9' }]}
+                                      onPress={() => {
+                                        setSelectedReview(v);
+                                        setReviewModalVisible(true);
+                                      }}
+                                    >
+                                      <Text style={[styles.btnSmallText, { color: '#ffffff' }]}>Results & Review 🔍</Text>
+                                    </TouchableOpacity>
+                                  </View>
+                                </View>
+                              ))}
+                            </View>
+                          )}
+                        </ScrollView>
+
+                        {/* Modal Footer */}
+                        <View style={{ marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#e2e8f0', flexDirection: 'row', justifyContent: 'flex-end', gap: 10, width: '100%' }}>
+                          <TouchableOpacity style={styles.btnOutline} onPress={() => setPipelineDetailVisible(false)}>
+                            <Text style={styles.btnOutlineText}>Close</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    );
+                  })()}
               </View>
           </View>
       </Modal>

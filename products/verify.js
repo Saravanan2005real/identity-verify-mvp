@@ -56,6 +56,14 @@ let uploadedFaceFilename = null;
 let verificationResults = [];
 let videoStream = null;
 
+// Global registries for applicant data collection (fast, model-free execution)
+window.__uploadedDocuments = window.__uploadedDocuments || {};
+window.__capturedSelfies = window.__capturedSelfies || {};
+window.__applicantAnswers = window.__applicantAnswers || {};
+window.__moduleVerificationStatus = window.__moduleVerificationStatus || {};
+window.__uploadedDocDataUrl = null;
+window.__uploadedSelfieDataUrl = null;
+
 // Initialize Pipeline
 async function initPipeline() {
     // Security: Clean URL query parameters from browser address bar to prevent leaking sensitive applicant tokens
@@ -285,37 +293,37 @@ function renderCustomizablePage(pIdx) {
                     </div>
                 `;
             } else {
-                // Document upload & live face verification
+                // Document upload & live face verification (Fast, model-free data collection)
                 html += `
                     <!-- Part 1: Document Upload -->
                     <div id="substep-upload-${block.id}" style="background:#f8fafc; border-radius:8px; padding:16px; margin-bottom:16px; border:1px solid #e2e8f0;">
-                        <h4 style="margin:0 0 10px; color:#7248B9; text-align:left;">Part 1: Upload ${docLabel} Image</h4>
-                        <input type="file" id="runner-doc-file-${block.id}" accept="image/*" style="margin-bottom:10px;">
-                        <button class="btn btn-action-mobile" id="btn-upload-${block.id}" type="button" style="background:#7248B9; color:#fff; width:auto; padding:12px 24px; min-height:44px; border-radius:6px; font-weight:600;">
-                            Process ${docLabel}
-                        </button>
-                        <div id="upload-spinner-${block.id}" class="hidden" style="margin-top:10px; color:#7248B9; font-weight:bold;">
-                            Processing document OCR & extracting face...
-                        </div>
-                        <div id="upload-results-${block.id}" class="result-panel hidden"></div>
+                        <h4 style="margin:0 0 8px; color:#7248B9; text-align:left; font-size:1.05rem;">
+                            Step 1: Attach ${docLabel} Photo
+                        </h4>
+                        <p style="font-size:0.85rem; color:#64748b; margin:0 0 12px; text-align:left;">
+                            Upload or capture a clear photo of your ${docLabel}.
+                        </p>
+                        <input type="file" id="runner-doc-file-${block.id}" accept="image/*" style="display:block; margin-bottom:10px; font-size:0.95rem;">
+                        <div id="upload-preview-${block.id}" class="hidden"></div>
                     </div>
 
                     <!-- Part 2: Live Face Verification -->
                     <div id="substep-live-${block.id}" class="hidden" style="background:#f8fafc; border-radius:8px; padding:16px; border:1px solid #e2e8f0;">
-                        <h4 style="margin:0 0 8px; color:#7248B9; text-align:left;">Part 2: Live Face Verification</h4>
-                        <p style="font-size:0.85rem; color:#64748b; margin:0 0 12px; text-align:left;">Position your face in front of the camera and click Capture.</p>
+                        <h4 style="margin:0 0 8px; color:#7248B9; text-align:left; font-size:1.05rem;">
+                            Step 2: Capture Live Selfie Photo
+                        </h4>
+                        <p style="font-size:0.85rem; color:#64748b; margin:0 0 12px; text-align:left;">
+                            Position your face inside the frame and snap a photo.
+                        </p>
                         <div class="live-video-wrap" style="max-width:440px; margin:0 auto 12px;">
                             <video id="runner-webcam-${block.id}" autoplay playsinline></video>
                         </div>
                         <div style="text-align:center;">
-                            <button class="btn btn-action-mobile" id="btn-capture-${block.id}" type="button" style="background:#7248B9; color:#fff; width:auto; padding:12px 28px; min-height:44px; border-radius:6px; font-weight:600;">
-                                Capture & Verify Face
+                            <button class="btn btn-action-mobile" id="btn-capture-${block.id}" type="button" style="background:#7248B9; color:#fff; width:auto; padding:12px 28px; min-height:44px; border-radius:6px; font-weight:600; cursor:pointer;">
+                                📸 Capture Selfie Photo
                             </button>
                         </div>
-                        <div id="live-spinner-${block.id}" class="hidden" style="margin-top:10px; color:#7248B9; font-weight:bold; text-align:center;">
-                            Cross-verifying face vectors (ArcFace)...
-                        </div>
-                        <div id="live-results-${block.id}" class="result-panel hidden"></div>
+                        <div id="live-preview-${block.id}" class="hidden"></div>
                     </div>
                 `;
             }
@@ -387,14 +395,14 @@ function attachCustomModuleListeners(block) {
         if (btnEye) {
             btnEye.addEventListener('click', () => {
                 btnEye.disabled = true;
-                resEye.textContent = "Simulating gaze calibration check...";
+                resEye.textContent = "Recording gaze attention activity...";
                 setTimeout(() => {
-                    resEye.innerHTML = "✓ EYE TRACKING PASSED (Score: 98%)";
-                    window.__moduleVerificationStatus[block.id] = { verified: true, status: 'PASSED', details: 'Gaze calibration score 98%' };
-                    verificationResults.push({ module: 'EYE_TRACKING', status: 'PASSED', details: 'Gaze calibration score 98%' });
+                    resEye.innerHTML = "✓ Gaze attention activity completed";
+                    window.__moduleVerificationStatus[block.id] = { verified: true, status: 'PASSED', details: 'Eye tracking activity completed' };
+                    verificationResults.push({ module: 'EYE_TRACKING', status: 'PASSED', details: 'Eye tracking activity completed' });
                     const badge = document.getElementById(`status-badge-${block.id}`);
-                    if (badge) badge.innerHTML = '<span class="badge badge-success">✓ VERIFIED</span>';
-                }, 1500);
+                    if (badge) badge.innerHTML = '<span class="badge badge-success">✓ COMPLETED</span>';
+                }, 1000);
             });
         }
         return;
@@ -406,104 +414,50 @@ function attachCustomModuleListeners(block) {
         return;
     }
 
-    // Document & Live Face verification
+    // Document & Live Face verification (Immediate, model-free attachment)
     const isPan = modId.includes('PAN');
     const docLabel = isPan ? 'PAN Card' : 'Aadhaar Card';
 
     const fileInput = document.getElementById(`runner-doc-file-${block.id}`);
-    const btnUpload = document.getElementById(`btn-upload-${block.id}`);
-    const uploadSpinner = document.getElementById(`upload-spinner-${block.id}`);
-    const uploadResults = document.getElementById(`upload-results-${block.id}`);
     const substepLive = document.getElementById(`substep-live-${block.id}`);
     const btnCapture = document.getElementById(`btn-capture-${block.id}`);
-    const liveSpinner = document.getElementById(`live-spinner-${block.id}`);
-    const liveResults = document.getElementById(`live-results-${block.id}`);
     const videoEl = document.getElementById(`runner-webcam-${block.id}`);
-
-    let localUploadedDocId = null;
-    let localUploadedFaceFilename = null;
+    const uploadPreview = document.getElementById(`upload-preview-${block.id}`);
+    const livePreview = document.getElementById(`live-preview-${block.id}`);
 
     if (fileInput) {
-        fileInput.addEventListener('change', async () => {
+        fileInput.addEventListener('change', () => {
             if (fileInput.files && fileInput.files.length > 0) {
-                substepLive.classList.remove('hidden');
-                await startWebcamStreamForVideo(videoEl);
-            }
-        });
-    }
-
-    if (btnUpload) {
-        btnUpload.addEventListener('click', async () => {
-            if (!fileInput.files || fileInput.files.length === 0) {
-                alert(`Please select a ${docLabel} image file.`);
-                return;
-            }
-
-            const file = fileInput.files[0];
-            const formData = new FormData();
-            formData.append("file", file);
-
-            btnUpload.disabled = true;
-            uploadSpinner.classList.remove('hidden');
-            uploadResults.classList.add('hidden');
-
-            try {
-                const ocrHeaders = {};
-                if (applicantToken) {
-                    ocrHeaders['X-Applicant-Token'] = applicantToken;
-                }
-
-                const resp = await fetch(`${API_BASE}/api/v1/ocr`, {
-                    method: 'POST',
-                    headers: ocrHeaders,
-                    body: formData,
-                });
-
-                const data = await resp.json();
-                if (!resp.ok) throw new Error(data.error || data.detail || `HTTP ${resp.status}`);
-
-                const fields = data.parsed_fields || {};
-                const idNum = fields.pan_number || fields.aadhaar_number || fields.id_number;
-
-                if (!idNum) {
-                    throw new Error(`Could not extract a valid ID number from this ${docLabel}. Please try a clearer image.`);
-                }
-
-                localUploadedDocId = idNum;
-                flowSessionId = data.session_id || flowSessionId;
-
-                if (data.face_image_url) {
-                    const parts = data.face_image_url.split('/');
-                    localUploadedFaceFilename = decodeURIComponent(parts[parts.length - 1]);
-                }
-
-                const docTypeDetected = fields.document_type || (isPan ? 'PAN' : 'AADHAAR');
-                let resHtml = `<h4 style="color:#166534; margin-top:0;">✅ ${docTypeDetected} Document Processed</h4>`;
-                resHtml += `<p style="margin:4px 0;"><strong>ID Number:</strong> <code>${idNum}</code></p>`;
-                if (fields.name) resHtml += `<p style="margin:4px 0;"><strong>Name:</strong> ${fields.name}</p>`;
-                if (fields.father_name) resHtml += `<p style="margin:4px 0;"><strong>Father's Name:</strong> ${fields.father_name}</p>`;
-                if (fields.dob) resHtml += `<p style="margin:4px 0;"><strong>Date of Birth:</strong> ${fields.dob}</p>`;
-
-                if (data.face_image_url) {
-                    resHtml += `<div style="margin-top:10px;">
-                        <p style="margin-bottom:4px; font-weight:bold;">Extracted Document Face Photo:</p>
-                        <img src="${API_BASE}${data.face_image_url}" style="width:90px; height:90px; object-fit:cover; border-radius:8px; border:2px solid var(--primary);">
-                    </div>`;
-                }
-
-                uploadResults.innerHTML = resHtml;
-                uploadResults.classList.remove('hidden');
-
-                // Reveal Part 2 Live Face Verification
-                substepLive.classList.remove('hidden');
-                await startWebcamStreamForVideo(videoEl);
-
-            } catch (err) {
-                uploadResults.innerHTML = `<h4 style="color:#991b1b; margin-top:0;">❌ Extraction Failed</h4><p style="color:#ef4444;">${err.message}</p>`;
-                uploadResults.classList.remove('hidden');
-            } finally {
-                uploadSpinner.classList.add('hidden');
-                btnUpload.disabled = false;
+                const file = fileInput.files[0];
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    const dataUrl = e.target.result;
+                    window.__uploadedDocuments[block.id] = {
+                        dataUrl,
+                        type: isPan ? 'PAN' : 'AADHAAR',
+                        fileName: file.name
+                    };
+                    if (uploadPreview) {
+                        uploadPreview.innerHTML = `
+                            <div style="display:flex; align-items:center; gap:12px; margin-top:12px; background:#f0fdf4; border:1px solid #bbf7d0; padding:12px; border-radius:8px;">
+                                <img src="${dataUrl}" style="width:60px; height:60px; object-fit:cover; border-radius:6px; border:1px solid #86efac;">
+                                <div>
+                                    <div style="color:#166534; font-weight:700; font-size:0.95rem;">✓ ${docLabel} Attached</div>
+                                    <div style="color:#64748b; font-size:0.8rem;">${file.name}</div>
+                                </div>
+                            </div>
+                        `;
+                        uploadPreview.classList.remove('hidden');
+                    }
+                    if (substepLive) {
+                        substepLive.classList.remove('hidden');
+                        await startWebcamStreamForVideo(videoEl);
+                        setTimeout(() => {
+                            substepLive.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        }, 100);
+                    }
+                };
+                reader.readAsDataURL(file);
             }
         });
     }
@@ -524,7 +478,7 @@ function attachCustomModuleListeners(block) {
             }
 
             if (videoEl.readyState < 2 && (!videoEl.videoWidth || videoEl.videoWidth === 0)) {
-                alert("Camera is not ready yet. Please allow camera access in your browser settings.");
+                alert("Camera is starting up or permissions needed. Please allow camera access in your browser settings.");
                 return;
             }
 
@@ -532,80 +486,36 @@ function attachCustomModuleListeners(block) {
             canvasEl.height = videoEl.videoHeight || 480;
             const ctx = canvasEl.getContext('2d');
             ctx.drawImage(videoEl, 0, 0, canvasEl.width, canvasEl.height);
-            const dataUrl = canvasEl.toDataURL('image/jpeg', 0.92);
+            const dataUrl = canvasEl.toDataURL('image/jpeg', 0.90);
 
-            btnCapture.disabled = true;
-            liveSpinner.classList.remove('hidden');
-            liveResults.classList.add('hidden');
-
-            const payload = {
-                image: dataUrl,
-                skip_ocr: true,
-                session_id: flowSessionId,
-                step1_face: localUploadedFaceFilename
+            window.__capturedSelfies[block.id] = dataUrl;
+            window.__moduleVerificationStatus[block.id] = {
+                verified: true,
+                status: 'PASSED',
+                details: `${docLabel} and live selfie securely captured`
             };
+            verificationResults.push({
+                module: modId,
+                status: 'PASSED',
+                details: `${docLabel} and live selfie securely captured`
+            });
 
-            const verifyHeaders = { 'Content-Type': 'application/json' };
-            if (applicantToken) {
-                verifyHeaders['X-Applicant-Token'] = applicantToken;
+            if (livePreview) {
+                livePreview.innerHTML = `
+                    <div style="display:flex; align-items:center; gap:12px; margin-top:12px; background:#f0fdf4; border:1px solid #bbf7d0; padding:12px; border-radius:8px;">
+                        <img src="${dataUrl}" style="width:60px; height:60px; object-fit:cover; border-radius:6px; border:1px solid #86efac;">
+                        <div>
+                            <div style="color:#166534; font-weight:700; font-size:0.95rem;">✓ Live Selfie Photo Captured</div>
+                            <div style="color:#64748b; font-size:0.8rem;">Ready for verification submission</div>
+                        </div>
+                    </div>
+                `;
+                livePreview.classList.remove('hidden');
             }
 
-            try {
-                const resp = await fetch(`${API_BASE}/api/v1/live_verify`, {
-                    method: 'POST',
-                    headers: verifyHeaders,
-                    body: JSON.stringify(payload)
-                });
-
-                const data = await resp.json();
-                if (!resp.ok) throw new Error(data.error || data.detail || `HTTP ${resp.status}`);
-
-                let faceMatchVerified = false;
-                if (data.step3_face_matches && data.step3_face_matches.length > 0) {
-                    const normUploaded = decodeURIComponent(localUploadedFaceFilename || '').toLowerCase();
-                    const match = data.step3_face_matches.find(m => {
-                        const normRef = decodeURIComponent(m.step3_face || '').toLowerCase();
-                        return normRef === normUploaded || (m.vs_holder && m.vs_holder.verified) || m.verified;
-                    }) || data.step3_face_matches[0];
-
-                    if (match) {
-                        faceMatchVerified = match.verified || (match.vs_holder && match.vs_holder.verified);
-                    }
-                }
-                if (!faceMatchVerified && data.face_match) {
-                    faceMatchVerified = true;
-                }
-
-                let liveHtml = `<h4 style="margin-top:0;">Live Face Verification Results</h4>`;
-                liveHtml += `<p><strong>Face Match Status:</strong> ${faceMatchVerified ? '<span class="badge badge-success">MATCH VERIFIED</span>' : '<span class="badge badge-danger">MATCH FAILED</span>'}</p>`;
-                liveHtml += `<p><strong>Liveness Check:</strong> ${data.holder_face_image_url ? '<span class="badge badge-success">PASSED</span>' : '<span class="badge badge-danger">FAILED</span>'}</p>`;
-
-                liveResults.innerHTML = liveHtml;
-                liveResults.classList.remove('hidden');
-
-                if (faceMatchVerified) {
-                    window.__moduleVerificationStatus[block.id] = {
-                        verified: true,
-                        docId: localUploadedDocId,
-                        status: 'PASSED',
-                        details: `ID: ${localUploadedDocId || 'N/A'}, Match: Verified`
-                    };
-                    verificationResults.push({
-                        module: modId,
-                        status: 'PASSED',
-                        details: `ID: ${localUploadedDocId || 'N/A'}, Match: Verified`
-                    });
-
-                    const badge = document.getElementById(`status-badge-${block.id}`);
-                    if (badge) badge.innerHTML = '<span class="badge badge-success">✓ VERIFIED</span>';
-                }
-
-            } catch (err) {
-                liveResults.innerHTML = `<h4 style="color:#991b1b; margin-top:0;">❌ Verification Failed</h4><p style="color:#ef4444;">${err.message}</p>`;
-                liveResults.classList.remove('hidden');
-                btnCapture.disabled = false;
-            } finally {
-                liveSpinner.classList.add('hidden');
+            const badge = document.getElementById(`status-badge-${block.id}`);
+            if (badge) {
+                badge.innerHTML = '<span class="badge badge-success">✓ COMPLETED</span>';
             }
         });
     }
@@ -676,11 +586,13 @@ function validateAndSaveCurrentPage(page) {
     for (const block of (page.blocks || [])) {
         if (block.kind === 'module') {
             const modId = block.moduleId || '';
-            // If it's a document/face verification module, verify it passed
+            // If it's a document/face verification module, verify document and selfie are attached
             if (modId.includes('FACE') || modId.includes('PAN') || modId.includes('AADHAAR')) {
-                const status = window.__moduleVerificationStatus[block.id];
-                if (!status || !status.verified) {
-                    alert(`Please complete the verification check for "${block.name}" on this page before continuing.`);
+                const hasDoc = !!window.__uploadedDocuments[block.id];
+                const hasSelfie = !!window.__capturedSelfies[block.id];
+                if (!hasDoc || !hasSelfie) {
+                    const missing = !hasDoc && !hasSelfie ? 'attach your document photo and capture your live selfie' : (!hasDoc ? 'attach your document photo' : 'capture your live selfie photo');
+                    alert(`Please ${missing} for "${block.name}" before continuing.`);
                     const card = document.getElementById(`card-block-${block.id}`);
                     if (card) {
                         card.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -845,7 +757,7 @@ function renderFieldInputHtml(f) {
 }
 
 // -------------------------------------------------------------
-// MODULE: Document OCR & Live Face Verification
+// MODULE: Document OCR & Live Face Verification (Fast, model-free)
 // -------------------------------------------------------------
 function renderDocFaceStep(modType) {
     const isPan = modType.includes('PAN');
@@ -854,123 +766,74 @@ function renderDocFaceStep(modType) {
     contentEl.innerHTML = `
         <div style="text-align:center;">
             <h3 style="margin-bottom:8px;">${MODULE_NAMES[modType] || modType}</h3>
-            <p style="color:var(--text-muted); margin-bottom:24px;">Upload your ${docLabel} to extract details, then verify with your live webcam face.</p>
+            <p style="color:var(--text-muted); margin-bottom:24px;">Attach your ${docLabel} photo, then take a live selfie photo.</p>
 
             <!-- Part 1: Upload -->
             <div id="substep-upload" class="step-card">
-                <h4 style="margin-top:0; color:var(--primary);">Part 1: Upload ${docLabel} Image</h4>
+                <h4 style="margin-top:0; color:var(--primary);">Step 1: Attach ${docLabel} Photo</h4>
                 <input type="file" id="runner-doc-file" accept="image/*">
-                <button class="btn" id="btn-runner-upload" type="button">Process ${docLabel}</button>
-                <div id="runner-upload-spinner" class="hidden" style="margin-top:12px; color:var(--primary); font-weight:bold;">Processing document OCR & extracting face...</div>
-                <div id="runner-upload-results" class="result-panel hidden"></div>
+                <div id="runner-upload-preview" class="hidden"></div>
             </div>
 
             <!-- Part 2: Live Verification -->
             <div id="substep-live" class="step-card hidden">
-                <h4 style="margin-top:0; color:var(--primary);">Part 2: Live Face Verification</h4>
+                <h4 style="margin-top:0; color:var(--primary);">Step 2: Capture Live Selfie Photo</h4>
                 <p style="font-size:0.9rem; color:var(--text-muted);">Position your face in front of the camera and click Capture.</p>
                 <div class="live-video-wrap">
                     <video id="runner-webcam" autoplay playsinline></video>
                 </div>
-                <button class="btn" id="btn-runner-capture" type="button">Capture & Verify Face</button>
-                <div id="runner-live-spinner" class="hidden" style="margin-top:12px; color:var(--primary); font-weight:bold;">Cross-verifying face vectors (ArcFace)...</div>
-                <div id="runner-live-results" class="result-panel hidden"></div>
+                <button class="btn" id="btn-runner-capture" type="button">📸 Capture Selfie Photo</button>
+                <div id="runner-live-preview" class="hidden"></div>
+            </div>
+
+            <div id="step-next-row" class="hidden" style="margin-top:20px; text-align:center;">
+                <button class="btn" id="btn-step-continue" type="button" style="background:#10b981; width:auto; padding:12px 32px; border-radius:24px; font-weight:700;">
+                    Continue to Next Step →
+                </button>
             </div>
         </div>
     `;
 
-    const btnUpload = document.getElementById('btn-runner-upload');
     const fileInput = document.getElementById('runner-doc-file');
-    const uploadSpinner = document.getElementById('runner-upload-spinner');
-    const uploadResults = document.getElementById('runner-upload-results');
     const substepLive = document.getElementById('substep-live');
     const btnCapture = document.getElementById('btn-runner-capture');
+    const uploadPreview = document.getElementById('runner-upload-preview');
+    const livePreview = document.getElementById('runner-live-preview');
+    const stepNextRow = document.getElementById('step-next-row');
+    const btnContinue = document.getElementById('btn-step-continue');
+
+    let currentDocDataUrl = null;
+    let currentSelfieDataUrl = null;
 
     if (fileInput) {
-        fileInput.addEventListener('change', async () => {
+        fileInput.addEventListener('change', () => {
             if (fileInput.files && fileInput.files.length > 0) {
-                substepLive.classList.remove('hidden');
-                await startWebcamStream();
+                const file = fileInput.files[0];
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    currentDocDataUrl = e.target.result;
+                    window.__uploadedDocDataUrl = currentDocDataUrl;
+                    if (uploadPreview) {
+                        uploadPreview.innerHTML = `
+                            <div style="display:flex; align-items:center; gap:12px; margin-top:12px; background:#f0fdf4; border:1px solid #bbf7d0; padding:12px; border-radius:8px; text-align:left;">
+                                <img src="${currentDocDataUrl}" style="width:60px; height:60px; object-fit:cover; border-radius:6px; border:1px solid #86efac;">
+                                <div>
+                                    <div style="color:#166534; font-weight:700; font-size:0.95rem;">✓ ${docLabel} Attached</div>
+                                    <div style="color:#64748b; font-size:0.8rem;">${file.name}</div>
+                                </div>
+                            </div>
+                        `;
+                        uploadPreview.classList.remove('hidden');
+                    }
+                    if (substepLive) {
+                        substepLive.classList.remove('hidden');
+                        await startWebcamStream();
+                    }
+                };
+                reader.readAsDataURL(file);
             }
         });
     }
-
-    btnUpload.addEventListener('click', async () => {
-        if (!fileInput.files || fileInput.files.length === 0) {
-            alert(`Please select a ${docLabel} image file.`);
-            return;
-        }
-
-        const file = fileInput.files[0];
-        const formData = new FormData();
-        formData.append("file", file);
-
-        btnUpload.disabled = true;
-        uploadSpinner.classList.remove('hidden');
-        uploadResults.classList.add('hidden');
-
-        try {
-            const ocrHeaders = {};
-            if (applicantToken) {
-                ocrHeaders['X-Applicant-Token'] = applicantToken;
-            }
-
-            const resp = await fetch(`${API_BASE}/api/v1/ocr`, {
-                method: 'POST',
-                headers: ocrHeaders,
-                body: formData,
-            });
-
-            const data = await resp.json();
-            if (!resp.ok) throw new Error(data.error || data.detail || `HTTP ${resp.status}`);
-
-            const fields = data.parsed_fields || {};
-            const idNum = fields.pan_number || fields.aadhaar_number || fields.id_number;
-
-            if (!idNum) {
-                throw new Error(`Could not extract a valid ID number from this ${docLabel}. Please try a clearer image.`);
-            }
-
-            uploadedDocumentId = idNum;
-            flowSessionId = data.session_id || null;
-
-            if (data.face_image_url) {
-                const parts = data.face_image_url.split('/');
-                uploadedFaceFilename = decodeURIComponent(parts[parts.length - 1]);
-            }
-
-            const docTypeDetected = fields.document_type || (isPan ? 'PAN' : 'AADHAAR');
-            let resHtml = `<h4 style="color:#166534; margin-top:0;">✅ ${docTypeDetected} Document Processed</h4>`;
-            resHtml += `<p style="margin:4px 0;"><strong>ID Number:</strong> <code>${idNum}</code></p>`;
-            if (fields.name) resHtml += `<p style="margin:4px 0;"><strong>Name:</strong> ${fields.name}</p>`;
-            if (fields.father_name) resHtml += `<p style="margin:4px 0;"><strong>Father's Name:</strong> ${fields.father_name}</p>`;
-            if (fields.dob) resHtml += `<p style="margin:4px 0;"><strong>Date of Birth:</strong> ${fields.dob}</p>`;
-
-            if (data.face_image_url) {
-                resHtml += `<div style="margin-top:10px;">
-                    <p style="margin-bottom:4px; font-weight:bold;">Extracted Document Face Photo:</p>
-                    <img src="${API_BASE}${data.face_image_url}" style="width:90px; height:90px; object-fit:cover; border-radius:8px; border:2px solid var(--primary);">
-                </div>`;
-            }
-
-            uploadResults.innerHTML = resHtml;
-            uploadResults.classList.remove('hidden');
-
-            // Reveal Part 2 Live Face Verification for all document verification flows
-            substepLive.classList.remove('hidden');
-            await startWebcamStream();
-            setTimeout(() => {
-                substepLive.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }, 150);
-
-        } catch (err) {
-            uploadResults.innerHTML = `<h4 style="color:#991b1b; margin-top:0;">❌ Extraction Failed</h4><p style="color:#ef4444;">${err.message}</p>`;
-            uploadResults.classList.remove('hidden');
-        } finally {
-            uploadSpinner.classList.add('hidden');
-            btnUpload.disabled = false;
-        }
-    });
 
     if (btnCapture) {
         btnCapture.addEventListener('click', async () => {
@@ -981,96 +844,44 @@ function renderDocFaceStep(modType) {
                 await startWebcamStream();
             }
 
-            if (videoEl.readyState < 2) {
-                for (let i = 0; i < 10; i++) {
-                    if (videoEl.readyState >= 2 && videoEl.videoWidth > 0) break;
-                    await new Promise(r => setTimeout(r, 100));
-                }
-            }
-
-            if (videoEl.readyState < 2 && (!videoEl.videoWidth || videoEl.videoWidth === 0)) {
-                alert("Camera is not ready yet. Please allow camera access in your browser settings.");
-                return;
-            }
-
             canvasEl.width = videoEl.videoWidth || 640;
             canvasEl.height = videoEl.videoHeight || 480;
             const ctx = canvasEl.getContext('2d');
             ctx.drawImage(videoEl, 0, 0, canvasEl.width, canvasEl.height);
-            const dataUrl = canvasEl.toDataURL('image/jpeg', 0.92);
+            currentSelfieDataUrl = canvasEl.toDataURL('image/jpeg', 0.90);
+            window.__uploadedSelfieDataUrl = currentSelfieDataUrl;
 
-            const liveSpinner = document.getElementById('runner-live-spinner');
-            const liveResults = document.getElementById('runner-live-results');
+            stopWebcamStream();
 
-            btnCapture.disabled = true;
-            liveSpinner.classList.remove('hidden');
-            liveResults.classList.add('hidden');
-
-            const payload = {
-                image: dataUrl,
-                skip_ocr: true,
-                session_id: flowSessionId,
-                step1_face: uploadedFaceFilename
-            };
-
-            const verifyHeaders = { 'Content-Type': 'application/json' };
-            if (applicantToken) {
-                verifyHeaders['X-Applicant-Token'] = applicantToken;
+            if (livePreview) {
+                livePreview.innerHTML = `
+                    <div style="display:flex; align-items:center; gap:12px; margin-top:12px; background:#f0fdf4; border:1px solid #bbf7d0; padding:12px; border-radius:8px; text-align:left;">
+                        <img src="${currentSelfieDataUrl}" style="width:60px; height:60px; object-fit:cover; border-radius:6px; border:1px solid #86efac;">
+                        <div>
+                            <div style="color:#166534; font-weight:700; font-size:0.95rem;">✓ Live Selfie Captured</div>
+                            <div style="color:#64748b; font-size:0.8rem;">Ready for verification submission</div>
+                        </div>
+                    </div>
+                `;
+                livePreview.classList.remove('hidden');
             }
 
-            try {
-                const resp = await fetch(`${API_BASE}/api/v1/live_verify`, {
-                    method: 'POST',
-                    headers: verifyHeaders,
-                    body: JSON.stringify(payload)
-                });
+            verificationResults.push({
+                module: modType,
+                status: 'PASSED',
+                details: `${docLabel} and live selfie securely attached`
+            });
 
-                const data = await resp.json();
-                if (!resp.ok) throw new Error(data.error || data.detail || `HTTP ${resp.status}`);
-
-                let faceMatchVerified = false;
-                if (data.step3_face_matches && data.step3_face_matches.length > 0) {
-                    const normUploaded = decodeURIComponent(uploadedFaceFilename || '').toLowerCase();
-                    const match = data.step3_face_matches.find(m => {
-                        const normRef = decodeURIComponent(m.step3_face || '').toLowerCase();
-                        return normRef === normUploaded || (m.vs_holder && m.vs_holder.verified) || m.verified;
-                    }) || data.step3_face_matches[0];
-
-                    if (match) {
-                        faceMatchVerified = match.verified || (match.vs_holder && match.vs_holder.verified);
-                    }
-                }
-                if (!faceMatchVerified && data.face_match) {
-                    faceMatchVerified = true;
-                }
-
-                stopWebcamStream();
-
-                let liveHtml = `<h4 style="margin-top:0;">Live Face Verification Results</h4>`;
-                liveHtml += `<p><strong>Face Match Status:</strong> ${faceMatchVerified ? '<span class="badge badge-success">MATCH VERIFIED</span>' : '<span class="badge badge-danger">MATCH FAILED</span>'}</p>`;
-                liveHtml += `<p><strong>Liveness Check:</strong> ${data.holder_face_image_url ? '<span class="badge badge-success">PASSED</span>' : '<span class="badge badge-danger">FAILED</span>'}</p>`;
-
-                liveResults.innerHTML = liveHtml;
-                liveResults.classList.remove('hidden');
-
-                verificationResults.push({
-                    module: modType,
-                    status: faceMatchVerified ? 'PASSED' : 'FAILED',
-                    details: `ID: ${uploadedDocumentId || 'N/A'}, Match: ${faceMatchVerified ? 'Verified' : 'Unverified'}`
-                });
-
-                setTimeout(() => {
-                    currentStepIndex++;
-                    renderCurrentStep();
-                }, 2000);
-
-            } catch (err) {
-                liveResults.innerHTML = `<h4 style="color:#991b1b; margin-top:0;">❌ Verification Failed</h4><p style="color:#ef4444;">${err.message}</p>`;
-                liveResults.classList.remove('hidden');
-                btnCapture.disabled = false;
-            } finally {
-                liveSpinner.classList.add('hidden');
+            if (stepNextRow) {
+                stepNextRow.classList.remove('hidden');
             }
+        });
+    }
+
+    if (btnContinue) {
+        btnContinue.addEventListener('click', () => {
+            currentStepIndex++;
+            renderCurrentStep();
         });
     }
 }
@@ -1163,43 +974,100 @@ function renderHumanReviewStep() {
 }
 
 // -------------------------------------------------------------
-// FINAL COMPLETION SCREEN
+// FINAL COMPLETION SCREEN (Clean Employee Experience)
 // -------------------------------------------------------------
 function renderFinalCompletion() {
     updateStepperUI();
     stopWebcamStream();
 
-    const allPassed = verificationResults.every(r => r.status === 'PASSED' || r.status === 'QUEUED');
+    const docsList = Object.values(window.__uploadedDocuments || {});
+    const primaryDoc = docsList[0] || (window.__uploadedDocDataUrl ? { dataUrl: window.__uploadedDocDataUrl, type: 'ID' } : null);
+    const selfiesList = Object.values(window.__capturedSelfies || {});
+    const primarySelfie = selfiesList[0] || window.__uploadedSelfieDataUrl || '';
+
+    const docImage = primaryDoc ? primaryDoc.dataUrl : '';
+    const docType = primaryDoc ? (primaryDoc.type || 'ID') : 'ID';
+
+    const applicantName = (window.__applicantAnswers && (
+        window.__applicantAnswers['Full Legal Name'] || 
+        window.__applicantAnswers['Name'] || 
+        window.__applicantAnswers['Work Email Address']
+    )) || `Applicant ${pipelineId}`;
+
+    const submissionPayload = {
+        id: `EMP-${Date.now().toString(36).toUpperCase()}`,
+        session_id: `emp_${pipelineId}_${Date.now()}`,
+        document_type: docType,
+        extracted_name: applicantName,
+        overall_status: 'MANUAL_REVIEW',
+        face_match_verified: false,
+        extracted_face_url: docImage,
+        live_holder_face_url: primarySelfie,
+        metadata: {
+            pipelineId,
+            answers: window.__applicantAnswers || {},
+            document_image: docImage,
+            selfie_image: primarySelfie,
+            document_type: docType,
+            submitted_at: new Date().toISOString()
+        },
+        created_at: new Date().toISOString()
+    };
+
+    // Cache locally for Instant Admin Access
+    try {
+        const existing = JSON.parse(localStorage.getItem('verifyyy_local_submissions') || '[]');
+        existing.unshift(submissionPayload);
+        localStorage.setItem('verifyyy_local_submissions', JSON.stringify(existing.slice(0, 100)));
+    } catch (e) {
+        console.warn('Could not cache submission locally:', e);
+    }
+
+    // Persist to Supabase database
+    try {
+        fetch(`${SUPABASE_REST_URL}/verifications`, {
+            method: 'POST',
+            headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify(submissionPayload)
+        }).catch(err => console.warn('Supabase verification save warning:', err));
+    } catch (sbErr) {
+        console.warn('Could not sync verification run to Supabase:', sbErr);
+    }
 
     let html = `
-        <div style="text-align:center; padding:20px;">
-            <div style="font-size:3.5rem; margin-bottom:12px;">${allPassed ? '🎉' : '⚠️'}</div>
-            <h2 style="color:${allPassed ? 'var(--primary)' : 'var(--error)'}; font-weight:800;">
-                ${allPassed ? 'Verification Complete!' : 'Verification Flagged'}
+        <div style="text-align:center; padding:36px 16px; max-width:540px; margin:0 auto;">
+            <div style="font-size:3.8rem; margin-bottom:12px;">🎉</div>
+            <h2 style="color:#10b981; font-weight:800; margin-bottom:8px; font-size:1.75rem;">
+                Submission Received!
             </h2>
-            <p style="color:var(--text-muted); margin-bottom:24px;">
-                Pipeline <code>${pipelineId}</code> has executed all requested verification steps.
+            <p style="color:#475569; font-size:1.05rem; margin-bottom:24px; line-height:1.5;">
+                Thank you for participating! Your form responses, document attachments, and verification activity have been securely submitted.
             </p>
 
-            <div class="step-card" style="text-align:left;">
-                <h4 style="margin-top:0; color:var(--primary);">Verification Results Summary</h4>
-                ${verificationResults.map(r => {
-                    const badgeClass = r.status === 'PASSED' ? 'badge-success' : (r.status === 'QUEUED' ? 'badge-info' : 'badge-danger');
-                    return `
-                        <div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--border-color); padding:10px 0;">
-                            <div>
-                                <strong>${MODULE_NAMES[r.module] || r.module}</strong>
-                                <div style="font-size:0.85rem; color:var(--text-muted);">${r.details}</div>
-                            </div>
-                            <div><span class="badge ${badgeClass}">${r.status}</span></div>
-                        </div>
-                    `;
-                }).join('')}
+            <div class="step-card" style="text-align:left; background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:20px; margin-bottom:20px;">
+                <h4 style="margin:0 0 12px; color:#1e293b; font-size:1rem;">Submission Details</h4>
+                <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #e2e8f0;">
+                    <span style="color:#64748b; font-size:0.9rem;">Form Responses</span>
+                    <span style="color:#10b981; font-weight:700; font-size:0.9rem;">✓ Recorded</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #e2e8f0;">
+                    <span style="color:#64748b; font-size:0.9rem;">Document Photo</span>
+                    <span style="color:#10b981; font-weight:700; font-size:0.9rem;">✓ Attached</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; padding:8px 0;">
+                    <span style="color:#64748b; font-size:0.9rem;">Live Selfie Photo</span>
+                    <span style="color:#10b981; font-weight:700; font-size:0.9rem;">✓ Captured</span>
+                </div>
             </div>
 
             ${window.__applicantAnswers && Object.keys(window.__applicantAnswers).length > 0 ? `
                 <div class="step-card" style="text-align:left; margin-top:16px;">
-                    <h4 style="margin-top:0; color:#7248B9;">Submitted Application Details</h4>
+                    <h4 style="margin-top:0; color:#7248B9; font-size:1rem;">Submitted Application Details</h4>
                     ${Object.entries(window.__applicantAnswers).map(([k, v]) => `
                         <div style="display:flex; justify-content:space-between; border-bottom:1px solid #f1f5f9; padding:8px 0; font-size:0.95rem;">
                             <span style="font-weight:600; color:#475569;">${k}</span>
@@ -1209,38 +1077,11 @@ function renderFinalCompletion() {
                 </div>
             ` : ''}
 
-            <button class="btn" onclick="location.reload()" style="margin-top:20px;">Run Flow Again</button>
+            <p style="color:#94a3b8; font-size:0.85rem; margin-top:24px;">
+                Your submission has been securely recorded and queued for administrator compliance review. You may safely close this page.
+            </p>
         </div>
     `;
-
-    // Persist applicant verification completion to Supabase database
-    try {
-        const applicantName = (window.__applicantAnswers && (window.__applicantAnswers['Full Legal Name'] || window.__applicantAnswers['Work Email Address'])) || `Applicant ${pipelineId}`;
-        fetch(`${SUPABASE_REST_URL}/verifications`, {
-            method: 'POST',
-            headers: {
-                'apikey': SUPABASE_ANON_KEY,
-                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-                'Content-Type': 'application/json',
-                'Prefer': 'return=minimal'
-            },
-            body: JSON.stringify({
-                session_id: `run_${pipelineId}_${Date.now()}`,
-                document_type: 'VERIFICATION_RUN',
-                extracted_name: applicantName,
-                overall_status: allPassed ? 'SUCCESS' : 'MANUAL_REVIEW',
-                face_match_verified: allPassed,
-                metadata: {
-                    pipelineId,
-                    results: verificationResults,
-                    answers: window.__applicantAnswers || {},
-                    completed_at: new Date().toISOString()
-                }
-            })
-        }).catch(err => console.warn('Supabase verification save warning:', err));
-    } catch (sbErr) {
-        console.warn('Could not sync verification run to Supabase:', sbErr);
-    }
 
     contentEl.innerHTML = html;
 }

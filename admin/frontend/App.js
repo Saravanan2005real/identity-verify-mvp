@@ -1394,16 +1394,18 @@ export default function App() {
     const moduleCount = flowBlocks.filter(b => b.kind === 'module').length;
 
     return (
-      <View style={{ width: '100%', maxWidth: 840, alignSelf: 'center', paddingBottom: 80 }}>
+      <View style={{ width: '100%', maxWidth: 840, alignSelf: 'center', paddingBottom: 80, paddingHorizontal: 12 }}>
         {/* Top Sticky Builder Bar */}
         <View style={{
           backgroundColor: '#ffffff',
           borderRadius: 12,
-          paddingHorizontal: 20,
-          paddingVertical: 14,
+          paddingHorizontal: 16,
+          paddingVertical: 12,
           flexDirection: 'row',
+          flexWrap: 'wrap',
           alignItems: 'center',
           justifyContent: 'space-between',
+          gap: 12,
           marginBottom: 16,
           boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
           borderWidth: 1,
@@ -1417,7 +1419,7 @@ export default function App() {
             <Text style={{ fontSize: 14, color: '#334155', fontWeight: '700' }}>Back to Dashboard</Text>
           </TouchableOpacity>
 
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <View style={{ backgroundColor: '#f1f5f9', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 }}>
               <Text style={{ fontSize: 12, color: '#475569', fontWeight: '600' }}>
                 📋 {questionCount} {questionCount === 1 ? 'Question' : 'Questions'}
@@ -1435,14 +1437,14 @@ export default function App() {
             </View>
           </View>
 
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <TouchableOpacity
               style={{
                 backgroundColor: '#f8fafc',
                 borderWidth: 1.5,
                 borderColor: '#cbd5e1',
-                paddingHorizontal: 16,
-                paddingVertical: 9,
+                paddingHorizontal: 14,
+                paddingVertical: 8,
                 borderRadius: 8,
                 cursor: 'pointer'
               }}
@@ -1454,8 +1456,8 @@ export default function App() {
             <TouchableOpacity
               style={{
                 backgroundColor: '#7248B9',
-                paddingHorizontal: 20,
-                paddingVertical: 9,
+                paddingHorizontal: 18,
+                paddingVertical: 8,
                 borderRadius: 8,
                 boxShadow: '0 2px 6px rgba(114, 72, 185, 0.35)',
                 cursor: 'pointer'
@@ -1520,22 +1522,24 @@ export default function App() {
           backgroundColor: '#ffffff',
           borderRadius: 10,
           padding: 12,
-          marginBottom: 20,
+          marginBottom: 18,
           flexDirection: 'row',
+          flexWrap: 'wrap',
           alignItems: 'center',
           justifyContent: 'space-between',
+          gap: 10,
           borderWidth: 1,
           borderColor: '#e2e8f0',
           boxShadow: '0 2px 6px rgba(0,0,0,0.05)'
         }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <Text style={{ fontSize: 13, fontWeight: '700', color: '#334155' }}>+ Add To Flow:</Text>
 
             <TouchableOpacity
               style={{
                 backgroundColor: '#7248B9',
-                paddingHorizontal: 14,
-                paddingVertical: 8,
+                paddingHorizontal: 12,
+                paddingVertical: 7,
                 borderRadius: 6,
                 cursor: 'pointer'
               }}
@@ -1555,7 +1559,7 @@ export default function App() {
                 }}
                 defaultValue=""
                 style={{
-                  padding: '7px 12px',
+                  padding: '7px 10px',
                   borderRadius: 6,
                   border: '1.5px solid #7248B9',
                   backgroundColor: '#f5f3ff',
@@ -1563,7 +1567,8 @@ export default function App() {
                   fontWeight: '700',
                   fontSize: '13px',
                   cursor: 'pointer',
-                  outline: 'none'
+                  outline: 'none',
+                  maxWidth: '100%'
                 }}
               >
                 <option value="" disabled>🛡️ + Add Verification Module ▾</option>
@@ -1576,8 +1581,8 @@ export default function App() {
             <TouchableOpacity
               style={{
                 backgroundColor: '#0f766e',
-                paddingHorizontal: 14,
-                paddingVertical: 8,
+                paddingHorizontal: 12,
+                paddingVertical: 7,
                 borderRadius: 6,
                 cursor: 'pointer'
               }}
@@ -1587,22 +1592,22 @@ export default function App() {
             </TouchableOpacity>
           </View>
 
-          <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+          <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
             <Text style={{ fontSize: 11, color: '#64748b', fontWeight: '600' }}>Presets:</Text>
             <TouchableOpacity
-              style={{ backgroundColor: '#f1f5f9', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14, borderWidth: 1, borderColor: '#e2e8f0', cursor: 'pointer' }}
+              style={{ backgroundColor: '#f1f5f9', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 14, borderWidth: 1, borderColor: '#e2e8f0', cursor: 'pointer' }}
               onPress={() => addBlock('question', { type: 'short_answer', title: 'Full Legal Name' })}
             >
               <Text style={{ fontSize: 11, fontWeight: '600', color: '#475569' }}>+ Name</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={{ backgroundColor: '#f1f5f9', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14, borderWidth: 1, borderColor: '#e2e8f0', cursor: 'pointer' }}
+              style={{ backgroundColor: '#f1f5f9', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 14, borderWidth: 1, borderColor: '#e2e8f0', cursor: 'pointer' }}
               onPress={() => addBlock('question', { type: 'short_answer', title: 'Work Email Address' })}
             >
               <Text style={{ fontSize: 11, fontWeight: '600', color: '#475569' }}>+ Email</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={{ backgroundColor: '#f1f5f9', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14, borderWidth: 1, borderColor: '#e2e8f0', cursor: 'pointer' }}
+              style={{ backgroundColor: '#f1f5f9', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 14, borderWidth: 1, borderColor: '#e2e8f0', cursor: 'pointer' }}
               onPress={() => addBlock('question', { type: 'file_upload', title: 'Document Upload' })}
             >
               <Text style={{ fontSize: 11, fontWeight: '600', color: '#475569' }}>+ Document</Text>
@@ -1648,14 +1653,14 @@ export default function App() {
                     borderLeftWidth: 6,
                     borderLeftColor: isModule ? '#7248B9' : (isPageBreak ? '#0f766e' : (isActive ? '#7248B9' : '#94a3b8')),
                     boxShadow: isActive ? '0 4px 14px rgba(114, 72, 185, 0.12)' : '0 2px 6px rgba(0,0,0,0.05)',
-                    padding: '18px 20px',
+                    padding: '16px 18px',
                     opacity: draggedIndex === index ? 0.45 : 1,
                     transition: 'all 0.15s ease'
                   }}
                 >
                   {/* Card Header Bar */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                       {/* Drag Grip Handle */}
                       <div
                         className="dragGrip"
@@ -1734,7 +1739,7 @@ export default function App() {
                   {/* ────────────────── QUESTION CARD BODY ────────────────── */}
                   {isQuestion && (
                     <div>
-                      <div style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'center' }}>
+                      <div style={{ display: 'flex', gap: 10, marginBottom: 12, alignItems: 'center', flexWrap: 'wrap' }}>
                         <input
                           type="text"
                           value={block.title}
@@ -1742,7 +1747,8 @@ export default function App() {
                           onChange={(e) => updateBlock(block.id, 'title', e.target.value)}
                           placeholder="Untitled Question"
                           style={{
-                            flex: 1,
+                            flex: '1 1 200px',
+                            minWidth: 160,
                             padding: '10px 14px',
                             fontSize: 15,
                             fontWeight: 600,
@@ -1758,6 +1764,8 @@ export default function App() {
                           value={block.type}
                           onChange={(e) => updateBlock(block.id, 'type', e.target.value)}
                           style={{
+                            flex: '0 0 auto',
+                            minWidth: 140,
                             padding: '10px 12px',
                             borderRadius: 6,
                             border: '1.5px solid #cbd5e1',
@@ -1801,7 +1809,7 @@ export default function App() {
                                   placeholder={`Option ${oIdx + 1}`}
                                   style={{
                                     flex: 1,
-                                    maxWidth: 360,
+                                    maxWidth: 420,
                                     padding: '6px 10px',
                                     border: '1px solid #cbd5e1',
                                     borderRadius: 4,
@@ -1865,8 +1873,8 @@ export default function App() {
                   {/* ────────────────── MODULE CARD BODY ────────────────── */}
                   {isModule && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: '1 1 220px', minWidth: 180 }}>
                           <span style={{ fontSize: 28 }}>{block.icon || '🛡️'}</span>
                           <div>
                             <div style={{ fontWeight: 800, fontSize: 16, color: '#1e293b' }}>
@@ -1882,6 +1890,8 @@ export default function App() {
                           value={block.moduleId}
                           onChange={(e) => updateBlock(block.id, 'moduleId', e.target.value)}
                           style={{
+                            flex: '0 0 auto',
+                            minWidth: 160,
                             padding: '8px 12px',
                             borderRadius: 6,
                             border: '1.5px solid #7248B9',
@@ -1899,7 +1909,7 @@ export default function App() {
                       </div>
 
                       {/* Workflow Chips */}
-                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4, background: '#f5f3ff', padding: '10px 14px', borderRadius: 8, border: '1px solid #ddd6fe' }}>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4, background: '#f5f3ff', padding: '10px 14px', borderRadius: 8, border: '1px solid #ddd6fe' }}>
                         <span style={{ fontSize: 12, color: '#7248B9', fontWeight: 700 }}>⚡ Executes on this page:</span>
                         <span style={{ fontSize: 12, color: '#4c1d95', fontWeight: 600 }}>✓ Document Image OCR</span>
                         <span style={{ fontSize: 12, color: '#cbd5e1' }}>•</span>
@@ -1913,7 +1923,7 @@ export default function App() {
                   {/* ────────────────── PAGE BREAK CARD BODY ────────────────── */}
                   {isPageBreak && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                         <span style={{ fontSize: 22 }}>📑</span>
                         <input
                           type="text"
@@ -1921,7 +1931,8 @@ export default function App() {
                           onChange={(e) => updateBlock(block.id, 'title', e.target.value)}
                           placeholder="Page Section Title (e.g. Page 2: Identity Documents)"
                           style={{
-                            flex: 1,
+                            flex: '1 1 220px',
+                            minWidth: 180,
                             padding: '8px 12px',
                             fontSize: 15,
                             fontWeight: 700,
@@ -1944,10 +1955,11 @@ export default function App() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: 8,
-                  paddingVertical: 4
+                  gap: 6,
+                  padding: '6px 0',
+                  flexWrap: 'wrap'
                 }}>
-                  <div style={{ height: 1, flex: 1, backgroundColor: '#e2e8f0' }} />
+                  <div style={{ height: 1, flex: '1 1 20px', minWidth: 20, backgroundColor: '#e2e8f0' }} />
                   <button
                     type="button"
                     onClick={() => addBlock('question', { type: 'short_answer', title: 'New Question' }, index + 1)}
@@ -1955,7 +1967,7 @@ export default function App() {
                       background: '#ffffff',
                       border: '1px solid #cbd5e1',
                       borderRadius: 14,
-                      padding: '3px 10px',
+                      padding: '4px 10px',
                       fontSize: 11,
                       fontWeight: 600,
                       color: '#475569',
@@ -1971,7 +1983,7 @@ export default function App() {
                       background: '#f5f3ff',
                       border: '1px solid #ddd6fe',
                       borderRadius: 14,
-                      padding: '3px 10px',
+                      padding: '4px 10px',
                       fontSize: 11,
                       fontWeight: 700,
                       color: '#7248B9',
@@ -1987,7 +1999,7 @@ export default function App() {
                       background: '#f0fdfa',
                       border: '1px solid #99f6e4',
                       borderRadius: 14,
-                      padding: '3px 10px',
+                      padding: '4px 10px',
                       fontSize: 11,
                       fontWeight: 700,
                       color: '#0f766e',
@@ -1996,7 +2008,7 @@ export default function App() {
                   >
                     📄 + Page Break here
                   </button>
-                  <div style={{ height: 1, flex: 1, backgroundColor: '#e2e8f0' }} />
+                  <div style={{ height: 1, flex: '1 1 20px', minWidth: 20, backgroundColor: '#e2e8f0' }} />
                 </div>
               </div>
             );
@@ -2011,24 +2023,26 @@ export default function App() {
         {/* 3. Bottom Save Action Floating Footer */}
         <View style={{
           marginTop: 24,
-          padding: 20,
+          padding: 18,
           backgroundColor: '#ffffff',
           borderRadius: 12,
           borderWidth: 1,
           borderColor: '#e2e8f0',
           flexDirection: 'row',
+          flexWrap: 'wrap',
           alignItems: 'center',
           justifyContent: 'space-between',
+          gap: 14,
           boxShadow: '0 4px 12px rgba(0,0,0,0.06)'
         }}>
-          <View>
+          <View style={{ flex: 1, minWidth: 220 }}>
             <Text style={{ fontSize: 16, fontWeight: '700', color: '#1e293b' }}>Ready to deploy this verification flow?</Text>
             <Text style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
               Configured with {questionCount} questions and {moduleCount} verification steps across {pages.length} {pages.length === 1 ? 'page' : 'pages'}.
             </Text>
           </View>
           <TouchableOpacity
-            style={[styles.btn, { backgroundColor: '#7248B9', paddingHorizontal: 32 }]}
+            style={[styles.btn, { backgroundColor: '#7248B9', paddingHorizontal: 28, marginBottom: 0 }]}
             onPress={generateLink}
             testID="save-deploy-bottom-btn"
           >
@@ -2039,10 +2053,10 @@ export default function App() {
         {/* Form Interactive Preview Modal */}
         <Modal visible={formPreviewVisible} transparent={true} animationType="fade">
           <View style={styles.modalOverlay}>
-            <View style={[styles.modalContent, { maxWidth: 720, maxHeight: '90%' }]}>
+            <View style={[styles.modalContent, { maxWidth: 720, width: '94%', maxHeight: '90%', padding: 18 }]}>
               <ScrollView style={{ width: '100%' }}>
                 <View style={{ backgroundColor: '#7248B9', height: 8, borderTopLeftRadius: 12, borderTopRightRadius: 12, width: '100%' }} />
-                <View style={{ padding: 24 }}>
+                <View style={{ padding: 18 }}>
                   {(() => {
                     const previewPages = partitionFlowBlocks(flowBlocks);
                     const curPageIdx = Math.min(previewActivePageIndex, previewPages.length - 1);
@@ -2054,7 +2068,7 @@ export default function App() {
                       <View>
                         {/* Page Header */}
                         <View style={{ marginBottom: 20 }}>
-                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, flexWrap: 'wrap', gap: 6 }}>
                             <Text style={{ fontSize: 22, fontWeight: '800', color: '#1e293b' }}>
                               {isFirstPage ? (formTitle || 'Untitled form') : (curPage.header?.title || `Page ${curPageIdx + 1}`)}
                             </Text>
@@ -2119,7 +2133,7 @@ export default function App() {
                         </View>
 
                         {/* Page Preview Navigation */}
-                        <View style={{ marginTop: 24, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, borderTopWidth: 1, borderTopColor: '#e2e8f0' }}>
+                        <View style={{ marginTop: 24, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 10, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#e2e8f0' }}>
                           <View>
                             {!isFirstPage && (
                               <TouchableOpacity
@@ -2130,7 +2144,7 @@ export default function App() {
                               </TouchableOpacity>
                             )}
                           </View>
-                          <View style={{ flexDirection: 'row', gap: 10 }}>
+                          <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
                             {!isLastPage && (
                               <TouchableOpacity
                                 style={[styles.btnSmall, { backgroundColor: '#7248B9' }]}
@@ -2603,7 +2617,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   scrollContent: {
-    padding: 40,
+    padding: width > 768 ? 40 : 16,
     maxWidth: 1200,
     alignSelf: 'center',
     width: '100%',
@@ -2917,7 +2931,7 @@ const styles = StyleSheet.create({
     maxWidth: 1140,
     width: '100%',
     alignSelf: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: width > 768 ? 24 : 14,
   },
   gfSectionHeader: {
     flexDirection: 'row',
@@ -2940,6 +2954,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 16,
     paddingVertical: 4,
+    flexWrap: 'wrap',
   },
   gfTemplateCardWrapper: {
     alignItems: 'flex-start',
@@ -3065,6 +3080,9 @@ const styles = StyleSheet.create({
   },
   gfFormCard: {
     width: 210,
+    minWidth: 160,
+    flex: '1 1 200px',
+    maxWidth: 280,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#dadce0',

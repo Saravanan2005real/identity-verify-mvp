@@ -157,14 +157,14 @@ function renderCustomStepper() {
 function renderFieldInputHtmlWithVal(f, val) {
     const isRequired = f.required ? 'required' : '';
     if (f.type === 'paragraph') {
-        return `<textarea name="${f.id}" style="width:100%; box-sizing:border-box; border:1px solid #dadce0; border-radius:8px; padding:10px 12px; font-family:inherit; min-height:80px;" placeholder="Your answer" ${isRequired}>${val || ''}</textarea>`;
+        return `<textarea name="${f.id}" style="width:100%; box-sizing:border-box; border:1px solid #dadce0; border-radius:8px; padding:10px 12px; font-family:inherit; font-size:16px; min-height:80px;" placeholder="Your answer" ${isRequired}>${val || ''}</textarea>`;
     }
     if (f.type === 'multiple_choice') {
         const opts = (f.options && f.options.length) ? f.options : ['Option 1'];
         return opts.map((opt, oi) => `
             <div style="margin:8px 0; display:flex; align-items:center; gap:8px;">
                 <input type="radio" name="${f.id}" id="${f.id}_${oi}" value="${opt}" ${val === opt ? 'checked' : ''} ${isRequired && oi === 0 ? 'required' : ''}>
-                <label for="${f.id}_${oi}" style="color:#3c4043; cursor:pointer;">${opt}</label>
+                <label for="${f.id}_${oi}" style="color:#3c4043; cursor:pointer; font-size:15px;">${opt}</label>
             </div>
         `).join('');
     }
@@ -174,27 +174,27 @@ function renderFieldInputHtmlWithVal(f, val) {
         return opts.map((opt, oi) => `
             <div style="margin:8px 0; display:flex; align-items:center; gap:8px;">
                 <input type="checkbox" name="${f.id}" id="${f.id}_${oi}" value="${opt}" ${valArr.includes(opt) ? 'checked' : ''}>
-                <label for="${f.id}_${oi}" style="color:#3c4043; cursor:pointer;">${opt}</label>
+                <label for="${f.id}_${oi}" style="color:#3c4043; cursor:pointer; font-size:15px;">${opt}</label>
             </div>
         `).join('');
     }
     if (f.type === 'dropdown') {
         const opts = (f.options && f.options.length) ? f.options : ['Option 1'];
         return `
-            <select name="${f.id}" style="width:100%; box-sizing:border-box; border:1px solid #dadce0; border-radius:8px; padding:10px 12px; font-family:inherit; background:#fff;" ${isRequired}>
+            <select name="${f.id}" style="width:100%; box-sizing:border-box; border:1px solid #dadce0; border-radius:8px; padding:10px 12px; font-family:inherit; font-size:16px; background:#fff;" ${isRequired}>
                 <option value="">Choose an option</option>
                 ${opts.map(opt => `<option value="${opt}" ${val === opt ? 'selected' : ''}>${opt}</option>`).join('')}
             </select>
         `;
     }
     if (f.type === 'date') {
-        return `<input type="date" name="${f.id}" value="${val || ''}" style="border:1px solid #dadce0; border-radius:8px; padding:10px 12px; font-family:inherit;" ${isRequired} />`;
+        return `<input type="date" name="${f.id}" value="${val || ''}" style="width:100%; box-sizing:border-box; border:1px solid #dadce0; border-radius:8px; padding:10px 12px; font-family:inherit; font-size:16px;" ${isRequired} />`;
     }
     if (f.type === 'file_upload') {
-        return `<input type="file" name="${f.id}" style="width:100%; padding:8px 0;" ${isRequired} />`;
+        return `<input type="file" name="${f.id}" style="width:100%; padding:8px 0; font-size:15px;" ${isRequired} />`;
     }
     // Default short_answer
-    return `<input type="text" name="${f.id}" value="${val || ''}" style="width:100%; box-sizing:border-box; border:none; border-bottom:1.5px solid #dadce0; padding:8px 0; font-size:1rem; outline:none;" placeholder="Your answer" ${isRequired} />`;
+    return `<input type="text" name="${f.id}" value="${val || ''}" style="width:100%; box-sizing:border-box; border:none; border-bottom:1.5px solid #dadce0; padding:8px 0; font-size:16px; outline:none;" placeholder="Your answer" ${isRequired} />`;
 }
 
 function renderCustomizablePage(pIdx) {
@@ -291,7 +291,7 @@ function renderCustomizablePage(pIdx) {
                     <div id="substep-upload-${block.id}" style="background:#f8fafc; border-radius:8px; padding:16px; margin-bottom:16px; border:1px solid #e2e8f0;">
                         <h4 style="margin:0 0 10px; color:#7248B9; text-align:left;">Part 1: Upload ${docLabel} Image</h4>
                         <input type="file" id="runner-doc-file-${block.id}" accept="image/*" style="margin-bottom:10px;">
-                        <button class="btn" id="btn-upload-${block.id}" type="button" style="background:#7248B9; color:#fff; width:auto; padding:10px 24px; border-radius:6px; font-weight:600;">
+                        <button class="btn btn-action-mobile" id="btn-upload-${block.id}" type="button" style="background:#7248B9; color:#fff; width:auto; padding:12px 24px; min-height:44px; border-radius:6px; font-weight:600;">
                             Process ${docLabel}
                         </button>
                         <div id="upload-spinner-${block.id}" class="hidden" style="margin-top:10px; color:#7248B9; font-weight:bold;">
@@ -304,11 +304,11 @@ function renderCustomizablePage(pIdx) {
                     <div id="substep-live-${block.id}" class="hidden" style="background:#f8fafc; border-radius:8px; padding:16px; border:1px solid #e2e8f0;">
                         <h4 style="margin:0 0 8px; color:#7248B9; text-align:left;">Part 2: Live Face Verification</h4>
                         <p style="font-size:0.85rem; color:#64748b; margin:0 0 12px; text-align:left;">Position your face in front of the camera and click Capture.</p>
-                        <div class="live-video-wrap" style="max-width:400px; margin:0 auto 12px;">
+                        <div class="live-video-wrap" style="max-width:440px; margin:0 auto 12px;">
                             <video id="runner-webcam-${block.id}" autoplay playsinline></video>
                         </div>
                         <div style="text-align:center;">
-                            <button class="btn" id="btn-capture-${block.id}" type="button" style="background:#7248B9; color:#fff; width:auto; padding:10px 28px; border-radius:6px; font-weight:600;">
+                            <button class="btn btn-action-mobile" id="btn-capture-${block.id}" type="button" style="background:#7248B9; color:#fff; width:auto; padding:12px 28px; min-height:44px; border-radius:6px; font-weight:600;">
                                 Capture & Verify Face
                             </button>
                         </div>
@@ -326,7 +326,7 @@ function renderCustomizablePage(pIdx) {
 
     // Page Navigation Buttons
     html += `
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:24px; padding-top:16px; border-top:1px solid #e2e8f0;">
+            <div class="page-nav-row" style="display:flex; justify-content:space-between; align-items:center; margin-top:24px; padding-top:16px; border-top:1px solid #e2e8f0; flex-wrap:wrap; gap:12px;">
                 <div>
                     ${!isFirstPage ? `
                         <button type="button" id="btn-page-prev" class="btn" style="background:#e2e8f0; color:#1e293b; width:auto; padding:12px 24px; border-radius:24px; font-weight:600; cursor:pointer;">

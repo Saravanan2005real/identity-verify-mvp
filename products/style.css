@@ -1,7 +1,7 @@
 :root {
-  --primary: #0f766e;
-  --primary-light: rgba(45, 212, 191, 0.15);
-  --background: #f8fafc;
+  --primary: #008080;
+  --primary-light: rgba(0, 128, 128, 0.08);
+  --background: #F7F9FB;
   --card: #ffffff;
   --text-main: #0f172a;
   --text-muted: #64748b;

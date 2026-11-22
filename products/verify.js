@@ -222,10 +222,10 @@ function renderCustomizablePage(pIdx) {
     let html = `
         <div style="text-align:left; max-width:720px; margin:0 auto;">
             <!-- Page Header Card -->
-            <div style="background:#fff; border-top:8px solid #7248B9; border-radius:12px; padding:24px; margin-bottom:20px; box-shadow:0 1px 3px rgba(60,64,67,0.1); border:1px solid #dadce0;">
+            <div style="background:#fff; border-top:8px solid #008080; border-radius:12px; padding:24px; margin-bottom:20px; box-shadow:0 1px 3px rgba(60,64,67,0.1); border:1px solid #dadce0;">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <h2 style="margin:0 0 8px; font-size:1.6rem; color:#202124;">${pageTitle}</h2>
-                    <span style="font-size:0.85rem; font-weight:700; color:#7248B9; background:#f5f3ff; padding:4px 12px; border-radius:12px; border:1px solid #ddd6fe;">
+                    <span style="font-size:0.85rem; font-weight:700; color:#008080; background:rgba(0, 128, 128, 0.06); padding:4px 12px; border-radius:12px; border:1px solid rgba(0, 128, 128, 0.22);">
                         Page ${pIdx + 1} of ${totalPages}
                     </span>
                 </div>
@@ -257,10 +257,10 @@ function renderCustomizablePage(pIdx) {
             const isVerified = window.__moduleVerificationStatus[block.id]?.verified;
 
             html += `
-                <div class="step-card" style="background:#fff; border-radius:12px; padding:24px; margin-bottom:20px; box-shadow:0 2px 8px rgba(114, 72, 185, 0.12); border:2px solid #7248B9;" id="card-block-${block.id}">
+                <div class="step-card" style="background:#fff; border-radius:12px; padding:24px; margin-bottom:20px; box-shadow:0 2px 8px rgba(0, 128, 128, 0.12); border:2px solid #008080;" id="card-block-${block.id}">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid #f1f5f9; padding-bottom:12px;">
                         <div>
-                            <h3 style="margin:0; text-align:left; color:#7248B9; font-size:1.2rem; display:flex; align-items:center; gap:8px;">
+                            <h3 style="margin:0; text-align:left; color:#008080; font-size:1.2rem; display:flex; align-items:center; gap:8px;">
                                 <span>${block.icon || '🛡️'}</span> ${block.name}
                             </h3>
                             <p style="margin:4px 0 0; text-align:left; font-size:0.85rem; color:#64748b;">${block.desc || 'Automated identity verification check'}</p>
@@ -278,7 +278,7 @@ function renderCustomizablePage(pIdx) {
                 html += `
                     <div style="text-align:center; padding:16px;">
                         <p style="margin-bottom:12px; color:#475569;">Click "Start Eye Tracking Check" to calibrate and test gaze attention.</p>
-                        <button type="button" class="btn" id="btn-eyetrack-${block.id}" style="width:auto; padding:10px 24px; background:#7248B9; color:#fff; border-radius:8px;">
+                        <button type="button" class="btn" id="btn-eyetrack-${block.id}" style="width:auto; padding:10px 24px; background:#008080; color:#fff; border-radius:8px;">
                             ${isVerified ? '✓ Eye Tracking Completed' : 'Start Eye Tracking Check'}
                         </button>
                         <div id="eyetrack-res-${block.id}" style="margin-top:10px; font-weight:700; color:#059669;"></div>
@@ -298,7 +298,7 @@ function renderCustomizablePage(pIdx) {
                 html += `
                     <!-- Part 1: Document Upload -->
                     <div id="substep-upload-${block.id}" style="background:#f8fafc; border-radius:8px; padding:16px; margin-bottom:16px; border:1px solid #e2e8f0;">
-                        <h4 style="margin:0 0 8px; color:#7248B9; text-align:left; font-size:1.05rem;">
+                        <h4 style="margin:0 0 8px; color:#008080; text-align:left; font-size:1.05rem;">
                             Step 1: Attach ${docLabel} Photo
                         </h4>
                         <p style="font-size:0.85rem; color:#64748b; margin:0 0 12px; text-align:left;">
@@ -311,7 +311,7 @@ function renderCustomizablePage(pIdx) {
                     ${isFace ? `
                     <!-- Part 2: Live Face Verification -->
                     <div id="substep-live-${block.id}" class="hidden" style="background:#f8fafc; border-radius:8px; padding:16px; border:1px solid #e2e8f0;">
-                        <h4 style="margin:0 0 8px; color:#7248B9; text-align:left; font-size:1.05rem;">
+                        <h4 style="margin:0 0 8px; color:#008080; text-align:left; font-size:1.05rem;">
                             Step 2: Capture Live Selfie Photo
                         </h4>
                         <p style="font-size:0.85rem; color:#64748b; margin:0 0 12px; text-align:left;">
@@ -321,7 +321,7 @@ function renderCustomizablePage(pIdx) {
                             <video id="runner-webcam-${block.id}" autoplay playsinline></video>
                         </div>
                         <div style="text-align:center;">
-                            <button class="btn btn-action-mobile" id="btn-capture-${block.id}" type="button" style="background:#7248B9; color:#fff; width:auto; padding:12px 28px; min-height:44px; border-radius:6px; font-weight:600; cursor:pointer;">
+                            <button class="btn btn-action-mobile" id="btn-capture-${block.id}" type="button" style="background:#008080; color:#fff; width:auto; padding:12px 28px; min-height:44px; border-radius:6px; font-weight:600; cursor:pointer;">
                                 📸 Capture Selfie Photo
                             </button>
                         </div>
@@ -346,7 +346,7 @@ function renderCustomizablePage(pIdx) {
                     ` : '<div></div>'}
                 </div>
                 <div>
-                    <button type="button" id="btn-page-next" class="btn" style="background:${isLastPage ? '#10b981' : '#7248B9'}; color:#fff; width:auto; padding:12px 32px; border-radius:24px; font-weight:700; font-size:1rem; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.15);">
+                    <button type="button" id="btn-page-next" class="btn" style="background:${isLastPage ? '#10b981' : '#008080'}; color:#fff; width:auto; padding:12px 32px; border-radius:24px; font-weight:700; font-size:1rem; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.15);">
                         ${isLastPage ? 'Complete & Submit Verification 🚀' : 'Continue to Next Page →'}
                     </button>
                 </div>
@@ -1086,7 +1086,7 @@ function renderFinalCompletion() {
 
             ${window.__applicantAnswers && Object.keys(window.__applicantAnswers).length > 0 ? `
                 <div class="step-card" style="text-align:left; margin-top:16px;">
-                    <h4 style="margin-top:0; color:#7248B9; font-size:1rem;">Submitted Application Details</h4>
+                    <h4 style="margin-top:0; color:#008080; font-size:1rem;">Submitted Application Details</h4>
                     ${Object.entries(window.__applicantAnswers).map(([k, v]) => `
                         <div style="display:flex; justify-content:space-between; border-bottom:1px solid #f1f5f9; padding:8px 0; font-size:0.95rem;">
                             <span style="font-weight:600; color:#475569;">${k}</span>

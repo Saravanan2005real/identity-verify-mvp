@@ -18,16 +18,23 @@ const VERIFY_BASE_URL = (
   process.env.EXPO_PUBLIC_VERIFY_BASE_URL || (isDev ? 'http://localhost:5174' : '')
 ).replace(/\/+$/, '');
 
+// Zudoc Official Theme Palette - Matching zudoc.co
 const COLORS = {
-  primary: '#0f766e', 
-  primaryLight: 'rgba(45, 212, 191, 0.15)',
-  background: '#f8fafc', 
+  primary: '#008080', // Zudoc Teal
+  primaryHover: '#006565',
+  primaryLight: 'rgba(0, 128, 128, 0.08)',
+  primaryBorder: 'rgba(0, 128, 128, 0.22)',
+  accent: '#00baa7', // Mint / Aqua
+  cyan: '#0e7490', // Deep Cyan
+  background: '#F7F9FB', // Zudoc Clean Slate White
   card: '#ffffff',
+  surface: '#ffffff',
   textMain: '#0f172a',
   textMuted: '#64748b',
-  border: 'rgba(203, 213, 225, 0.5)',
+  border: '#e2e8f0',
   danger: '#ef4444',
   success: '#10b981',
+  warning: '#f59e0b',
 };
 
 const PLACEHOLDER_IMAGE = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="140" height="140" viewBox="0 0 140 140"><rect width="140" height="140" fill="%23f1f5f9" rx="8"/><path d="M40 95 L65 65 L80 82 L95 62 L115 95 Z" fill="%23cbd5e1"/><circle cx="55" cy="50" r="8" fill="%23cbd5e1"/><text x="70" y="120" text-anchor="middle" fill="%2394a3b8" font-size="11" font-family="sans-serif">Unavailable</text></svg>';
@@ -325,6 +332,18 @@ export default function App() {
       }
     };
 
+    // Inject Zudoc Brand Font (Manrope) & Tab Title
+    if (typeof document !== 'undefined') {
+      if (!document.getElementById('zudoc-font-manrope')) {
+        const link = document.createElement('link');
+        link.id = 'zudoc-font-manrope';
+        link.rel = 'stylesheet';
+        link.href = 'https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap';
+        document.head.appendChild(link);
+      }
+      document.title = 'Zudoc | eKYC & Identity Studio';
+    }
+
     Linking.getInitialURL().then(handleAuthUrl);
     const linkSub = Linking.addEventListener('url', ({ url }) => handleAuthUrl(url));
 
@@ -455,7 +474,7 @@ export default function App() {
               link: cleanLink,
               status: meta.status || (r.overall_status === 'SUCCESS' ? 'published' : 'draft'),
               created_at: r.created_at ? new Date(r.created_at).toLocaleDateString() : 'Recently',
-              themeColor: meta.themeColor || '#7248B9'
+              themeColor: meta.themeColor || '#008080'
             };
           });
 
@@ -852,7 +871,7 @@ export default function App() {
       link: link,
       status: 'draft',
       created_at: new Date().toISOString().split('T')[0],
-      themeColor: '#7248B9',
+      themeColor: '#008080',
     };
 
     // Store form fields & flowBlocks in localStorage for applicant runner
@@ -1491,7 +1510,7 @@ export default function App() {
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
                             {/* Purple Google Forms Icon */}
                             <svg width="16" height="16" viewBox="0 0 16 16">
-                              <rect width="16" height="16" rx="3" fill="#7248B9"/>
+                              <rect width="16" height="16" rx="3" fill="#008080"/>
                               <rect x="3.5" y="4.5" width="3" height="1.5" rx="0.75" fill="#ffffff"/>
                               <rect x="7.5" y="4.5" width="5" height="1.5" rx="0.75" fill="#ffffff"/>
                               <rect x="3.5" y="7.5" width="3" height="1.5" rx="0.75" fill="#ffffff"/>
@@ -1534,7 +1553,7 @@ export default function App() {
                             style={styles.gfDropdownItem}
                             onPress={() => { setSelectedPipeline(p); setPipelineDetailVisible(true); setActiveMenuPid(null); }}
                           >
-                            <Text style={[styles.gfDropdownItemText, { fontWeight: '700', color: '#7248B9' }]}>📁 Manage Form</Text>
+                            <Text style={[styles.gfDropdownItemText, { fontWeight: '700', color: '#008080' }]}>📁 Manage Form</Text>
                           </TouchableOpacity>
 
                           <TouchableOpacity
@@ -1607,7 +1626,7 @@ export default function App() {
                       onPress={() => openGeneratedLink(p.link)}
                     >
                       <svg width="22" height="22" viewBox="0 0 22 22">
-                        <rect width="22" height="22" rx="4" fill="#7248B9"/>
+                        <rect width="22" height="22" rx="4" fill="#008080"/>
                         <rect x="5" y="6" width="4" height="2" rx="1" fill="#ffffff"/>
                         <rect x="10.5" y="6" width="6.5" height="2" rx="1" fill="#ffffff"/>
                         <rect x="5" y="10" width="4" height="2" rx="1" fill="#ffffff"/>
@@ -1628,7 +1647,7 @@ export default function App() {
 
                     <View style={{ flex: 2.3, flexDirection: 'row', justifyContent: 'flex-end', gap: 6 }}>
                       <TouchableOpacity
-                        style={[styles.btnSmall, { backgroundColor: '#7248B9' }]}
+                        style={[styles.btnSmall, { backgroundColor: '#008080' }]}
                         onPress={() => { setSelectedPipeline(p); setPipelineDetailVisible(true); }}
                       >
                         <Text style={[styles.btnSmallText, { color: '#ffffff' }]}>Manage 📁</Text>
@@ -1729,8 +1748,8 @@ export default function App() {
                 📋 {questionCount} {questionCount === 1 ? 'Question' : 'Questions'}
               </Text>
             </View>
-            <View style={{ backgroundColor: '#f5f3ff', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1, borderColor: '#ddd6fe' }}>
-              <Text style={{ fontSize: 12, color: '#7248B9', fontWeight: '700' }}>
+            <View style={{ backgroundColor: 'rgba(0, 128, 128, 0.06)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(0, 128, 128, 0.22)' }}>
+              <Text style={{ fontSize: 12, color: '#008080', fontWeight: '700' }}>
                 🛡️ {moduleCount} {moduleCount === 1 ? 'Module' : 'Modules'}
               </Text>
             </View>
@@ -1759,11 +1778,11 @@ export default function App() {
 
             <TouchableOpacity
               style={{
-                backgroundColor: '#7248B9',
+                backgroundColor: '#008080',
                 paddingHorizontal: 18,
                 paddingVertical: 8,
                 borderRadius: 8,
-                boxShadow: '0 2px 6px rgba(114, 72, 185, 0.35)',
+                boxShadow: '0 2px 6px rgba(0, 128, 128, 0.35)',
                 cursor: 'pointer'
               }}
               onPress={generateLink}
@@ -1784,7 +1803,7 @@ export default function App() {
           borderWidth: 1,
           borderColor: '#e2e8f0'
         }}>
-          <View style={{ height: 10, backgroundColor: '#7248B9', width: '100%' }} />
+          <View style={{ height: 10, backgroundColor: '#008080', width: '100%' }} />
           <View style={{ padding: 24 }}>
             <TextInput
               style={{
@@ -1841,7 +1860,7 @@ export default function App() {
 
             <TouchableOpacity
               style={{
-                backgroundColor: '#7248B9',
+                backgroundColor: '#008080',
                 paddingHorizontal: 12,
                 paddingVertical: 7,
                 borderRadius: 6,
@@ -1865,9 +1884,9 @@ export default function App() {
                 style={{
                   padding: '7px 10px',
                   borderRadius: 6,
-                  border: '1.5px solid #7248B9',
-                  backgroundColor: '#f5f3ff',
-                  color: '#7248B9',
+                  border: '1.5px solid #008080',
+                  backgroundColor: 'rgba(0, 128, 128, 0.06)',
+                  color: '#008080',
                   fontWeight: '700',
                   fontSize: '13px',
                   cursor: 'pointer',
@@ -1950,13 +1969,13 @@ export default function App() {
                     backgroundColor: '#ffffff',
                     borderRadius: 12,
                     border: isModule
-                      ? '2px solid #7248B9'
+                      ? '2px solid #008080'
                       : isPageBreak
                       ? '2px dashed #0f766e'
-                      : (isActive ? '2px solid #7248B9' : '1px solid #cbd5e1'),
+                      : (isActive ? '2px solid #008080' : '1px solid #cbd5e1'),
                     borderLeftWidth: 6,
-                    borderLeftColor: isModule ? '#7248B9' : (isPageBreak ? '#0f766e' : (isActive ? '#7248B9' : '#94a3b8')),
-                    boxShadow: isActive ? '0 4px 14px rgba(114, 72, 185, 0.12)' : '0 2px 6px rgba(0,0,0,0.05)',
+                    borderLeftColor: isModule ? '#008080' : (isPageBreak ? '#0f766e' : (isActive ? '#008080' : '#94a3b8')),
+                    boxShadow: isActive ? '0 4px 14px rgba(0, 128, 128, 0.12)' : '0 2px 6px rgba(0,0,0,0.05)',
                     padding: '16px 18px',
                     opacity: draggedIndex === index ? 0.45 : 1,
                     transition: 'all 0.15s ease'
@@ -1989,9 +2008,9 @@ export default function App() {
                         borderRadius: 16,
                         fontSize: 12,
                         fontWeight: 700,
-                        backgroundColor: isModule ? '#f5f3ff' : (isPageBreak ? '#f0fdfa' : '#f8fafc'),
-                        color: isModule ? '#7248B9' : (isPageBreak ? '#0f766e' : '#475569'),
-                        border: isModule ? '1px solid #ddd6fe' : (isPageBreak ? '1px solid #99f6e4' : '1px solid #e2e8f0')
+                        backgroundColor: isModule ? 'rgba(0, 128, 128, 0.06)' : (isPageBreak ? '#f0fdfa' : '#f8fafc'),
+                        color: isModule ? '#008080' : (isPageBreak ? '#0f766e' : '#475569'),
+                        border: isModule ? '1px solid rgba(0, 128, 128, 0.22)' : (isPageBreak ? '1px solid #99f6e4' : '1px solid #e2e8f0')
                       }}>
                         {isModule ? '🛡️ Verification Module' : (isPageBreak ? '📄 Page Break / New Section' : `📝 Question ${index + 1}`)}
                       </span>
@@ -2135,7 +2154,7 @@ export default function App() {
                               style={{
                                 background: 'none',
                                 border: 'none',
-                                color: '#7248B9',
+                                color: '#008080',
                                 fontWeight: 700,
                                 fontSize: 13,
                                 cursor: 'pointer',
@@ -2154,7 +2173,7 @@ export default function App() {
                           </div>
                         )}
                         {block.type === 'file_upload' && (
-                          <div style={{ color: '#7248B9', fontSize: 13, padding: '8px 12px', background: '#f5f3ff', borderRadius: 6, display: 'inline-block', fontWeight: 600 }}>
+                          <div style={{ color: '#008080', fontSize: 13, padding: '8px 12px', background: 'rgba(0, 128, 128, 0.06)', borderRadius: 6, display: 'inline-block', fontWeight: 600 }}>
                             📁 Applicant document / image file upload
                           </div>
                         )}
@@ -2184,13 +2203,13 @@ export default function App() {
                             type="button"
                             onClick={() => addBlock('module', { moduleId: 'AADHAAR_FACE' }, index + 1)}
                             style={{
-                              background: '#f5f3ff',
-                              border: '1px solid #ddd6fe',
+                              background: 'rgba(0, 128, 128, 0.06)',
+                              border: '1px solid rgba(0, 128, 128, 0.22)',
                               borderRadius: 12,
                               padding: '3px 8px',
                               fontSize: 11,
                               fontWeight: 700,
-                              color: '#7248B9',
+                              color: '#008080',
                               cursor: 'pointer'
                             }}
                           >
@@ -2250,9 +2269,9 @@ export default function App() {
                             minWidth: 160,
                             padding: '8px 12px',
                             borderRadius: 6,
-                            border: '1.5px solid #7248B9',
+                            border: '1.5px solid #008080',
                             backgroundColor: '#ffffff',
-                            color: '#7248B9',
+                            color: '#008080',
                             fontWeight: 700,
                             fontSize: 13,
                             cursor: 'pointer'
@@ -2265,8 +2284,8 @@ export default function App() {
                       </div>
 
                       {/* Workflow Chips */}
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4, background: '#f5f3ff', padding: '10px 14px', borderRadius: 8, border: '1px solid #ddd6fe' }}>
-                        <span style={{ fontSize: 12, color: '#7248B9', fontWeight: 700 }}>⚡ Executes on this page:</span>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4, background: 'rgba(0, 128, 128, 0.06)', padding: '10px 14px', borderRadius: 8, border: '1px solid rgba(0, 128, 128, 0.22)' }}>
+                        <span style={{ fontSize: 12, color: '#008080', fontWeight: 700 }}>⚡ Executes on this page:</span>
                         <span style={{ fontSize: 12, color: '#4c1d95', fontWeight: 600 }}>✓ Document Image OCR</span>
                         <span style={{ fontSize: 12, color: '#cbd5e1' }}>•</span>
                         <span style={{ fontSize: 12, color: '#4c1d95', fontWeight: 600 }}>✓ Live Webcam Face Match</span>
@@ -2275,7 +2294,7 @@ export default function App() {
                       </div>
 
                       {/* Module Card Footer */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, borderTop: '1px solid #f5f3ff', paddingTop: 8, flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, borderTop: '1px solid rgba(0, 128, 128, 0.06)', paddingTop: 8, flexWrap: 'wrap' }}>
                         <span style={{ fontSize: 11, fontWeight: '700', color: '#64748b' }}>+ Add Below:</span>
                         <button
                           type="button"
@@ -2297,13 +2316,13 @@ export default function App() {
                           type="button"
                           onClick={() => addBlock('module', { moduleId: 'PAN_FACE' }, index + 1)}
                           style={{
-                            background: '#f5f3ff',
-                            border: '1px solid #ddd6fe',
+                            background: 'rgba(0, 128, 128, 0.06)',
+                            border: '1px solid rgba(0, 128, 128, 0.22)',
                             borderRadius: 12,
                             padding: '3px 8px',
                             fontSize: 11,
                             fontWeight: 700,
-                            color: '#7248B9',
+                            color: '#008080',
                             cursor: 'pointer'
                           }}
                         >
@@ -2379,13 +2398,13 @@ export default function App() {
                           type="button"
                           onClick={() => addBlock('module', { moduleId: 'AADHAAR_FACE' }, index + 1)}
                           style={{
-                            background: '#f5f3ff',
-                            border: '1px solid #ddd6fe',
+                            background: 'rgba(0, 128, 128, 0.06)',
+                            border: '1px solid rgba(0, 128, 128, 0.22)',
                             borderRadius: 12,
                             padding: '3px 8px',
                             fontSize: 11,
                             fontWeight: 700,
-                            color: '#7248B9',
+                            color: '#008080',
                             cursor: 'pointer'
                           }}
                         >
@@ -2416,7 +2435,7 @@ export default function App() {
                     left: 20,
                     right: 20,
                     height: 1.5,
-                    backgroundColor: '#7248B9',
+                    backgroundColor: '#008080',
                     opacity: (hoveredGapIndex === index || openInserterIndex === index) ? 0.35 : 0,
                     transition: 'opacity 0.15s ease'
                   }} />
@@ -2430,8 +2449,8 @@ export default function App() {
                       backgroundColor: '#ffffff',
                       padding: '3px 10px',
                       borderRadius: 20,
-                      border: '1.5px solid #7248B9',
-                      boxShadow: '0 2px 8px rgba(114, 72, 185, 0.25)',
+                      border: '1.5px solid #008080',
+                      boxShadow: '0 2px 8px rgba(0, 128, 128, 0.25)',
                       zIndex: 10
                     }}>
                       <button
@@ -2465,9 +2484,9 @@ export default function App() {
                           style={{
                             padding: '3px 8px',
                             borderRadius: 12,
-                            border: '1px solid #ddd6fe',
-                            backgroundColor: '#f5f3ff',
-                            color: '#7248B9',
+                            border: '1px solid rgba(0, 128, 128, 0.22)',
+                            backgroundColor: 'rgba(0, 128, 128, 0.06)',
+                            color: '#008080',
                             fontWeight: 700,
                             fontSize: '11px',
                             cursor: 'pointer',
@@ -2552,7 +2571,7 @@ export default function App() {
                 type="button"
                 onClick={() => addBlock('question', { type: 'short_answer', title: 'New Question' })}
                 style={{
-                  backgroundColor: '#7248B9',
+                  backgroundColor: '#008080',
                   color: '#ffffff',
                   border: 'none',
                   borderRadius: 8,
@@ -2576,9 +2595,9 @@ export default function App() {
                 style={{
                   padding: '7px 12px',
                   borderRadius: 8,
-                  border: '1.5px solid #7248B9',
+                  border: '1.5px solid #008080',
                   backgroundColor: '#ffffff',
-                  color: '#7248B9',
+                  color: '#008080',
                   fontWeight: 700,
                   fontSize: 13,
                   cursor: 'pointer',
@@ -2637,7 +2656,7 @@ export default function App() {
             </Text>
           </View>
           <TouchableOpacity
-            style={[styles.btn, { backgroundColor: '#7248B9', paddingHorizontal: 28, marginBottom: 0 }]}
+            style={[styles.btn, { backgroundColor: '#008080', paddingHorizontal: 28, marginBottom: 0 }]}
             onPress={generateLink}
             testID="save-deploy-bottom-btn"
           >
@@ -2650,7 +2669,7 @@ export default function App() {
           <View style={styles.modalOverlay}>
             <View style={[styles.modalContent, { maxWidth: 720, width: '94%', maxHeight: '90%', padding: 18 }]}>
               <ScrollView style={{ width: '100%' }}>
-                <View style={{ backgroundColor: '#7248B9', height: 8, borderTopLeftRadius: 12, borderTopRightRadius: 12, width: '100%' }} />
+                <View style={{ backgroundColor: '#008080', height: 8, borderTopLeftRadius: 12, borderTopRightRadius: 12, width: '100%' }} />
                 <View style={{ padding: 18 }}>
                   {(() => {
                     const previewPages = partitionFlowBlocks(flowBlocks);
@@ -2667,7 +2686,7 @@ export default function App() {
                             <Text style={{ fontSize: 22, fontWeight: '800', color: '#1e293b' }}>
                               {isFirstPage ? (formTitle || 'Untitled form') : (curPage.header?.title || `Page ${curPageIdx + 1}`)}
                             </Text>
-                            <Text style={{ fontSize: 12, fontWeight: '700', color: '#7248B9', backgroundColor: '#f5f3ff', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: '#008080', backgroundColor: 'rgba(0, 128, 128, 0.06)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
                               Page {curPageIdx + 1} of {previewPages.length}
                             </Text>
                           </View>
@@ -2700,7 +2719,7 @@ export default function App() {
                                   ) : b.type === 'date' ? (
                                     <Text style={{ color: '#64748b', fontSize: 13 }}>📅 dd/mm/yyyy</Text>
                                   ) : b.type === 'file_upload' ? (
-                                    <Text style={{ color: '#7248B9', fontSize: 13, fontWeight: '600' }}>📁 Upload document file</Text>
+                                    <Text style={{ color: '#008080', fontSize: 13, fontWeight: '600' }}>📁 Upload document file</Text>
                                   ) : (
                                     <TextInput placeholder="Your answer" style={{ borderBottomWidth: 1, borderBottomColor: '#cbd5e1', paddingVertical: 6 }} editable={false} />
                                   )}
@@ -2708,15 +2727,15 @@ export default function App() {
                               )}
 
                               {b.kind === 'module' && (
-                                <View style={{ borderWidth: 2, borderColor: '#7248B9', borderRadius: 10, padding: 16, backgroundColor: '#fdfcfe' }}>
+                                <View style={{ borderWidth: 2, borderColor: '#008080', borderRadius: 10, padding: 16, backgroundColor: '#fdfcfe' }}>
                                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                                     <Text style={{ fontSize: 22 }}>{b.icon || '🛡️'}</Text>
                                     <View>
-                                      <Text style={{ fontSize: 15, fontWeight: '800', color: '#7248B9' }}>{b.name}</Text>
+                                      <Text style={{ fontSize: 15, fontWeight: '800', color: '#008080' }}>{b.name}</Text>
                                       <Text style={{ fontSize: 12, color: '#64748b' }}>{b.desc}</Text>
                                     </View>
                                   </View>
-                                  <View style={{ backgroundColor: '#f5f3ff', padding: 10, borderRadius: 6, marginTop: 6 }}>
+                                  <View style={{ backgroundColor: 'rgba(0, 128, 128, 0.06)', padding: 10, borderRadius: 6, marginTop: 6 }}>
                                     <Text style={{ fontSize: 12, color: '#6b21a8', fontWeight: '600' }}>
                                       📸 Embedded on this page: Document Upload & Live Camera Face Match
                                     </Text>
@@ -2742,7 +2761,7 @@ export default function App() {
                           <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
                             {!isLastPage && (
                               <TouchableOpacity
-                                style={[styles.btnSmall, { backgroundColor: '#7248B9' }]}
+                                style={[styles.btnSmall, { backgroundColor: '#008080' }]}
                                 onPress={() => setPreviewActivePageIndex(p => Math.min(previewPages.length - 1, p + 1))}
                               >
                                 <Text style={styles.btnSmallText}>Next Page →</Text>
@@ -2861,9 +2880,9 @@ export default function App() {
   if (!isAuthenticated) {
     return (
       <SignInScreen
-        portalName="Verifyyy Client Admin"
+        portalName="Zudoc Identity & eKYC Studio"
         portalRole="admin"
-        defaultEmail="admin@verifyyy.ai"
+        defaultEmail="admin@zudoc.co"
         onLoginSuccess={(user) => {
           setCurrentUser(user);
           setIsAuthenticated(true);
@@ -2876,55 +2895,51 @@ export default function App() {
     <View style={styles.container}>
       <StatusBar style="light" />
       
-      {/* Google Forms Styled Header */}
+      {/* Zudoc Styled Header */}
       <View style={styles.header}>
-        {/* Left: Hamburger + Forms Document Logo + Title */}
+        {/* Left: Logo + Zudoc Wordmark + Identity Studio Badge */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <TouchableOpacity style={styles.gfMenuBtn}>
-            <Text style={{ fontSize: 20, color: '#5f6368', lineHeight: 20 }}>☰</Text>
+            <Text style={{ fontSize: 20, color: '#008080', lineHeight: 20 }}>☰</Text>
           </TouchableOpacity>
 
-          {/* Purple Forms Document Icon */}
-          <svg width="36" height="36" viewBox="0 0 36 36">
-            <rect width="36" height="36" rx="7" fill="#7248B9"/>
-            <rect x="8" y="10" width="7" height="3" rx="1.5" fill="#ffffff"/>
-            <rect x="18" y="10" width="10" height="3" rx="1.5" fill="#ffffff"/>
-            <rect x="8" y="16" width="7" height="3" rx="1.5" fill="#ffffff"/>
-            <rect x="18" y="16" width="10" height="3" rx="1.5" fill="#ffffff"/>
-            <rect x="8" y="22" width="7" height="3" rx="1.5" fill="#ffffff"/>
-            <rect x="18" y="22" width="10" height="3" rx="1.5" fill="#ffffff"/>
+          {/* Official Zudoc Brand Logo */}
+          <svg width="34" height="34" viewBox="0 0 43 42" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M0 9V2C0 0.895431 0.89543 0 2 0H33.4529C38.4418 0 42.4788 4.0581 42.4528 9.04694L42.3224 34.0417C42.2995 38.4437 38.7245 42 34.3225 42H2C0.895431 42 0 41.1046 0 40V31.7938C0 30.6341 0.403121 29.5105 1.14035 28.6153L13.4 13.7286C13.7799 13.2673 14.3462 13 14.9438 13H24.2974C25.5692 13 26.2639 14.4833 25.4498 15.4603L12.5 31H29C30.6569 31 32 29.6569 32 28V14C32 12.3431 30.6569 11 29 11H2C0.895431 11 0 10.1046 0 9Z" fill="#008080"/>
           </svg>
 
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
-            <Text style={styles.headerLogo}>Verifyyy Admin</Text>
-            <Text style={{ fontSize: 20, color: '#5f6368', fontWeight: '400' }}>Forms</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={[styles.headerLogo, { fontFamily: "'Manrope', sans-serif", fontSize: 24, fontWeight: '800', color: '#0f172a', letterSpacing: -0.8 }]}>zudoc</Text>
+            <View style={{ backgroundColor: 'rgba(0, 128, 128, 0.08)', borderColor: 'rgba(0, 128, 128, 0.22)', borderWidth: 1, paddingHorizontal: 9, paddingVertical: 2, borderRadius: 20 }}>
+              <Text style={{ color: '#008080', fontSize: 11, fontWeight: '700', letterSpacing: 0.3 }}>Identity & eKYC</Text>
+            </View>
           </View>
         </View>
 
-        {/* Center: Google Search Bar */}
+        {/* Center: Search Bar */}
         <View style={styles.gfSearchContainer}>
-          <Text style={{ fontSize: 16, color: '#5f6368', marginRight: 10 }}>🔍</Text>
+          <Text style={{ fontSize: 16, color: '#008080', marginRight: 10 }}>🔍</Text>
           <TextInput
             style={styles.gfSearchInput}
-            placeholder="Search forms"
-            placeholderTextColor="#5f6368"
+            placeholder="Search forms & pipelines..."
+            placeholderTextColor="#64748b"
             value={formSearchQuery}
             onChangeText={setFormSearchQuery}
           />
           {formSearchQuery ? (
             <TouchableOpacity onPress={() => setFormSearchQuery('')}>
-              <Text style={{ fontSize: 14, color: '#5f6368', paddingHorizontal: 6 }}>✕</Text>
+              <Text style={{ fontSize: 14, color: '#64748b', paddingHorizontal: 6 }}>✕</Text>
             </TouchableOpacity>
           ) : null}
         </View>
 
-        {/* Right: Navigation Tabs + Apps Icon + Avatar + Sign Out */}
+        {/* Right: Navigation Tabs + Avatar + Sign Out */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <TouchableOpacity
             onPress={() => setActiveTab('dashboard')}
             style={[styles.gfTabBtn, activeTab === 'dashboard' && styles.gfTabBtnActive]}
           >
-            <Text style={[styles.gfTabText, activeTab === 'dashboard' && styles.gfTabTextActive]}>Dashboard</Text>
+            <Text style={[styles.gfTabText, activeTab === 'dashboard' && styles.gfTabTextActive]}>Forms Studio</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -3033,7 +3048,7 @@ export default function App() {
 
                       {/* Publish CTA Button */}
                       <TouchableOpacity
-                        style={[styles.btn, { width: '100%', backgroundColor: '#7248B9', marginBottom: 10 }]}
+                        style={[styles.btn, { width: '100%', backgroundColor: '#008080', marginBottom: 10 }]}
                         onPress={publishForm}
                         testID="publish-now-btn"
                       >
@@ -3073,7 +3088,7 @@ export default function App() {
                       
                       <View style={{ flexDirection: 'row', gap: 10, width: '100%', marginBottom: 12 }}>
                         <TouchableOpacity
-                          style={[styles.btn, { flex: 1, backgroundColor: linkCopied ? '#059669' : '#7248B9', marginBottom: 0 }]}
+                          style={[styles.btn, { flex: 1, backgroundColor: linkCopied ? '#059669' : '#008080', marginBottom: 0 }]}
                           onPress={() => copyToClipboard(generatedLink)}
                           testID="copy-link-btn"
                         >
@@ -3191,7 +3206,7 @@ export default function App() {
                                 <Text style={[styles.btnSmallText, { color: '#ffffff', fontWeight: '700' }]}>📊 Download as Sheets</Text>
                               </TouchableOpacity>
                               <TouchableOpacity
-                                style={[styles.btnSmall, { backgroundColor: '#7248B9' }]}
+                                style={[styles.btnSmall, { backgroundColor: '#008080' }]}
                                 onPress={() => copyToClipboard(selectedPipeline?.link)}
                               >
                                 <Text style={[styles.btnSmallText, { color: '#ffffff' }]}>📋 Copy Link</Text>
@@ -3263,7 +3278,7 @@ export default function App() {
                                 When candidates or employees fill out this form and attach documents, their submitted answers, photos, and verification results will show up here.
                               </Text>
                               <TouchableOpacity
-                                style={[styles.btnSmall, { backgroundColor: '#7248B9', paddingHorizontal: 16 }]}
+                                style={[styles.btnSmall, { backgroundColor: '#008080', paddingHorizontal: 16 }]}
                                 onPress={() => copyToClipboard(selectedPipeline?.link)}
                               >
                                 <Text style={[styles.btnSmallText, { color: '#fff' }]}>📋 Copy Form Link to Share</Text>
@@ -3313,7 +3328,7 @@ export default function App() {
 
                                   <View style={{ flex: 1.5, flexDirection: 'row', justifyContent: 'flex-end', gap: 6 }}>
                                     <TouchableOpacity
-                                      style={[styles.btnSmall, { backgroundColor: '#7248B9' }]}
+                                      style={[styles.btnSmall, { backgroundColor: '#008080' }]}
                                       onPress={() => {
                                         setSelectedReview(v);
                                         setReviewModalVisible(true);
@@ -3390,7 +3405,7 @@ export default function App() {
                   {/* Local AI Execution Button */}
                   <View style={{width: '100%', marginBottom: 16, alignItems: 'center'}}>
                     <TouchableOpacity
-                      style={[styles.btn, { backgroundColor: isAiRunning ? '#9333ea' : '#7248B9', width: '100%', paddingVertical: 12, justifyContent: 'center', alignItems: 'center' }]}
+                      style={[styles.btn, { backgroundColor: isAiRunning ? '#9333ea' : '#008080', width: '100%', paddingVertical: 12, justifyContent: 'center', alignItems: 'center' }]}
                       onPress={runLocalAiVerification}
                       disabled={isAiRunning}
                     >
@@ -3420,7 +3435,7 @@ export default function App() {
                         <View style={{flex: 1}}>
                           <Text style={{fontWeight: '700', fontSize: 12, color: '#334155'}}>📑 Extracted Document Details (OCR):</Text>
                           <Text style={{fontSize: 12, color: '#475569', marginTop: 2}}>Type: <Text style={{fontWeight: '600', color: '#0f172a'}}>{aiResult.docType}</Text></Text>
-                          <Text style={{fontSize: 12, color: '#475569', marginTop: 2}}>ID #: <Text style={{fontWeight: '700', color: '#7248B9', fontFamily: 'monospace'}}>{aiResult.ocrFields.id_number || aiResult.ocrFields.pan_number || aiResult.ocrFields.aadhaar_number || 'Extracted'}</Text></Text>
+                          <Text style={{fontSize: 12, color: '#475569', marginTop: 2}}>ID #: <Text style={{fontWeight: '700', color: '#008080', fontFamily: 'monospace'}}>{aiResult.ocrFields.id_number || aiResult.ocrFields.pan_number || aiResult.ocrFields.aadhaar_number || 'Extracted'}</Text></Text>
                           {aiResult.ocrFields.name && <Text style={{fontSize: 12, color: '#475569', marginTop: 2}}>Name: <Text style={{fontWeight: '600', color: '#0f172a'}}>{aiResult.ocrFields.name}</Text></Text>}
                           {aiResult.ocrFields.dob && <Text style={{fontSize: 12, color: '#475569', marginTop: 2}}>DOB: <Text style={{fontWeight: '600', color: '#0f172a'}}>{aiResult.ocrFields.dob}</Text></Text>}
                         </View>
@@ -4172,7 +4187,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
   },
   gfTabBtnActive: {
-    backgroundColor: 'rgba(114, 72, 185, 0.1)',
+    backgroundColor: 'rgba(0, 128, 128, 0.1)',
   },
   gfTabText: {
     fontSize: 13,
@@ -4180,7 +4195,7 @@ const styles = StyleSheet.create({
     color: '#5f6368',
   },
   gfTabTextActive: {
-    color: '#7248B9',
+    color: '#008080',
   },
   gfAppsBtn: {
     padding: 8,
@@ -4190,7 +4205,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#7248B9',
+    backgroundColor: '#008080',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -4224,7 +4239,7 @@ const styles = StyleSheet.create({
   },
   fbHeaderStripe: {
     height: 10,
-    backgroundColor: '#7248B9',
+    backgroundColor: '#008080',
     width: '100%',
   },
   fbHeaderBody: {
@@ -4258,9 +4273,9 @@ const styles = StyleSheet.create({
     boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
   },
   fbFieldCardActive: {
-    borderColor: '#7248B9',
+    borderColor: '#008080',
     borderWidth: 2,
-    boxShadow: '0 2px 8px rgba(114, 72, 185, 0.15)',
+    boxShadow: '0 2px 8px rgba(0, 128, 128, 0.15)',
   },
   fbActiveStrip: {
     position: 'absolute',
@@ -4268,7 +4283,7 @@ const styles = StyleSheet.create({
     left: 0,
     bottom: 0,
     width: 6,
-    backgroundColor: '#7248B9',
+    backgroundColor: '#008080',
     zIndex: 2,
   },
   fbFieldCardContent: {
@@ -4291,7 +4306,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 4,
     borderBottomWidth: 2,
-    borderBottomColor: '#7248B9',
+    borderBottomColor: '#008080',
     outlineStyle: 'none',
   },
   fbTypeSelectorWrap: {
@@ -4385,7 +4400,7 @@ const styles = StyleSheet.create({
     cursor: 'pointer',
   },
   fbSwitchTrackActive: {
-    backgroundColor: '#7248B9',
+    backgroundColor: '#008080',
   },
   fbSwitchThumb: {
     width: 16,
@@ -4411,7 +4426,7 @@ const styles = StyleSheet.create({
     boxShadow: '0 1px 2px rgba(0,0,0,0.06)',
   },
   fbAddPrimaryBtn: {
-    backgroundColor: '#7248B9',
+    backgroundColor: '#008080',
     paddingHorizontal: 18,
     paddingVertical: 10,
     borderRadius: 6,
@@ -4454,15 +4469,15 @@ const styles = StyleSheet.create({
     color: '#202124',
   },
   fbBadgeCount: {
-    backgroundColor: 'rgba(114, 72, 185, 0.1)',
+    backgroundColor: 'rgba(0, 128, 128, 0.1)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(114, 72, 185, 0.3)',
+    borderColor: 'rgba(0, 128, 128, 0.3)',
   },
   fbBadgeCountText: {
-    color: '#7248B9',
+    color: '#008080',
     fontSize: 12,
     fontWeight: '700',
   },
@@ -4474,7 +4489,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#cbd5e1',
     borderLeftWidth: 4,
-    borderLeftColor: '#7248B9',
+    borderLeftColor: '#008080',
     borderRadius: 8,
     padding: 12,
   },
@@ -4482,7 +4497,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#7248B9',
+    backgroundColor: '#008080',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -4507,7 +4522,7 @@ const styles = StyleSheet.create({
   },
   dropIndicator: {
     height: 4,
-    backgroundColor: '#7248B9',
+    backgroundColor: '#008080',
     borderRadius: 2,
     marginVertical: 6,
     width: '100%',

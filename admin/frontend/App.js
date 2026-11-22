@@ -227,12 +227,28 @@ export default function App() {
   const [formDescription, setFormDescription] = useState('');
   const [flowBlocks, setFlowBlocks] = useState([
     {
-      id: 'q-1',
+      id: 'q-demo-1',
       kind: 'question',
-      title: 'Untitled Question',
+      title: 'Full Legal Name',
       type: 'short_answer',
-      required: false,
+      required: true,
       options: []
+    },
+    {
+      id: 'q-demo-2',
+      kind: 'question',
+      title: 'Work Email Address',
+      type: 'short_answer',
+      required: true,
+      options: []
+    },
+    {
+      id: 'mod-demo-1',
+      kind: 'module',
+      moduleId: 'AADHAAR_FACE',
+      name: 'Aadhaar & Face Verification',
+      desc: 'Combined Aadhaar Document OCR + Live Face Match & Liveness',
+      icon: '🆔'
     }
   ]);
   const [formFields, setFormFields] = useState([]);
@@ -1102,20 +1118,35 @@ export default function App() {
     setCurrentPid(null);
     setPublishStep('ready');
     setFormTitle('Untitled form');
-    setFormDescription('');
-    const newId = `q-${Date.now()}`;
-    const initialBlocks = [
+    setFormDescription('Please provide your identity information and complete verification steps below.');
+    const demoBlocks = [
       {
-        id: newId,
+        id: `q-${Date.now()}-1`,
         kind: 'question',
-        title: 'Untitled Question',
+        title: 'Full Legal Name',
         type: 'short_answer',
-        required: false,
+        required: true,
         options: []
+      },
+      {
+        id: `q-${Date.now()}-2`,
+        kind: 'question',
+        title: 'Work Email Address',
+        type: 'short_answer',
+        required: true,
+        options: []
+      },
+      {
+        id: `mod-${Date.now()}-1`,
+        kind: 'module',
+        moduleId: 'AADHAAR_FACE',
+        name: 'Aadhaar & Face Verification',
+        desc: 'Combined Aadhaar Document OCR + Live Face Match & Liveness',
+        icon: '🆔'
       }
     ];
-    setFlowBlocks(initialBlocks);
-    setActiveFieldId(newId);
+    setFlowBlocks(demoBlocks);
+    setActiveFieldId(demoBlocks[0].id);
     setActiveTab('builder');
   };
 
@@ -2004,11 +2035,6 @@ export default function App() {
     const questionCount = flowBlocks.filter(b => b.kind === 'question').length;
     const moduleCount = flowBlocks.filter(b => b.kind === 'module').length;
 
-    const handleOpenAddModal = (insertIdx = null) => {
-      setAddStepInsertIndex(insertIdx);
-      setAddStepModalVisible(true);
-    };
-
     return (
       <View style={{ width: '100%', maxWidth: 840, alignSelf: 'center', paddingBottom: 100, paddingHorizontal: 16 }}>
         {/* 1. Top Sticky Navigation & Action Bar */}
@@ -2117,7 +2143,7 @@ export default function App() {
           backgroundColor: '#ffffff',
           borderRadius: 16,
           overflow: 'hidden',
-          marginBottom: 16,
+          marginBottom: 20,
           boxShadow: '0 4px 20px -2px rgba(0,0,0,0.05)',
           borderWidth: 1,
           borderColor: '#e2e8f0'
@@ -2191,29 +2217,43 @@ export default function App() {
               <View key={block.id} style={{ width: '100%' }}>
                 {/* Visual Pipeline Connector Stem (between previous card and this card) */}
                 {index > 0 && (
-                  <View style={{ alignItems: 'center', marginVertical: 6, position: 'relative' }}>
-                    <View style={{ width: 2, height: 32, backgroundColor: '#cbd5e1' }} />
-                    <TouchableOpacity
-                      onPress={() => handleOpenAddModal(index)}
-                      style={{
-                        position: 'absolute',
-                        top: 5,
-                        width: 22,
-                        height: 22,
-                        borderRadius: 11,
-                        backgroundColor: '#ffffff',
-                        borderWidth: 1.5,
-                        borderColor: '#008080',
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        boxShadow: '0 2px 6px rgba(0, 128, 128, 0.2)',
-                        cursor: 'pointer',
-                        zIndex: 2
-                      }}
-                      title="Insert next verification step here"
-                    >
-                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#008080', lineHeight: 14 }}>+</Text>
-                    </TouchableOpacity>
+                  <View style={{ alignItems: 'center', marginVertical: 8 }}>
+                    <View style={{ width: 2, height: 16, backgroundColor: '#cbd5e1' }} />
+                    {/* Quick In-line Inserter Bar between steps */}
+                    <View style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 8,
+                      backgroundColor: '#ffffff',
+                      paddingHorizontal: 12,
+                      paddingVertical: 5,
+                      borderRadius: 20,
+                      borderWidth: 1,
+                      borderColor: '#e2e8f0',
+                      boxShadow: '0 2px 6px rgba(0,0,0,0.04)'
+                    }}>
+                      <TouchableOpacity
+                        onPress={() => addBlock('question', { title: 'Untitled Question', type: 'short_answer', required: false }, index)}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4, cursor: 'pointer' }}
+                      >
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#008080' }}>+ Question</Text>
+                      </TouchableOpacity>
+                      <Text style={{ color: '#cbd5e1', fontSize: 10 }}>•</Text>
+                      <TouchableOpacity
+                        onPress={() => addBlock('module', { moduleId: 'AADHAAR_FACE' }, index)}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4, cursor: 'pointer' }}
+                      >
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#008080' }}>🛡️ + Module</Text>
+                      </TouchableOpacity>
+                      <Text style={{ color: '#cbd5e1', fontSize: 10 }}>•</Text>
+                      <TouchableOpacity
+                        onPress={() => addBlock('page_break', { title: `Page ${pageNumber + 1} Section` }, index)}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4, cursor: 'pointer' }}
+                      >
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#0f766e' }}>📄 + Break</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <View style={{ width: 2, height: 16, backgroundColor: '#cbd5e1' }} />
                   </View>
                 )}
 
@@ -2359,14 +2399,14 @@ export default function App() {
 
                         {/* Styled Type Selector Pill Bar */}
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-                          {FIELD_TYPES.slice(0, 4).map(t => {
+                          {FIELD_TYPES.map(t => {
                             const isSelected = block.type === t.id;
                             return (
                               <TouchableOpacity
                                 key={t.id}
                                 onPress={() => updateBlock(block.id, 'type', t.id)}
                                 style={{
-                                  paddingHorizontal: 10,
+                                  paddingHorizontal: 9,
                                   paddingVertical: 6,
                                   borderRadius: 6,
                                   borderWidth: 1,
@@ -2384,7 +2424,7 @@ export default function App() {
                         </View>
                       </View>
 
-                      {/* Candidate Response Visual Preview */}
+                      {/* Candidate Response Visual Preview & Options Editor */}
                       <View style={{ paddingVertical: 8, marginBottom: 12 }}>
                         {block.type === 'short_answer' && (
                           <View style={{ borderBottomWidth: 1.5, borderBottomColor: '#cbd5e1', borderStyle: 'dotted', width: '55%', paddingVertical: 6 }}>
@@ -2603,35 +2643,115 @@ export default function App() {
             <View className="dropIndicator" style={styles.dropIndicator} />
           )}
 
-          {/* 4. Large Dashed '+ Add Step to Pipeline' Button */}
-          <View style={{ alignItems: 'center', marginTop: 12, marginBottom: 24 }}>
-            <View style={{ width: 2, height: 26, backgroundColor: '#cbd5e1' }} />
-            <TouchableOpacity
-              onPress={() => handleOpenAddModal(flowBlocks.length)}
-              style={{
-                width: '100%',
-                borderWidth: 2,
-                borderStyle: 'dashed',
-                borderColor: '#94a3b8',
-                borderRadius: 14,
-                paddingVertical: 14,
-                paddingHorizontal: 20,
-                backgroundColor: '#ffffff',
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 10,
-                cursor: 'pointer',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
-              }}
-            >
-              <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(0, 128, 128, 0.1)', justifyContent: 'center', alignItems: 'center' }}>
-                <Text style={{ fontSize: 16, fontWeight: '800', color: '#008080' }}>+</Text>
+          {/* 4. Prominent In-Line Action Dock: Add Question, Module, Page Break */}
+          <View style={{
+            marginTop: 20,
+            marginBottom: 20,
+            backgroundColor: '#ffffff',
+            borderRadius: 14,
+            borderWidth: 1.5,
+            borderColor: '#e2e8f0',
+            padding: 18,
+            boxShadow: '0 4px 16px rgba(0,0,0,0.04)',
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 14
+          }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#008080' }} />
+              <View>
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a', fontFamily: "'Manrope', sans-serif" }}>
+                  Add Next Element to Flow:
+                </Text>
+                <Text style={{ fontSize: 11, color: '#64748b' }}>
+                  Insert a new question, verification step, or page break
+                </Text>
               </View>
-              <Text style={{ fontSize: 14, fontWeight: '700', color: '#008080', fontFamily: "'Manrope', sans-serif" }}>
-                Add Verification Module or Question
-              </Text>
-            </TouchableOpacity>
+            </View>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              {/* 1. Add Question Button */}
+              <TouchableOpacity
+                onPress={() => {
+                  addBlock('question', { title: 'Untitled Question', type: 'short_answer', required: false });
+                }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  backgroundColor: '#008080',
+                  paddingHorizontal: 16,
+                  paddingVertical: 10,
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(0, 128, 128, 0.28)'
+                }}
+              >
+                <Text style={{ fontSize: 15, color: '#ffffff', fontWeight: '800' }}>+</Text>
+                <Text style={{ fontSize: 13, color: '#ffffff', fontWeight: '700', fontFamily: "'Manrope', sans-serif" }}>
+                  Add Question
+                </Text>
+              </TouchableOpacity>
+
+              {/* 2. Add Verification Module Select */}
+              <View style={{ position: 'relative' }}>
+                <select
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      const m = availableModules.find(item => item.id === e.target.value);
+                      if (m) {
+                        addBlock('module', m);
+                      }
+                      e.target.value = '';
+                    }
+                  }}
+                  defaultValue=""
+                  style={{
+                    padding: '9px 14px',
+                    borderRadius: 8,
+                    border: '1.5px solid #008080',
+                    backgroundColor: 'rgba(0, 128, 128, 0.05)',
+                    color: '#008080',
+                    fontWeight: 700,
+                    fontSize: 12,
+                    cursor: 'pointer',
+                    outline: 'none',
+                    fontFamily: "'Manrope', sans-serif"
+                  }}
+                >
+                  <option value="" disabled>🛡️ + Add Verification Module ▾</option>
+                  {availableModules.map(m => (
+                    <option key={m.id} value={m.id}>🛡️ {m.name}</option>
+                  ))}
+                </select>
+              </View>
+
+              {/* 3. Add Page Break Button */}
+              <TouchableOpacity
+                onPress={() => {
+                  addBlock('page_break', { title: `Page ${pages.length + 1} Section` });
+                }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  backgroundColor: '#f0fdfa',
+                  borderWidth: 1.5,
+                  borderColor: '#99f6e4',
+                  paddingHorizontal: 14,
+                  paddingVertical: 9,
+                  borderRadius: 8,
+                  cursor: 'pointer'
+                }}
+              >
+                <Text style={{ fontSize: 13 }}>📄</Text>
+                <Text style={{ fontSize: 12, color: '#0f766e', fontWeight: '700', fontFamily: "'Manrope', sans-serif" }}>
+                  + Page Break
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
@@ -2663,304 +2783,6 @@ export default function App() {
             <Text style={[styles.btnText, { fontWeight: '700' }]}>Save & Review for Publish 🚀</Text>
           </TouchableOpacity>
         </View>
-
-        {/* 6. High-End 'Add Step to Pipeline' Modal Sheet */}
-        <Modal visible={addStepModalVisible} transparent={true} animationType="fade">
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalContent, { maxWidth: 640, width: '92%', maxHeight: '90vh', padding: 24 }]}>
-              {/* Modal Header */}
-              <View style={{ width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 }}>
-                <View>
-                  <Text style={{ fontSize: 20, fontWeight: '800', color: '#0f172a' }}>Add Step to Pipeline</Text>
-                  <Text style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
-                    Select an automated verification module or candidate form input.
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  onPress={() => setAddStepModalVisible(false)}
-                  style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-                >
-                  <Text style={{ fontSize: 16, color: '#64748b', fontWeight: 'bold' }}>✕</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Segmented Category Tabs */}
-              <View style={{ flexDirection: 'row', backgroundColor: '#f1f5f9', padding: 3, borderRadius: 10, width: '100%', marginBottom: 18 }}>
-                <TouchableOpacity
-                  onPress={() => setAddStepActiveTab('modules')}
-                  style={{
-                    flex: 1,
-                    paddingVertical: 8,
-                    borderRadius: 8,
-                    alignItems: 'center',
-                    backgroundColor: addStepActiveTab === 'modules' ? '#ffffff' : 'transparent',
-                    boxShadow: addStepActiveTab === 'modules' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: addStepActiveTab === 'modules' ? '#008080' : '#64748b' }}>
-                    🛡️ Verification Modules
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={() => setAddStepActiveTab('questions')}
-                  style={{
-                    flex: 1,
-                    paddingVertical: 8,
-                    borderRadius: 8,
-                    alignItems: 'center',
-                    backgroundColor: addStepActiveTab === 'questions' ? '#ffffff' : 'transparent',
-                    boxShadow: addStepActiveTab === 'questions' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: addStepActiveTab === 'questions' ? '#008080' : '#64748b' }}>
-                    📝 Candidate Questions
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={() => setAddStepActiveTab('sections')}
-                  style={{
-                    flex: 1,
-                    paddingVertical: 8,
-                    borderRadius: 8,
-                    alignItems: 'center',
-                    backgroundColor: addStepActiveTab === 'sections' ? '#ffffff' : 'transparent',
-                    boxShadow: addStepActiveTab === 'sections' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: addStepActiveTab === 'sections' ? '#008080' : '#64748b' }}>
-                    📑 Page Break
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Tab 1: Verification Modules */}
-              {addStepActiveTab === 'modules' && (
-                <View style={{ width: '100%', gap: 10 }}>
-                  <TouchableOpacity
-                    onPress={() => {
-                      addBlock('module', { moduleId: 'AADHAAR_FACE', name: 'Aadhaar & Face Verification', desc: 'Combined Aadhaar Document OCR + Live Face Match & Liveness' }, addStepInsertIndex);
-                      setAddStepModalVisible(false);
-                    }}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: 14,
-                      borderRadius: 10,
-                      borderWidth: 1.5,
-                      borderColor: 'rgba(0, 128, 128, 0.25)',
-                      backgroundColor: 'rgba(0, 128, 128, 0.04)',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                      <Text style={{ fontSize: 24 }}>🛡️</Text>
-                      <View>
-                        <Text style={{ fontSize: 14, fontWeight: '800', color: '#0f172a' }}>Aadhaar eKYC Verification</Text>
-                        <Text style={{ fontSize: 12, color: '#008080', fontWeight: '600', marginTop: 2 }}>
-                          Govt Aadhaar OCR + Live Webcam Face Biometrics
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#008080' }}>+ Add Step</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    onPress={() => {
-                      addBlock('module', { moduleId: 'PAN_FACE', name: 'PAN & Face Verification', desc: 'Combined PAN Card Document OCR + Live Face Match & Liveness' }, addStepInsertIndex);
-                      setAddStepModalVisible(false);
-                    }}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: 14,
-                      borderRadius: 10,
-                      borderWidth: 1.5,
-                      borderColor: '#bbf7d0',
-                      backgroundColor: '#f0fdf4',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                      <Text style={{ fontSize: 24 }}>💳</Text>
-                      <View>
-                        <Text style={{ fontSize: 14, fontWeight: '800', color: '#0f172a' }}>PAN Card Verification</Text>
-                        <Text style={{ fontSize: 12, color: '#16a34a', fontWeight: '600', marginTop: 2 }}>
-                          Income Tax PAN OCR Extraction + Biometric Match
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#16a34a' }}>+ Add Step</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    onPress={() => {
-                      addBlock('module', { moduleId: 'EYE_TRACKING', name: 'Eye Tracking & Attention', desc: 'WebGazer eye tracking calibration' }, addStepInsertIndex);
-                      setAddStepModalVisible(false);
-                    }}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: 14,
-                      borderRadius: 10,
-                      borderWidth: 1,
-                      borderColor: '#e2e8f0',
-                      backgroundColor: '#f8fafc',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                      <Text style={{ fontSize: 24 }}>👁️</Text>
-                      <View>
-                        <Text style={{ fontSize: 14, fontWeight: '800', color: '#0f172a' }}>Biometric Liveness Check</Text>
-                        <Text style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
-                          Passive & Active 3D webcam anti-spoof tracking
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }}>+ Add Step</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    onPress={() => {
-                      addBlock('module', { moduleId: 'HUMAN_REVIEW', name: 'Human Review Queue', desc: 'Manual Human Review Audit Queue' }, addStepInsertIndex);
-                      setAddStepModalVisible(false);
-                    }}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: 14,
-                      borderRadius: 10,
-                      borderWidth: 1.5,
-                      borderColor: '#fde68a',
-                      backgroundColor: '#fffbeb',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                      <Text style={{ fontSize: 24 }}>⚖️</Text>
-                      <View>
-                        <Text style={{ fontSize: 14, fontWeight: '800', color: '#0f172a' }}>Manual Compliance Audit</Text>
-                        <Text style={{ fontSize: 12, color: '#b45309', marginTop: 2 }}>
-                          Route candidate submission to compliance officers
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#b45309' }}>+ Add Step</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {/* Tab 2: Candidate Questions */}
-              {addStepActiveTab === 'questions' && (
-                <View style={{ width: '100%', gap: 8 }}>
-                  <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-                    {[
-                      { title: 'Full Legal Name', type: 'short_answer', icon: '👤' },
-                      { title: 'Work Email Address', type: 'short_answer', icon: '✉️' },
-                      { title: 'Mobile Phone Number', type: 'short_answer', icon: '📱' },
-                      { title: 'Supporting Document Upload', type: 'file_upload', icon: '📁' },
-                      { title: 'Select Verification Option', type: 'multiple_choice', icon: '🔘' },
-                      { title: 'Date of Birth', type: 'date', icon: '📅' }
-                    ].map((q, qIdx) => (
-                      <TouchableOpacity
-                        key={qIdx}
-                        onPress={() => {
-                          addBlock('question', { title: q.title, type: q.type }, addStepInsertIndex);
-                          setAddStepModalVisible(false);
-                        }}
-                        style={{
-                          flex: 1,
-                          minWidth: '46%',
-                          padding: 12,
-                          borderRadius: 8,
-                          borderWidth: 1,
-                          borderColor: '#e2e8f0',
-                          backgroundColor: '#ffffff',
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: 10,
-                          cursor: 'pointer'
-                        }}
-                      >
-                        <Text style={{ fontSize: 18 }}>{q.icon}</Text>
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: 12, fontWeight: '700', color: '#0f172a' }}>{q.title}</Text>
-                          <Text style={{ fontSize: 11, color: '#64748b' }}>{q.type.replace('_', ' ')}</Text>
-                        </View>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-
-                  <TouchableOpacity
-                    onPress={() => {
-                      addBlock('question', { title: 'Untitled Question', type: 'short_answer' }, addStepInsertIndex);
-                      setAddStepModalVisible(false);
-                    }}
-                    style={{
-                      width: '100%',
-                      marginTop: 8,
-                      paddingVertical: 10,
-                      borderRadius: 8,
-                      borderWidth: 1.5,
-                      borderStyle: 'dashed',
-                      borderColor: '#008080',
-                      backgroundColor: 'rgba(0, 128, 128, 0.04)',
-                      alignItems: 'center',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#008080' }}>
-                      + Add Custom Blank Question
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {/* Tab 3: Section Breaks */}
-              {addStepActiveTab === 'sections' && (
-                <View style={{ width: '100%', gap: 10 }}>
-                  <TouchableOpacity
-                    onPress={() => {
-                      addBlock('page_break', { title: `Page ${pages.length + 1} Section` }, addStepInsertIndex);
-                      setAddStepModalVisible(false);
-                    }}
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: 16,
-                      borderRadius: 10,
-                      borderWidth: 1.5,
-                      borderColor: '#99f6e4',
-                      backgroundColor: '#f0fdfa',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                      <Text style={{ fontSize: 24 }}>📄</Text>
-                      <View>
-                        <Text style={{ fontSize: 14, fontWeight: '800', color: '#0f766e' }}>Multi-Page Section Break</Text>
-                        <Text style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
-                          Splits candidate flow into separate pages with a stepper bar.
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#0f766e' }}>+ Add Break</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-          </View>
-        </Modal>
 
         {/* Form Interactive Preview Modal */}
         <Modal visible={formPreviewVisible} transparent={true} animationType="fade">

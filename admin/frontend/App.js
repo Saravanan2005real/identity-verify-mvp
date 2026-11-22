@@ -241,6 +241,9 @@ export default function App() {
   const [openInserterIndex, setOpenInserterIndex] = useState(null);
   const [formPreviewVisible, setFormPreviewVisible] = useState(false);
   const [previewActivePageIndex, setPreviewActivePageIndex] = useState(0);
+  const [addStepModalVisible, setAddStepModalVisible] = useState(false);
+  const [addStepInsertIndex, setAddStepInsertIndex] = useState(null);
+  const [addStepActiveTab, setAddStepActiveTab] = useState('modules');
 
   // Sync formFields & pipeline from unified flowBlocks
   useEffect(() => {
@@ -2001,9 +2004,14 @@ export default function App() {
     const questionCount = flowBlocks.filter(b => b.kind === 'question').length;
     const moduleCount = flowBlocks.filter(b => b.kind === 'module').length;
 
+    const handleOpenAddModal = (insertIdx = null) => {
+      setAddStepInsertIndex(insertIdx);
+      setAddStepModalVisible(true);
+    };
+
     return (
-      <View style={{ width: '100%', maxWidth: 1280, alignSelf: 'center', paddingBottom: 80, paddingHorizontal: 16 }}>
-        {/* Top Sticky Builder Bar */}
+      <View style={{ width: '100%', maxWidth: 840, alignSelf: 'center', paddingBottom: 100, paddingHorizontal: 16 }}>
+        {/* 1. Top Sticky Navigation & Action Bar */}
         <View style={{
           backgroundColor: '#ffffff',
           borderRadius: 14,
@@ -2014,13 +2022,13 @@ export default function App() {
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: 12,
-          marginBottom: 20,
-          boxShadow: '0 4px 16px rgba(0,0,0,0.04)',
+          marginBottom: 24,
+          boxShadow: '0 4px 20px -2px rgba(0,0,0,0.06)',
           borderWidth: 1,
           borderColor: '#e2e8f0'
         }}>
-          {/* Left: Breadcrumbs & Back */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          {/* Left: Breadcrumb Navigation */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <TouchableOpacity
               style={{
                 flexDirection: 'row',
@@ -2031,19 +2039,19 @@ export default function App() {
                 paddingVertical: 7,
                 borderRadius: 8,
                 borderWidth: 1,
-                borderColor: '#e2e8f0'
+                borderColor: '#e2e8f0',
+                cursor: 'pointer'
               }}
               onPress={() => setActiveTab('dashboard')}
             >
-              <Text style={{ fontSize: 14, color: '#475569' }}>←</Text>
-              <Text style={{ fontSize: 13, color: '#334155', fontWeight: '700' }}>Dashboard</Text>
+              <Text style={{ fontSize: 13, color: '#475569', fontWeight: '700' }}>← Dashboard</Text>
             </TouchableOpacity>
 
-            <View style={{ width: 1, height: 18, backgroundColor: '#cbd5e1' }} />
+            <View style={{ width: 1, height: 16, backgroundColor: '#cbd5e1' }} />
 
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Text style={{ fontSize: 16, fontWeight: '800', color: '#0f172a' }}>
-                {formTitle || 'Untitled Verification Form'}
+              <Text style={{ fontSize: 15, fontWeight: '800', color: '#0f172a', maxWidth: 220 }} numberOfLines={1}>
+                {formTitle || 'Untitled form'}
               </Text>
               <View style={{ backgroundColor: '#ecfdf5', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#a7f3d0' }}>
                 <Text style={{ fontSize: 11, fontWeight: '700', color: '#059669' }}>🟢 Pipeline Studio</Text>
@@ -2051,46 +2059,46 @@ export default function App() {
             </View>
           </View>
 
-          {/* Center: Live Flow Metrics */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <View style={{ backgroundColor: '#f1f5f9', paddingHorizontal: 11, paddingVertical: 5, borderRadius: 20 }}>
-              <Text style={{ fontSize: 12, color: '#475569', fontWeight: '700' }}>
+          {/* Center: Flow Counter Badges */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <View style={{ backgroundColor: '#f1f5f9', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 }}>
+              <Text style={{ fontSize: 11, color: '#475569', fontWeight: '700' }}>
                 📋 {questionCount} {questionCount === 1 ? 'Question' : 'Questions'}
               </Text>
             </View>
-            <View style={{ backgroundColor: 'rgba(0, 128, 128, 0.08)', paddingHorizontal: 11, paddingVertical: 5, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(0, 128, 128, 0.25)' }}>
-              <Text style={{ fontSize: 12, color: '#008080', fontWeight: '800' }}>
+            <View style={{ backgroundColor: 'rgba(0, 128, 128, 0.08)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(0, 128, 128, 0.22)' }}>
+              <Text style={{ fontSize: 11, color: '#008080', fontWeight: '800' }}>
                 🛡️ {moduleCount} {moduleCount === 1 ? 'Module' : 'Modules'}
               </Text>
             </View>
-            <View style={{ backgroundColor: '#ecfdf5', paddingHorizontal: 11, paddingVertical: 5, borderRadius: 20, borderWidth: 1, borderColor: '#a7f3d0' }}>
-              <Text style={{ fontSize: 12, color: '#059669', fontWeight: '700' }}>
+            <View style={{ backgroundColor: '#ecfdf5', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, borderWidth: 1, borderColor: '#a7f3d0' }}>
+              <Text style={{ fontSize: 11, color: '#059669', fontWeight: '700' }}>
                 📄 {pages.length} {pages.length === 1 ? 'Page' : 'Pages'}
               </Text>
             </View>
           </View>
 
           {/* Right: Actions */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <TouchableOpacity
               style={{
                 backgroundColor: '#ffffff',
                 borderWidth: 1.5,
                 borderColor: '#cbd5e1',
                 paddingHorizontal: 14,
-                paddingVertical: 8,
+                paddingVertical: 7,
                 borderRadius: 8,
                 cursor: 'pointer'
               }}
               onPress={() => { setPreviewActivePageIndex(0); setFormPreviewVisible(true); }}
             >
-              <Text style={{ fontSize: 13, fontWeight: '700', color: '#1e293b' }}>👁️ Preview Flow</Text>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#1e293b' }}>👁️ Preview Flow</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={{
                 backgroundColor: '#008080',
-                paddingHorizontal: 18,
+                paddingHorizontal: 16,
                 paddingVertical: 8,
                 borderRadius: 8,
                 boxShadow: '0 2px 8px rgba(0, 128, 128, 0.35)',
@@ -2099,944 +2107,860 @@ export default function App() {
               onPress={generateLink}
               testID="save-deploy-btn"
             >
-              <Text style={{ fontSize: 13, fontWeight: '700', color: '#ffffff' }}>Save & Publish Flow 🚀</Text>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#ffffff' }}>Save & Publish Flow 🚀</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Two-Column Studio Layout */}
-        <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap', width: '100%' }}>
-          
-          {/* ════════════ LEFT: COMPONENT PALETTE & TOOLBOX (320px) ════════════ */}
-          <div style={{
-            width: 320,
-            flex: '0 0 320px',
-            backgroundColor: '#ffffff',
-            borderRadius: 14,
-            border: '1px solid #e2e8f0',
-            padding: 18,
-            boxShadow: '0 4px 16px rgba(0,0,0,0.03)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 18
-          }}>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 800, color: '#008080', letterSpacing: 0.6, textTransform: 'uppercase' }}>
-                BUILDING BLOCKS
-              </div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginTop: 2 }}>
-                Toolbox & Flow Elements
-              </div>
-              <div style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>
-                Click any element to add it directly to your flow
-              </div>
-            </div>
+        {/* 2. Form Settings Header Card */}
+        <View style={{
+          backgroundColor: '#ffffff',
+          borderRadius: 16,
+          overflow: 'hidden',
+          marginBottom: 16,
+          boxShadow: '0 4px 20px -2px rgba(0,0,0,0.05)',
+          borderWidth: 1,
+          borderColor: '#e2e8f0'
+        }}>
+          <View style={{ height: 6, backgroundColor: '#008080', width: '100%' }} />
+          <View style={{ padding: 24 }}>
+            <TextInput
+              style={{
+                fontSize: 24,
+                fontWeight: '800',
+                color: '#0f172a',
+                borderBottomWidth: 1,
+                borderBottomColor: '#f1f5f9',
+                paddingBottom: 10,
+                marginBottom: 12,
+                outlineStyle: 'none',
+                fontFamily: "'Manrope', sans-serif"
+              }}
+              value={formTitle}
+              onChangeText={setFormTitle}
+              placeholder="Untitled Verification Form"
+              placeholderTextColor="#94a3b8"
+            />
+            <TextInput
+              style={{
+                fontSize: 14,
+                color: '#475569',
+                lineHeight: 22,
+                borderBottomWidth: 1,
+                borderBottomColor: 'transparent',
+                paddingVertical: 6,
+                outlineStyle: 'none',
+                fontFamily: "'Manrope', sans-serif"
+              }}
+              value={formDescription}
+              onChangeText={setFormDescription}
+              placeholder="Add instructions for applicants completing verification..."
+              placeholderTextColor="#94a3b8"
+              multiline
+            />
 
-            {/* Category 1: Verification Modules */}
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
-                🛡️ Verification Modules
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <button
-                  type="button"
-                  onClick={() => addBlock('module', { moduleId: 'AADHAAR_FACE', name: 'Aadhaar & Face Verification', desc: 'Combined Aadhaar Document OCR + Live Face Match & Liveness' })}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '9px 12px',
-                    borderRadius: 8,
-                    border: '1px solid rgba(0, 128, 128, 0.22)',
-                    backgroundColor: 'rgba(0, 128, 128, 0.04)',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 18 }}>🛡️</span>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>Aadhaar eKYC</div>
-                      <div style={{ fontSize: 10, color: '#008080', fontWeight: 600 }}>OCR + Face Biometrics</div>
-                    </div>
-                  </div>
-                  <span style={{ fontSize: 11, fontWeight: 800, color: '#008080' }}>+ Add</span>
-                </button>
+            {/* Workflow Capability Badges */}
+            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 16, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#f1f5f9' }}>
+              <View style={{ backgroundColor: 'rgba(0, 128, 128, 0.06)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(0, 128, 128, 0.2)' }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#008080' }}>✓ Auto Document OCR</Text>
+              </View>
+              <View style={{ backgroundColor: '#ecfdf5', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#a7f3d0' }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#059669' }}>✓ Live Face Biometrics</Text>
+              </View>
+              <View style={{ backgroundColor: '#eff6ff', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#bfdbfe' }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#2563eb' }}>✓ 3D Anti-Spoof Liveness</Text>
+              </View>
+            </View>
+          </View>
+        </View>
 
-                <button
-                  type="button"
-                  onClick={() => addBlock('module', { moduleId: 'PAN_FACE', name: 'PAN & Face Verification', desc: 'Combined PAN Card Document OCR + Live Face Match & Liveness' })}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '9px 12px',
-                    borderRadius: 8,
-                    border: '1px solid #bbf7d0',
-                    backgroundColor: '#f0fdf4',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 18 }}>💳</span>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>PAN Card Check</div>
-                      <div style={{ fontSize: 10, color: '#16a34a', fontWeight: 600 }}>Govt PAN OCR + Face</div>
-                    </div>
-                  </div>
-                  <span style={{ fontSize: 11, fontWeight: 800, color: '#16a34a' }}>+ Add</span>
-                </button>
+        {/* 3. Connected Pipeline Flow Sequence */}
+        <View style={{ width: '100%' }}>
+          {flowBlocks.map((block, index) => {
+            let pageNumber = 1;
+            for (let i = 0; i < index; i++) {
+              if (flowBlocks[i].kind === 'page_break') pageNumber++;
+            }
 
-                <button
-                  type="button"
-                  onClick={() => addBlock('module', { moduleId: 'EYE_TRACKING', name: 'Eye Tracking & Attention', desc: 'WebGazer eye tracking calibration' })}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '9px 12px',
-                    borderRadius: 8,
-                    border: '1px solid #e2e8f0',
-                    backgroundColor: '#f8fafc',
-                    cursor: 'pointer',
-                    textAlign: 'left'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 18 }}>👁️</span>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>Biometric Liveness</div>
-                      <div style={{ fontSize: 10, color: '#64748b' }}>Anti-spoof face tracking</div>
-                    </div>
-                  </div>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>+ Add</span>
-                </button>
+            const isQuestion = block.kind === 'question';
+            const isModule = block.kind === 'module';
+            const isPageBreak = block.kind === 'page_break';
+            const isActive = activeFieldId === block.id;
 
-                <button
-                  type="button"
-                  onClick={() => addBlock('module', { moduleId: 'HUMAN_REVIEW', name: 'Human Review Queue', desc: 'Manual Human Review Audit Queue' })}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '9px 12px',
-                    borderRadius: 8,
-                    border: '1px solid #fde68a',
-                    backgroundColor: '#fffbeb',
-                    cursor: 'pointer',
-                    textAlign: 'left'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 18 }}>⚖️</span>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>Manual Audit</div>
-                      <div style={{ fontSize: 10, color: '#b45309' }}>Compliance review queue</div>
-                    </div>
-                  </div>
-                  <span style={{ fontSize: 11, fontWeight: 800, color: '#b45309' }}>+ Add</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Category 2: Form Questions */}
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
-                📝 Applicant Fields & Questions
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                <button
-                  type="button"
-                  onClick={() => addBlock('question', { type: 'short_answer', title: 'Full Legal Name' })}
-                  style={{
-                    padding: '8px 10px',
-                    borderRadius: 6,
-                    border: '1px solid #e2e8f0',
-                    backgroundColor: '#ffffff',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: '#334155'
-                  }}
-                >
-                  👤 Full Name
-                </button>
-                <button
-                  type="button"
-                  onClick={() => addBlock('question', { type: 'short_answer', title: 'Work Email Address' })}
-                  style={{
-                    padding: '8px 10px',
-                    borderRadius: 6,
-                    border: '1px solid #e2e8f0',
-                    backgroundColor: '#ffffff',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: '#334155'
-                  }}
-                >
-                  ✉️ Work Email
-                </button>
-                <button
-                  type="button"
-                  onClick={() => addBlock('question', { type: 'short_answer', title: 'Mobile Phone Number' })}
-                  style={{
-                    padding: '8px 10px',
-                    borderRadius: 6,
-                    border: '1px solid #e2e8f0',
-                    backgroundColor: '#ffffff',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: '#334155'
-                  }}
-                >
-                  📱 Phone No.
-                </button>
-                <button
-                  type="button"
-                  onClick={() => addBlock('question', { type: 'file_upload', title: 'Supporting Document Upload' })}
-                  style={{
-                    padding: '8px 10px',
-                    borderRadius: 6,
-                    border: '1px solid #e2e8f0',
-                    backgroundColor: '#ffffff',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: '#334155'
-                  }}
-                >
-                  📁 File Upload
-                </button>
-                <button
-                  type="button"
-                  onClick={() => addBlock('question', { type: 'multiple_choice', title: 'Select Verification Option', options: ['Option A', 'Option B'] })}
-                  style={{
-                    padding: '8px 10px',
-                    borderRadius: 6,
-                    border: '1px solid #e2e8f0',
-                    backgroundColor: '#ffffff',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: '#334155'
-                  }}
-                >
-                  🔘 Choice
-                </button>
-                <button
-                  type="button"
-                  onClick={() => addBlock('question', { type: 'date', title: 'Date of Birth' })}
-                  style={{
-                    padding: '8px 10px',
-                    borderRadius: 6,
-                    border: '1px solid #e2e8f0',
-                    backgroundColor: '#ffffff',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: '#334155'
-                  }}
-                >
-                  📅 Date Field
-                </button>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => addBlock('question', { type: 'short_answer', title: 'Custom Question' })}
-                style={{
-                  width: '100%',
-                  marginTop: 8,
-                  padding: '8px',
-                  borderRadius: 6,
-                  border: '1px dashed #cbd5e1',
-                  backgroundColor: '#f8fafc',
-                  cursor: 'pointer',
-                  fontWeight: 700,
-                  fontSize: 12,
-                  color: '#008080'
-                }}
-              >
-                + Add Custom Question
-              </button>
-            </div>
-
-            {/* Category 3: Flow Control */}
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
-                📑 Flow Structure
-              </div>
-              <button
-                type="button"
-                onClick={() => addBlock('page_break', { title: `Page ${pages.length + 1} Section` })}
-                style={{
-                  width: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '9px 12px',
-                  borderRadius: 8,
-                  border: '1px solid #99f6e4',
-                  backgroundColor: '#f0fdfa',
-                  cursor: 'pointer',
-                  textAlign: 'left'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 16 }}>📄</span>
-                  <div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#0f766e' }}>Page / Section Break</div>
-                    <div style={{ fontSize: 10, color: '#64748b' }}>Creates multi-page journey</div>
-                  </div>
-                </div>
-                <span style={{ fontSize: 11, fontWeight: 800, color: '#0f766e' }}>+ Add</span>
-              </button>
-            </div>
-
-            {/* Category 4: 1-Click Blueprints */}
-            <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 12 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
-                ⚡ Quick Presets
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFlowBlocks([
-                      { id: 'q-name', kind: 'question', title: 'Full Legal Name', type: 'short_answer', required: true, options: [] },
-                      { id: 'q-email', kind: 'question', title: 'Work Email Address', type: 'short_answer', required: true, options: [] },
-                      { id: 'm-adh', kind: 'module', moduleId: 'AADHAAR_FACE', name: 'Aadhaar & Face Verification', desc: 'Aadhaar Document OCR + Face Match' }
-                    ]);
-                  }}
-                  style={{
-                    padding: '7px 10px',
-                    borderRadius: 6,
-                    border: '1px solid #e2e8f0',
-                    backgroundColor: '#f8fafc',
-                    cursor: 'pointer',
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: '#334155',
-                    textAlign: 'left'
-                  }}
-                >
-                  ⚡ Standard KYC Preset
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFlowBlocks([
-                      { id: 'q-name', kind: 'question', title: 'Full Legal Name', type: 'short_answer', required: true, options: [] },
-                      { id: 'm-pan', kind: 'module', moduleId: 'PAN_FACE', name: 'PAN & Face Verification', desc: 'PAN Card OCR + Face Biometrics' }
-                    ]);
-                  }}
-                  style={{
-                    padding: '7px 10px',
-                    borderRadius: 6,
-                    border: '1px solid #e2e8f0',
-                    backgroundColor: '#f8fafc',
-                    cursor: 'pointer',
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: '#334155',
-                    textAlign: 'left'
-                  }}
-                >
-                  ⚡ Financial KYC Preset
-                </button>
-              </div>
-            </div>
-
-          </div>
-
-          {/* ════════════ RIGHT: MAIN CANVAS (FLEX 1) ════════════ */}
-          <div style={{ flex: '1 1 640px', minWidth: 320 }}>
-            {/* 1. Header Card (Form Settings) */}
-            <View style={{
-              backgroundColor: '#ffffff',
-              borderRadius: 14,
-              overflow: 'hidden',
-              marginBottom: 20,
-              boxShadow: '0 4px 16px rgba(0,0,0,0.04)',
-              borderWidth: 1,
-              borderColor: '#e2e8f0'
-            }}>
-              <View style={{ height: 6, backgroundColor: '#008080', width: '100%' }} />
-              <View style={{ padding: 22 }}>
-                <TextInput
-                  style={{
-                    fontSize: 24,
-                    fontWeight: '800',
-                    color: '#0f172a',
-                    borderBottomWidth: 1,
-                    borderBottomColor: '#e2e8f0',
-                    paddingBottom: 8,
-                    marginBottom: 10,
-                    outlineStyle: 'none',
-                    fontFamily: "'Manrope', sans-serif"
-                  }}
-                  value={formTitle}
-                  onChangeText={setFormTitle}
-                  placeholder="Untitled Verification Form"
-                  placeholderTextColor="#94a3b8"
-                />
-                <TextInput
-                  style={{
-                    fontSize: 14,
-                    color: '#475569',
-                    lineHeight: 20,
-                    borderBottomWidth: 1,
-                    borderBottomColor: '#f1f5f9',
-                    paddingVertical: 6,
-                    outlineStyle: 'none',
-                    fontFamily: "'Manrope', sans-serif"
-                  }}
-                  value={formDescription}
-                  onChangeText={setFormDescription}
-                  placeholder="Provide instructions for candidates completing identity verification..."
-                  placeholderTextColor="#94a3b8"
-                  multiline
-                />
-
-                {/* Workflow Feature Badges */}
-                <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 14 }}>
-                  <View style={{ backgroundColor: 'rgba(0, 128, 128, 0.06)', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(0, 128, 128, 0.2)' }}>
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#008080' }}>✓ Auto-OCR Extraction</Text>
+            return (
+              <View key={block.id} style={{ width: '100%' }}>
+                {/* Visual Pipeline Connector Stem (between previous card and this card) */}
+                {index > 0 && (
+                  <View style={{ alignItems: 'center', marginVertical: 6, position: 'relative' }}>
+                    <View style={{ width: 2, height: 32, backgroundColor: '#cbd5e1' }} />
+                    <TouchableOpacity
+                      onPress={() => handleOpenAddModal(index)}
+                      style={{
+                        position: 'absolute',
+                        top: 5,
+                        width: 22,
+                        height: 22,
+                        borderRadius: 11,
+                        backgroundColor: '#ffffff',
+                        borderWidth: 1.5,
+                        borderColor: '#008080',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        boxShadow: '0 2px 6px rgba(0, 128, 128, 0.2)',
+                        cursor: 'pointer',
+                        zIndex: 2
+                      }}
+                      title="Insert next verification step here"
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#008080', lineHeight: 14 }}>+</Text>
+                    </TouchableOpacity>
                   </View>
-                  <View style={{ backgroundColor: '#ecfdf5', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#a7f3d0' }}>
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#059669' }}>✓ Live Face Biometrics</Text>
+                )}
+
+                {/* Drop indicator before card */}
+                {_showDropBefore(index) && (
+                  <View className="dropIndicator" style={styles.dropIndicator} />
+                )}
+
+                {/* Main Card Container */}
+                <View
+                  draggable={true}
+                  onDragStart={(e) => _onDragStart(e, index)}
+                  onDragOver={(e) => _onDragOver(e, index)}
+                  onDrop={(e) => _onDrop(e, index)}
+                  onDragEnd={_onDragEnd}
+                  className={draggedIndex === index ? "pipelineNodeDragging" : ""}
+                  style={[
+                    {
+                      backgroundColor: '#ffffff',
+                      borderRadius: 14,
+                      borderWidth: isModule ? 1.5 : (isPageBreak ? 1.5 : (isActive ? 1.5 : 1)),
+                      borderColor: isModule ? 'rgba(0, 128, 128, 0.28)' : (isPageBreak ? '#0f766e' : (isActive ? '#008080' : '#e2e8f0')),
+                      borderLeftWidth: 5,
+                      borderLeftColor: isModule ? '#008080' : (isPageBreak ? '#0f766e' : (isActive ? '#008080' : '#475569')),
+                      borderStyle: isPageBreak ? 'dashed' : 'solid',
+                      boxShadow: isActive ? '0 8px 24px rgba(0, 128, 128, 0.12)' : '0 2px 10px rgba(0,0,0,0.03)',
+                      padding: 20,
+                      opacity: draggedIndex === index ? 0.45 : 1,
+                      transition: 'all 0.15s ease'
+                    },
+                    draggedIndex === index && styles.pipelineNodeDragging
+                  ]}
+                >
+                  {/* Card Header Bar */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      {/* Drag Grip Handle */}
+                      <View
+                        className="dragGrip"
+                        style={styles.dragGrip}
+                        title="Drag to rearrange step"
+                      >
+                        <Text style={{ fontSize: 16, color: '#64748b', fontWeight: 'bold' }}>⠿</Text>
+                      </View>
+
+                      {/* Step Number Tag */}
+                      <View style={{
+                        paddingHorizontal: 8,
+                        paddingVertical: 3,
+                        borderRadius: 6,
+                        backgroundColor: '#0f172a'
+                      }}>
+                        <Text style={{ fontSize: 11, fontWeight: '800', color: '#ffffff', letterSpacing: 0.5 }}>
+                          STEP {index + 1 < 10 ? `0${index + 1}` : index + 1}
+                        </Text>
+                      </View>
+
+                      {/* Kind Pill Badge */}
+                      <View style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 3,
+                        borderRadius: 16,
+                        backgroundColor: isModule ? 'rgba(0, 128, 128, 0.08)' : (isPageBreak ? '#f0fdfa' : '#f8fafc'),
+                        borderWidth: 1,
+                        borderColor: isModule ? 'rgba(0, 128, 128, 0.22)' : (isPageBreak ? '#99f6e4' : '#e2e8f0')
+                      }}>
+                        <Text style={{
+                          fontSize: 11,
+                          fontWeight: '700',
+                          color: isModule ? '#008080' : (isPageBreak ? '#0f766e' : '#475569')
+                        }}>
+                          {isModule ? '🛡️ Verification Module' : (isPageBreak ? '📄 Page Section Break' : '📝 Applicant Input')}
+                        </Text>
+                      </View>
+
+                      <Text style={{ fontSize: 11, color: '#94a3b8', fontWeight: '600' }}>
+                        Page {pageNumber}
+                      </Text>
+                    </View>
+
+                    {/* Card Actions: Duplicate & Delete */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <TouchableOpacity
+                        onPress={() => duplicateBlock(block.id)}
+                        style={{
+                          backgroundColor: '#f8fafc',
+                          borderWidth: 1,
+                          borderColor: '#cbd5e1',
+                          borderRadius: 6,
+                          paddingHorizontal: 10,
+                          paddingVertical: 5,
+                          cursor: 'pointer'
+                        }}
+                        title="Duplicate step"
+                      >
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#334155' }}>📋 Copy</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={() => deleteBlock(block.id)}
+                        style={{
+                          backgroundColor: '#fee2e2',
+                          borderWidth: 1,
+                          borderColor: '#fca5a5',
+                          borderRadius: 6,
+                          paddingHorizontal: 10,
+                          paddingVertical: 5,
+                          cursor: 'pointer'
+                        }}
+                        title="Delete step"
+                      >
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#b91c1c' }}>🗑️ Delete</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                  <View style={{ backgroundColor: '#eff6ff', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#bfdbfe' }}>
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#2563eb' }}>✓ Multi-Page Stepper</Text>
-                  </View>
+
+                  {/* ────────────────── 1. QUESTION CARD BODY ────────────────── */}
+                  {isQuestion && (
+                    <View>
+                      <View style={{ flexDirection: 'row', gap: 12, marginBottom: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <TextInput
+                          value={block.title}
+                          onFocus={() => setActiveFieldId(block.id)}
+                          onChangeText={(val) => updateBlock(block.id, 'title', val)}
+                          placeholder="Question Title (e.g. Full Legal Name)"
+                          placeholderTextColor="#94a3b8"
+                          style={{
+                            flex: 1,
+                            minWidth: 220,
+                            paddingHorizontal: 14,
+                            paddingVertical: 10,
+                            fontSize: 15,
+                            fontWeight: '600',
+                            color: '#0f172a',
+                            borderRadius: 8,
+                            borderWidth: 1.5,
+                            borderColor: '#cbd5e1',
+                            backgroundColor: '#f8fafc',
+                            outlineStyle: 'none',
+                            fontFamily: "'Manrope', sans-serif"
+                          }}
+                        />
+
+                        {/* Styled Type Selector Pill Bar */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                          {FIELD_TYPES.slice(0, 4).map(t => {
+                            const isSelected = block.type === t.id;
+                            return (
+                              <TouchableOpacity
+                                key={t.id}
+                                onPress={() => updateBlock(block.id, 'type', t.id)}
+                                style={{
+                                  paddingHorizontal: 10,
+                                  paddingVertical: 6,
+                                  borderRadius: 6,
+                                  borderWidth: 1,
+                                  borderColor: isSelected ? '#008080' : '#e2e8f0',
+                                  backgroundColor: isSelected ? 'rgba(0, 128, 128, 0.08)' : '#ffffff',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                <Text style={{ fontSize: 11, fontWeight: isSelected ? '700' : '600', color: isSelected ? '#008080' : '#64748b' }}>
+                                  {t.icon} {t.label}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      </View>
+
+                      {/* Candidate Response Visual Preview */}
+                      <View style={{ paddingVertical: 8, marginBottom: 12 }}>
+                        {block.type === 'short_answer' && (
+                          <View style={{ borderBottomWidth: 1.5, borderBottomColor: '#cbd5e1', borderStyle: 'dotted', width: '55%', paddingVertical: 6 }}>
+                            <Text style={{ color: '#94a3b8', fontSize: 13, fontStyle: 'italic' }}>Short-answer candidate text</Text>
+                          </View>
+                        )}
+                        {block.type === 'paragraph' && (
+                          <View style={{ borderBottomWidth: 1.5, borderBottomColor: '#cbd5e1', borderStyle: 'dotted', width: '80%', paddingVertical: 12 }}>
+                            <Text style={{ color: '#94a3b8', fontSize: 13, fontStyle: 'italic' }}>Detailed paragraph response text</Text>
+                          </View>
+                        )}
+                        {['multiple_choice', 'checkboxes', 'dropdown'].includes(block.type) && (
+                          <View style={{ gap: 8 }}>
+                            {(block.options || ['Option 1']).map((opt, oIdx) => (
+                              <View key={oIdx} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                <Text style={{ color: '#64748b', fontSize: 14 }}>
+                                  {block.type === 'multiple_choice' ? '🔘' : (block.type === 'checkboxes' ? '☑️' : `${oIdx + 1}.`)}
+                                </Text>
+                                <TextInput
+                                  value={opt}
+                                  onChangeText={(val) => updateOption(block.id, oIdx, val)}
+                                  placeholder={`Option ${oIdx + 1}`}
+                                  placeholderTextColor="#94a3b8"
+                                  style={{
+                                    flex: 1,
+                                    maxWidth: 360,
+                                    paddingHorizontal: 10,
+                                    paddingVertical: 6,
+                                    borderWidth: 1,
+                                    borderColor: '#cbd5e1',
+                                    borderRadius: 6,
+                                    fontSize: 13,
+                                    color: '#0f172a',
+                                    backgroundColor: '#ffffff',
+                                    outlineStyle: 'none'
+                                  }}
+                                />
+                                {(block.options || []).length > 1 && (
+                                  <TouchableOpacity
+                                    onPress={() => deleteOption(block.id, oIdx)}
+                                    style={{ padding: 4, cursor: 'pointer' }}
+                                  >
+                                    <Text style={{ color: '#94a3b8', fontSize: 14 }}>✕</Text>
+                                  </TouchableOpacity>
+                                )}
+                              </View>
+                            ))}
+                            <TouchableOpacity
+                              onPress={() => addOption(block.id)}
+                              style={{ paddingVertical: 4, alignSelf: 'flex-start', cursor: 'pointer' }}
+                            >
+                              <Text style={{ color: '#008080', fontWeight: '700', fontSize: 12 }}>+ Add Option</Text>
+                            </TouchableOpacity>
+                          </View>
+                        )}
+                        {block.type === 'date' && (
+                          <View style={{ backgroundColor: '#f8fafc', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 6, alignSelf: 'flex-start', borderWidth: 1, borderColor: '#e2e8f0' }}>
+                            <Text style={{ color: '#64748b', fontSize: 12 }}>📅 Month, day, year picker</Text>
+                          </View>
+                        )}
+                        {block.type === 'file_upload' && (
+                          <View style={{ backgroundColor: 'rgba(0, 128, 128, 0.05)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 6, alignSelf: 'flex-start', borderWidth: 1, borderColor: 'rgba(0, 128, 128, 0.2)' }}>
+                            <Text style={{ color: '#008080', fontSize: 12, fontWeight: '700' }}>📁 Applicant document upload (PDF, JPG, PNG)</Text>
+                          </View>
+                        )}
+                      </View>
+
+                      {/* Card Footer: Custom Switch Toggle for Required */}
+                      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 12 }}>
+                        <TouchableOpacity
+                          activeOpacity={0.8}
+                          onPress={() => updateBlock(block.id, 'required', !block.required)}
+                          style={{ flexDirection: 'row', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+                        >
+                          <Text style={{ fontSize: 13, fontWeight: '600', color: '#475569', fontFamily: "'Manrope', sans-serif" }}>
+                            Required for applicant
+                          </Text>
+                          <View style={{
+                            width: 38,
+                            height: 22,
+                            borderRadius: 11,
+                            backgroundColor: block.required ? '#008080' : '#e2e8f0',
+                            padding: 2,
+                            justifyContent: 'center'
+                          }}>
+                            <View style={{
+                              width: 18,
+                              height: 18,
+                              borderRadius: 9,
+                              backgroundColor: '#ffffff',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                              alignSelf: block.required ? 'flex-end' : 'flex-start'
+                            }} />
+                          </View>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* ────────────────── 2. VERIFICATION MODULE CARD BODY ────────────────── */}
+                  {isModule && (
+                    <View style={{ gap: 14 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1, minWidth: 240 }}>
+                          <View style={{
+                            width: 48,
+                            height: 48,
+                            borderRadius: 12,
+                            backgroundColor: 'rgba(0, 128, 128, 0.08)',
+                            borderWidth: 1,
+                            borderColor: 'rgba(0, 128, 128, 0.2)',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}>
+                            <Text style={{ fontSize: 24 }}>{block.icon || '🛡️'}</Text>
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontWeight: '800', fontSize: 16, color: '#0f172a' }}>
+                              {block.name}
+                            </Text>
+                            <Text style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
+                              {block.desc}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* Switch Module Quick Buttons */}
+                        <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+                          {availableModules.map(m => {
+                            const isCur = block.moduleId === m.id;
+                            return (
+                              <TouchableOpacity
+                                key={m.id}
+                                onPress={() => updateBlock(block.id, 'moduleId', m.id)}
+                                style={{
+                                  paddingHorizontal: 10,
+                                  paddingVertical: 5,
+                                  borderRadius: 6,
+                                  borderWidth: 1,
+                                  borderColor: isCur ? '#008080' : '#e2e8f0',
+                                  backgroundColor: isCur ? 'rgba(0, 128, 128, 0.08)' : '#ffffff',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                <Text style={{ fontSize: 11, fontWeight: isCur ? '700' : '600', color: isCur ? '#008080' : '#64748b' }}>
+                                  {m.id.replace('_', ' ')}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      </View>
+
+                      {/* Capabilities Row */}
+                      <View style={{
+                        flexDirection: 'row',
+                        gap: 12,
+                        flexWrap: 'wrap',
+                        alignItems: 'center',
+                        backgroundColor: 'rgba(0, 128, 128, 0.04)',
+                        paddingHorizontal: 14,
+                        paddingVertical: 10,
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: 'rgba(0, 128, 128, 0.16)'
+                      }}>
+                        <Text style={{ fontSize: 11, color: '#008080', fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                          ⚡ VERIFICATION CHECKS:
+                        </Text>
+                        <Text style={{ fontSize: 12, color: '#0f766e', fontWeight: '600' }}>✓ Auto Document OCR</Text>
+                        <Text style={{ fontSize: 12, color: '#cbd5e1' }}>•</Text>
+                        <Text style={{ fontSize: 12, color: '#0f766e', fontWeight: '600' }}>✓ Live Face Biometrics</Text>
+                        <Text style={{ fontSize: 12, color: '#cbd5e1' }}>•</Text>
+                        <Text style={{ fontSize: 12, color: '#0f766e', fontWeight: '600' }}>✓ 3D Anti-Spoof Liveness</Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* ────────────────── 3. PAGE BREAK CARD BODY ────────────────── */}
+                  {isPageBreak && (
+                    <View style={{ gap: 8 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <Text style={{ fontSize: 20 }}>📑</Text>
+                        <TextInput
+                          value={block.title}
+                          onChangeText={(val) => updateBlock(block.id, 'title', val)}
+                          placeholder="Page Section Title (e.g. Identity Documents)"
+                          placeholderTextColor="#94a3b8"
+                          style={{
+                            flex: 1,
+                            paddingHorizontal: 12,
+                            paddingVertical: 8,
+                            fontSize: 15,
+                            fontWeight: '700',
+                            borderRadius: 6,
+                            borderWidth: 1,
+                            borderColor: '#0f766e',
+                            color: '#0f766e',
+                            backgroundColor: '#f0fdfa',
+                            outlineStyle: 'none'
+                          }}
+                        />
+                      </View>
+                      <Text style={{ fontSize: 12, color: '#0f766e', backgroundColor: 'rgba(15, 118, 110, 0.08)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 }}>
+                        ℹ️ Multi-page Section: Questions above this step appear on Page {pageNumber}. Subsequent items advance to Page {pageNumber + 1}.
+                      </Text>
+                    </View>
+                  )}
                 </View>
               </View>
-            </View>
+            );
+          })}
 
-            {/* 2. Interactive Flow Block Sequence */}
-            <div style={{ width: '100%' }}>
-              {flowBlocks.map((block, index) => {
-                let pageNumber = 1;
-                for (let i = 0; i < index; i++) {
-                  if (flowBlocks[i].kind === 'page_break') pageNumber++;
-                }
+          {/* Drop indicator after last card */}
+          {_showDropBefore(flowBlocks.length) && (
+            <View className="dropIndicator" style={styles.dropIndicator} />
+          )}
 
-                const isQuestion = block.kind === 'question';
-                const isModule = block.kind === 'module';
-                const isPageBreak = block.kind === 'page_break';
-                const isActive = activeFieldId === block.id;
-
-                return (
-                  <div key={block.id} style={{ width: '100%', marginBottom: 16 }}>
-                    {/* Drop indicator before card */}
-                    {_showDropBefore(index) && (
-                      <div className="dropIndicator" style={styles.dropIndicator} />
-                    )}
-
-                    <div
-                      draggable={true}
-                      onDragStart={(e) => _onDragStart(e, index)}
-                      onDragOver={(e) => _onDragOver(e, index)}
-                      onDrop={(e) => _onDrop(e, index)}
-                      onDragEnd={_onDragEnd}
-                      className={draggedIndex === index ? "pipelineNodeDragging" : ""}
-                      style={{
-                        backgroundColor: '#ffffff',
-                        borderRadius: 12,
-                        border: isModule
-                          ? '1.5px solid rgba(0, 128, 128, 0.35)'
-                          : isPageBreak
-                          ? '1.5px dashed #0f766e'
-                          : (isActive ? '1.5px solid #008080' : '1px solid #e2e8f0'),
-                        borderLeftWidth: 5,
-                        borderLeftColor: isModule ? '#008080' : (isPageBreak ? '#0f766e' : (isActive ? '#008080' : '#475569')),
-                        boxShadow: isActive ? '0 4px 14px rgba(0, 128, 128, 0.12)' : '0 2px 8px rgba(0,0,0,0.03)',
-                        padding: '16px 20px',
-                        opacity: draggedIndex === index ? 0.45 : 1,
-                        transition: 'all 0.15s ease'
-                      }}
-                    >
-                      {/* Card Header Bar */}
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                          {/* Drag Grip Handle */}
-                          <div
-                            className="dragGrip"
-                            title="Drag to rearrange anywhere"
-                            style={{
-                              cursor: 'grab',
-                              padding: '4px 8px',
-                              borderRadius: 6,
-                              background: '#f1f5f9',
-                              color: '#64748b',
-                              fontSize: 16,
-                              fontWeight: 'bold',
-                              userSelect: 'none'
-                            }}
-                          >
-                            ⠿
-                          </div>
-
-                          {/* Step Number Tag */}
-                          <span style={{
-                            padding: '3px 8px',
-                            borderRadius: 6,
-                            fontSize: 11,
-                            fontWeight: 800,
-                            backgroundColor: '#0f172a',
-                            color: '#ffffff',
-                            letterSpacing: 0.5
-                          }}>
-                            STEP {index + 1}
-                          </span>
-
-                          {/* Kind Pill Badge */}
-                          <span style={{
-                            padding: '3px 10px',
-                            borderRadius: 16,
-                            fontSize: 11,
-                            fontWeight: 700,
-                            backgroundColor: isModule ? 'rgba(0, 128, 128, 0.08)' : (isPageBreak ? '#f0fdfa' : '#f8fafc'),
-                            color: isModule ? '#008080' : (isPageBreak ? '#0f766e' : '#475569'),
-                            border: isModule ? '1px solid rgba(0, 128, 128, 0.22)' : (isPageBreak ? '1px solid #99f6e4' : '1px solid #e2e8f0')
-                          }}>
-                            {isModule ? '🛡️ Verification Module' : (isPageBreak ? '📄 Page Section Break' : `📝 Form Question`)}
-                          </span>
-
-                          <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>
-                            Page {pageNumber}
-                          </span>
-                        </div>
-
-                        {/* Actions: Duplicate / Delete */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <button
-                            type="button"
-                            onClick={() => duplicateBlock(block.id)}
-                            title="Duplicate this step"
-                            style={{
-                              background: '#f8fafc',
-                              border: '1px solid #cbd5e1',
-                              borderRadius: 6,
-                              padding: '5px 10px',
-                              cursor: 'pointer',
-                              fontSize: 12,
-                              fontWeight: 600,
-                              color: '#334155'
-                            }}
-                          >
-                            📄 Copy
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => deleteBlock(block.id)}
-                            title="Remove this step"
-                            style={{
-                              background: '#fee2e2',
-                              border: '1px solid #fca5a5',
-                              borderRadius: 6,
-                              padding: '5px 10px',
-                              cursor: 'pointer',
-                              fontSize: 12,
-                              fontWeight: 700,
-                              color: '#b91c1c'
-                            }}
-                          >
-                            🗑️ Delete
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* ────────────────── QUESTION CARD BODY ────────────────── */}
-                      {isQuestion && (
-                        <div>
-                          <div style={{ display: 'flex', gap: 10, marginBottom: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-                            <input
-                              type="text"
-                              value={block.title}
-                              onFocus={() => setActiveFieldId(block.id)}
-                              onChange={(e) => updateBlock(block.id, 'title', e.target.value)}
-                              placeholder="Untitled Question"
-                              style={{
-                                flex: '1 1 240px',
-                                minWidth: 180,
-                                padding: '10px 14px',
-                                fontSize: 15,
-                                fontWeight: 600,
-                                color: '#1e293b',
-                                borderRadius: 8,
-                                border: '1.5px solid #cbd5e1',
-                                outline: 'none',
-                                backgroundColor: '#f8fafc'
-                              }}
-                            />
-
-                            <select
-                              value={block.type}
-                              onChange={(e) => updateBlock(block.id, 'type', e.target.value)}
-                              style={{
-                                flex: '0 0 auto',
-                                minWidth: 150,
-                                padding: '10px 12px',
-                                borderRadius: 8,
-                                border: '1.5px solid #cbd5e1',
-                                backgroundColor: '#ffffff',
-                                fontWeight: 600,
-                                fontSize: 13,
-                                color: '#1e293b',
-                                cursor: 'pointer',
-                                outline: 'none'
-                              }}
-                            >
-                              {FIELD_TYPES.map(t => (
-                                <option key={t.id} value={t.id}>{t.icon} {t.label}</option>
-                              ))}
-                            </select>
-                          </div>
-
-                          {/* Dynamic Answer Preview */}
-                          <div style={{ paddingVertical: 8, marginBottom: 10 }}>
-                            {block.type === 'short_answer' && (
-                              <div style={{ borderBottom: '1.5px dotted #cbd5e1', width: '50%', padding: '6px 0', color: '#94a3b8', fontSize: 13 }}>
-                                Short-answer candidate response
-                              </div>
-                            )}
-                            {block.type === 'paragraph' && (
-                              <div style={{ borderBottom: '1.5px dotted #cbd5e1', width: '80%', padding: '12px 0', color: '#94a3b8', fontSize: 13 }}>
-                                Long-answer paragraph text
-                              </div>
-                            )}
-                            {['multiple_choice', 'checkboxes', 'dropdown'].includes(block.type) && (
-                              <div style={{ gap: 8, display: 'flex', flexDirection: 'column' }}>
-                                {(block.options || ['Option 1']).map((opt, oIdx) => (
-                                  <div key={oIdx} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <span style={{ color: '#64748b' }}>
-                                      {block.type === 'multiple_choice' ? '🔘' : (block.type === 'checkboxes' ? '☑️' : `${oIdx + 1}.`)}
-                                    </span>
-                                    <input
-                                      type="text"
-                                      value={opt}
-                                      onChange={(e) => updateOption(block.id, oIdx, e.target.value)}
-                                      placeholder={`Option ${oIdx + 1}`}
-                                      style={{
-                                        flex: 1,
-                                        maxWidth: 420,
-                                        padding: '7px 12px',
-                                        border: '1px solid #cbd5e1',
-                                        borderRadius: 6,
-                                        fontSize: 13
-                                      }}
-                                    />
-                                    {(block.options || []).length > 1 && (
-                                      <button
-                                        type="button"
-                                        onClick={() => deleteOption(block.id, oIdx)}
-                                        style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 16 }}
-                                      >✕</button>
-                                    )}
-                                  </div>
-                                ))}
-                                <button
-                                  type="button"
-                                  onClick={() => addOption(block.id)}
-                                  style={{
-                                    background: 'none',
-                                    border: 'none',
-                                    color: '#008080',
-                                    fontWeight: 700,
-                                    fontSize: 13,
-                                    cursor: 'pointer',
-                                    textAlign: 'left',
-                                    padding: '4px 0',
-                                    width: 'fit-content'
-                                  }}
-                                >
-                                  + Add option
-                                </button>
-                              </div>
-                            )}
-                            {block.type === 'date' && (
-                              <div style={{ color: '#64748b', fontSize: 13, padding: '7px 12px', background: '#f8fafc', borderRadius: 6, display: 'inline-block' }}>
-                                📅 Month, day, year picker
-                              </div>
-                            )}
-                            {block.type === 'file_upload' && (
-                              <div style={{ color: '#008080', fontSize: 13, padding: '8px 14px', background: 'rgba(0, 128, 128, 0.06)', borderRadius: 6, display: 'inline-block', fontWeight: 600 }}>
-                                📁 Applicant document upload (PDF, JPG, PNG)
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Card Footer Bar: Required Toggle */}
-                          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, color: '#475569', fontWeight: 600 }}>
-                              <input
-                                type="checkbox"
-                                checked={!!block.required}
-                                onChange={(e) => updateBlock(block.id, 'required', e.target.checked)}
-                              />
-                              Required for submission
-                            </label>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* ────────────────── MODULE CARD BODY ────────────────── */}
-                      {isModule && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: '1 1 240px', minWidth: 180 }}>
-                              <span style={{ fontSize: 28 }}>{block.icon || '🛡️'}</span>
-                              <div>
-                                <div style={{ fontWeight: 800, fontSize: 16, color: '#0f172a' }}>
-                                  {block.name}
-                                </div>
-                                <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
-                                  {block.desc}
-                                </div>
-                              </div>
-                            </div>
-
-                            <select
-                              value={block.moduleId}
-                              onChange={(e) => updateBlock(block.id, 'moduleId', e.target.value)}
-                              style={{
-                                flex: '0 0 auto',
-                                minWidth: 180,
-                                padding: '8px 12px',
-                                borderRadius: 8,
-                                border: '1.5px solid #008080',
-                                backgroundColor: '#ffffff',
-                                color: '#008080',
-                                fontWeight: 700,
-                                fontSize: 13,
-                                cursor: 'pointer'
-                              }}
-                            >
-                              {availableModules.map(m => (
-                                <option key={m.id} value={m.id}>{m.name}</option>
-                              ))}
-                            </select>
-                          </div>
-
-                          {/* Workflow Capabilities Box */}
-                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4, background: 'rgba(0, 128, 128, 0.05)', padding: '10px 14px', borderRadius: 8, border: '1px solid rgba(0, 128, 128, 0.18)' }}>
-                            <span style={{ fontSize: 12, color: '#008080', fontWeight: 700 }}>⚡ Automated Verification:</span>
-                            <span style={{ fontSize: 12, color: '#0f766e', fontWeight: 600 }}>✓ AI Document OCR</span>
-                            <span style={{ fontSize: 12, color: '#cbd5e1' }}>•</span>
-                            <span style={{ fontSize: 12, color: '#0f766e', fontWeight: 600 }}>✓ Live Webcam Face Biometrics</span>
-                            <span style={{ fontSize: 12, color: '#cbd5e1' }}>•</span>
-                            <span style={{ fontSize: 12, color: '#0f766e', fontWeight: 600 }}>✓ 3D Anti-Spoof Liveness</span>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* ────────────────── PAGE BREAK CARD BODY ────────────────── */}
-                      {isPageBreak && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                            <span style={{ fontSize: 22 }}>📑</span>
-                            <input
-                              type="text"
-                              value={block.title}
-                              onChange={(e) => updateBlock(block.id, 'title', e.target.value)}
-                              placeholder="Page Section Title (e.g. Identity Documents)"
-                              style={{
-                                flex: '1 1 220px',
-                                minWidth: 180,
-                                padding: '8px 12px',
-                                fontSize: 15,
-                                fontWeight: 700,
-                                borderRadius: 6,
-                                border: '1px solid #0f766e',
-                                color: '#0f766e',
-                                backgroundColor: '#f0fdfa'
-                              }}
-                            />
-                          </div>
-                          <div style={{ fontSize: 12, color: '#0f766e', background: 'rgba(15, 118, 110, 0.08)', padding: '8px 12px', borderRadius: 6 }}>
-                            ℹ️ Multi-page Section: Questions above this marker appear on Page {pageNumber}. Subsequent items advance to Page {pageNumber + 1}.
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Clean Inserter Line between cards */}
-                    <div
-                      onMouseEnter={() => setHoveredGapIndex(index)}
-                      onMouseLeave={() => setHoveredGapIndex(null)}
-                      style={{
-                        position: 'relative',
-                        height: (hoveredGapIndex === index || openInserterIndex === index) ? 36 : 8,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        transition: 'all 0.15s ease',
-                        margin: '2px 0'
-                      }}
-                    >
-                      <div style={{
-                        position: 'absolute',
-                        left: 20,
-                        right: 20,
-                        height: 1.5,
-                        backgroundColor: '#008080',
-                        opacity: (hoveredGapIndex === index || openInserterIndex === index) ? 0.35 : 0,
-                        transition: 'opacity 0.15s ease'
-                      }} />
-
-                      {(hoveredGapIndex === index || openInserterIndex === index) ? (
-                        <div style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 6,
-                          backgroundColor: '#ffffff',
-                          padding: '3px 10px',
-                          borderRadius: 20,
-                          border: '1.5px solid #008080',
-                          boxShadow: '0 2px 8px rgba(0, 128, 128, 0.25)',
-                          zIndex: 10
-                        }}>
-                          <button
-                            type="button"
-                            onClick={() => { addBlock('question', { type: 'short_answer', title: 'New Question' }, index + 1); setOpenInserterIndex(null); }}
-                            style={{
-                              background: '#ffffff',
-                              border: '1px solid #cbd5e1',
-                              borderRadius: 12,
-                              padding: '3px 9px',
-                              fontSize: 11,
-                              fontWeight: 700,
-                              color: '#334155',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            + Question
-                          </button>
-
-                          <div style={{ display: 'inline-flex', alignItems: 'center' }}>
-                            <select
-                              onChange={(e) => {
-                                if (e.target.value) {
-                                  const mod = availableModules.find(m => m.id === e.target.value);
-                                  if (mod) addBlock('module', mod, index + 1);
-                                  e.target.value = '';
-                                  setOpenInserterIndex(null);
-                                }
-                              }}
-                              defaultValue=""
-                              style={{
-                                padding: '3px 8px',
-                                borderRadius: 12,
-                                border: '1px solid rgba(0, 128, 128, 0.22)',
-                                backgroundColor: 'rgba(0, 128, 128, 0.06)',
-                                color: '#008080',
-                                fontWeight: 700,
-                                fontSize: '11px',
-                                cursor: 'pointer',
-                                outline: 'none'
-                              }}
-                            >
-                              <option value="" disabled>🛡️ + Module ▾</option>
-                              {availableModules.map(m => (
-                                <option key={m.id} value={m.id}>{m.name}</option>
-                              ))}
-                            </select>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => { addBlock('page_break', { title: `Page ${pageNumber + 1} Section` }, index + 1); setOpenInserterIndex(null); }}
-                            style={{
-                              background: '#f0fdfa',
-                              border: '1px solid #99f6e4',
-                              borderRadius: 12,
-                              padding: '3px 9px',
-                              fontSize: 11,
-                              fontWeight: 700,
-                              color: '#0f766e',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            📄 + Section
-                          </button>
-                        </div>
-                      ) : (
-                        <div
-                          onClick={() => setOpenInserterIndex(openInserterIndex === index ? null : index)}
-                          title="Insert step here"
-                          style={{
-                            width: 18,
-                            height: 18,
-                            borderRadius: 9,
-                            backgroundColor: '#ffffff',
-                            border: '1px solid #cbd5e1',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer',
-                            opacity: 0.2,
-                            transition: 'all 0.15s ease'
-                          }}
-                          onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.2'; }}
-                        >
-                          <span style={{ fontSize: 11, color: '#64748b', fontWeight: 'bold', lineHeight: '11px' }}>+</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* Drop indicator after last card */}
-              {_showDropBefore(flowBlocks.length) && (
-                <div className="dropIndicator" style={styles.dropIndicator} />
-              )}
-            </div>
-
-            {/* 3. Bottom Save Action Floating Footer */}
-            <View style={{
-              marginTop: 20,
-              padding: 20,
-              backgroundColor: '#ffffff',
-              borderRadius: 14,
-              borderWidth: 1,
-              borderColor: '#e2e8f0',
-              flexDirection: 'row',
-              flexWrap: 'wrap',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 14,
-              boxShadow: '0 4px 14px rgba(0,0,0,0.04)'
-            }}>
-              <View style={{ flex: 1, minWidth: 220 }}>
-                <Text style={{ fontSize: 16, fontWeight: '800', color: '#0f172a' }}>Ready to deploy this verification flow?</Text>
-                <Text style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
-                  Configured with {questionCount} questions and {moduleCount} verification steps across {pages.length} {pages.length === 1 ? 'page' : 'pages'}.
-                </Text>
+          {/* 4. Large Dashed '+ Add Step to Pipeline' Button */}
+          <View style={{ alignItems: 'center', marginTop: 12, marginBottom: 24 }}>
+            <View style={{ width: 2, height: 26, backgroundColor: '#cbd5e1' }} />
+            <TouchableOpacity
+              onPress={() => handleOpenAddModal(flowBlocks.length)}
+              style={{
+                width: '100%',
+                borderWidth: 2,
+                borderStyle: 'dashed',
+                borderColor: '#94a3b8',
+                borderRadius: 14,
+                paddingVertical: 14,
+                paddingHorizontal: 20,
+                backgroundColor: '#ffffff',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 10,
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
+              }}
+            >
+              <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(0, 128, 128, 0.1)', justifyContent: 'center', alignItems: 'center' }}>
+                <Text style={{ fontSize: 16, fontWeight: '800', color: '#008080' }}>+</Text>
               </View>
-              <TouchableOpacity
-                style={[styles.btn, { backgroundColor: '#008080', paddingHorizontal: 26, paddingVertical: 12, borderRadius: 8, marginBottom: 0 }]}
-                onPress={generateLink}
-                testID="save-deploy-bottom-btn"
-              >
-                <Text style={[styles.btnText, { fontWeight: '700' }]}>Save & Review for Publish 🚀</Text>
-              </TouchableOpacity>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: '#008080', fontFamily: "'Manrope', sans-serif" }}>
+                Add Verification Module or Question
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* 5. Bottom Save Action Floating Footer */}
+        <View style={{
+          padding: 22,
+          backgroundColor: '#ffffff',
+          borderRadius: 14,
+          borderWidth: 1,
+          borderColor: '#e2e8f0',
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 14,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.04)'
+        }}>
+          <View style={{ flex: 1, minWidth: 240 }}>
+            <Text style={{ fontSize: 16, fontWeight: '800', color: '#0f172a' }}>Ready to deploy this verification flow?</Text>
+            <Text style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
+              Configured with {questionCount} questions and {moduleCount} verification steps across {pages.length} {pages.length === 1 ? 'page' : 'pages'}.
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.btn, { backgroundColor: '#008080', paddingHorizontal: 26, paddingVertical: 12, borderRadius: 8, marginBottom: 0 }]}
+            onPress={generateLink}
+            testID="save-deploy-bottom-btn"
+          >
+            <Text style={[styles.btnText, { fontWeight: '700' }]}>Save & Review for Publish 🚀</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* 6. High-End 'Add Step to Pipeline' Modal Sheet */}
+        <Modal visible={addStepModalVisible} transparent={true} animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { maxWidth: 640, width: '92%', maxHeight: '90vh', padding: 24 }]}>
+              {/* Modal Header */}
+              <View style={{ width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 }}>
+                <View>
+                  <Text style={{ fontSize: 20, fontWeight: '800', color: '#0f172a' }}>Add Step to Pipeline</Text>
+                  <Text style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
+                    Select an automated verification module or candidate form input.
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setAddStepModalVisible(false)}
+                  style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                >
+                  <Text style={{ fontSize: 16, color: '#64748b', fontWeight: 'bold' }}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Segmented Category Tabs */}
+              <View style={{ flexDirection: 'row', backgroundColor: '#f1f5f9', padding: 3, borderRadius: 10, width: '100%', marginBottom: 18 }}>
+                <TouchableOpacity
+                  onPress={() => setAddStepActiveTab('modules')}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 8,
+                    borderRadius: 8,
+                    alignItems: 'center',
+                    backgroundColor: addStepActiveTab === 'modules' ? '#ffffff' : 'transparent',
+                    boxShadow: addStepActiveTab === 'modules' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: addStepActiveTab === 'modules' ? '#008080' : '#64748b' }}>
+                    🛡️ Verification Modules
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => setAddStepActiveTab('questions')}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 8,
+                    borderRadius: 8,
+                    alignItems: 'center',
+                    backgroundColor: addStepActiveTab === 'questions' ? '#ffffff' : 'transparent',
+                    boxShadow: addStepActiveTab === 'questions' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: addStepActiveTab === 'questions' ? '#008080' : '#64748b' }}>
+                    📝 Candidate Questions
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => setAddStepActiveTab('sections')}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 8,
+                    borderRadius: 8,
+                    alignItems: 'center',
+                    backgroundColor: addStepActiveTab === 'sections' ? '#ffffff' : 'transparent',
+                    boxShadow: addStepActiveTab === 'sections' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: addStepActiveTab === 'sections' ? '#008080' : '#64748b' }}>
+                    📑 Page Break
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Tab 1: Verification Modules */}
+              {addStepActiveTab === 'modules' && (
+                <View style={{ width: '100%', gap: 10 }}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      addBlock('module', { moduleId: 'AADHAAR_FACE', name: 'Aadhaar & Face Verification', desc: 'Combined Aadhaar Document OCR + Live Face Match & Liveness' }, addStepInsertIndex);
+                      setAddStepModalVisible(false);
+                    }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: 14,
+                      borderRadius: 10,
+                      borderWidth: 1.5,
+                      borderColor: 'rgba(0, 128, 128, 0.25)',
+                      backgroundColor: 'rgba(0, 128, 128, 0.04)',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                      <Text style={{ fontSize: 24 }}>🛡️</Text>
+                      <View>
+                        <Text style={{ fontSize: 14, fontWeight: '800', color: '#0f172a' }}>Aadhaar eKYC Verification</Text>
+                        <Text style={{ fontSize: 12, color: '#008080', fontWeight: '600', marginTop: 2 }}>
+                          Govt Aadhaar OCR + Live Webcam Face Biometrics
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#008080' }}>+ Add Step</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => {
+                      addBlock('module', { moduleId: 'PAN_FACE', name: 'PAN & Face Verification', desc: 'Combined PAN Card Document OCR + Live Face Match & Liveness' }, addStepInsertIndex);
+                      setAddStepModalVisible(false);
+                    }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: 14,
+                      borderRadius: 10,
+                      borderWidth: 1.5,
+                      borderColor: '#bbf7d0',
+                      backgroundColor: '#f0fdf4',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                      <Text style={{ fontSize: 24 }}>💳</Text>
+                      <View>
+                        <Text style={{ fontSize: 14, fontWeight: '800', color: '#0f172a' }}>PAN Card Verification</Text>
+                        <Text style={{ fontSize: 12, color: '#16a34a', fontWeight: '600', marginTop: 2 }}>
+                          Income Tax PAN OCR Extraction + Biometric Match
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#16a34a' }}>+ Add Step</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => {
+                      addBlock('module', { moduleId: 'EYE_TRACKING', name: 'Eye Tracking & Attention', desc: 'WebGazer eye tracking calibration' }, addStepInsertIndex);
+                      setAddStepModalVisible(false);
+                    }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: 14,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: '#e2e8f0',
+                      backgroundColor: '#f8fafc',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                      <Text style={{ fontSize: 24 }}>👁️</Text>
+                      <View>
+                        <Text style={{ fontSize: 14, fontWeight: '800', color: '#0f172a' }}>Biometric Liveness Check</Text>
+                        <Text style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                          Passive & Active 3D webcam anti-spoof tracking
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569' }}>+ Add Step</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => {
+                      addBlock('module', { moduleId: 'HUMAN_REVIEW', name: 'Human Review Queue', desc: 'Manual Human Review Audit Queue' }, addStepInsertIndex);
+                      setAddStepModalVisible(false);
+                    }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: 14,
+                      borderRadius: 10,
+                      borderWidth: 1.5,
+                      borderColor: '#fde68a',
+                      backgroundColor: '#fffbeb',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                      <Text style={{ fontSize: 24 }}>⚖️</Text>
+                      <View>
+                        <Text style={{ fontSize: 14, fontWeight: '800', color: '#0f172a' }}>Manual Compliance Audit</Text>
+                        <Text style={{ fontSize: 12, color: '#b45309', marginTop: 2 }}>
+                          Route candidate submission to compliance officers
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#b45309' }}>+ Add Step</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Tab 2: Candidate Questions */}
+              {addStepActiveTab === 'questions' && (
+                <View style={{ width: '100%', gap: 8 }}>
+                  <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                    {[
+                      { title: 'Full Legal Name', type: 'short_answer', icon: '👤' },
+                      { title: 'Work Email Address', type: 'short_answer', icon: '✉️' },
+                      { title: 'Mobile Phone Number', type: 'short_answer', icon: '📱' },
+                      { title: 'Supporting Document Upload', type: 'file_upload', icon: '📁' },
+                      { title: 'Select Verification Option', type: 'multiple_choice', icon: '🔘' },
+                      { title: 'Date of Birth', type: 'date', icon: '📅' }
+                    ].map((q, qIdx) => (
+                      <TouchableOpacity
+                        key={qIdx}
+                        onPress={() => {
+                          addBlock('question', { title: q.title, type: q.type }, addStepInsertIndex);
+                          setAddStepModalVisible(false);
+                        }}
+                        style={{
+                          flex: 1,
+                          minWidth: '46%',
+                          padding: 12,
+                          borderRadius: 8,
+                          borderWidth: 1,
+                          borderColor: '#e2e8f0',
+                          backgroundColor: '#ffffff',
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 10,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <Text style={{ fontSize: 18 }}>{q.icon}</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: '#0f172a' }}>{q.title}</Text>
+                          <Text style={{ fontSize: 11, color: '#64748b' }}>{q.type.replace('_', ' ')}</Text>
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <TouchableOpacity
+                    onPress={() => {
+                      addBlock('question', { title: 'Untitled Question', type: 'short_answer' }, addStepInsertIndex);
+                      setAddStepModalVisible(false);
+                    }}
+                    style={{
+                      width: '100%',
+                      marginTop: 8,
+                      paddingVertical: 10,
+                      borderRadius: 8,
+                      borderWidth: 1.5,
+                      borderStyle: 'dashed',
+                      borderColor: '#008080',
+                      backgroundColor: 'rgba(0, 128, 128, 0.04)',
+                      alignItems: 'center',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#008080' }}>
+                      + Add Custom Blank Question
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Tab 3: Section Breaks */}
+              {addStepActiveTab === 'sections' && (
+                <View style={{ width: '100%', gap: 10 }}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      addBlock('page_break', { title: `Page ${pages.length + 1} Section` }, addStepInsertIndex);
+                      setAddStepModalVisible(false);
+                    }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: 16,
+                      borderRadius: 10,
+                      borderWidth: 1.5,
+                      borderColor: '#99f6e4',
+                      backgroundColor: '#f0fdfa',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                      <Text style={{ fontSize: 24 }}>📄</Text>
+                      <View>
+                        <Text style={{ fontSize: 14, fontWeight: '800', color: '#0f766e' }}>Multi-Page Section Break</Text>
+                        <Text style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                          Splits candidate flow into separate pages with a stepper bar.
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#0f766e' }}>+ Add Break</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
-          </div>
-        </div>
+          </View>
+        </Modal>
 
         {/* Form Interactive Preview Modal */}
         <Modal visible={formPreviewVisible} transparent={true} animationType="fade">

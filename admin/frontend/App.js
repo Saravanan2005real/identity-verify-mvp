@@ -237,7 +237,7 @@ export default function App() {
   // --- Google Forms Hub State ---
   const [formSearchQuery, setFormSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'published' | 'draft'
-  const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list'
+  const [viewMode, setViewMode] = useState('list'); // 'list' | 'grid'
   const [sortOrder, setSortOrder] = useState('newest'); // 'newest' | 'az' | 'za'
   const [activeMenuPid, setActiveMenuPid] = useState(null);
   const [showTemplateGallery, setShowTemplateGallery] = useState(true);
@@ -1718,26 +1718,6 @@ export default function App() {
                         </View>
                       </View>
 
-                      {/* Verification Modules Stages Flow */}
-                      <View style={styles.zdStagesContainer}>
-                        <Text style={styles.zdStagesLabel}>VERIFICATION FLOW</Text>
-                        <View style={styles.zdStagesRow}>
-                          <View style={styles.zdStageTag}>
-                            <Text style={styles.zdStageTagText}>📝 Form</Text>
-                          </View>
-                          {moduleList.map((m, mIdx) => (
-                            <View key={mIdx} style={{ flexDirection: 'row', alignItems: 'center' }}>
-                              <Text style={{ fontSize: 10, color: '#94a3b8', marginHorizontal: 3 }}>→</Text>
-                              <View style={[styles.zdStageTag, styles.zdStageTagActive]}>
-                                <Text style={styles.zdStageTagActiveText}>
-                                  {m === 'AADHAAR_FACE' ? '🛡️ Aadhaar' : m === 'PAN' ? '💳 PAN' : m === 'PAN_FACE' ? '💳 PAN + Face' : m === 'EYE_TRACKING' ? '👁️ Liveness' : m === 'HUMAN_REVIEW' ? '⚖️ Review' : m}
-                                </Text>
-                              </View>
-                            </View>
-                          ))}
-                        </View>
-                      </View>
-
                       {/* Submission Counter Bar */}
                       <TouchableOpacity
                         style={styles.zdSubmissionBanner}
@@ -1830,91 +1810,137 @@ export default function App() {
           {viewMode === 'list' && (
             <View style={styles.zdTableWrapper}>
               <View style={styles.zdTableHeader}>
-                <Text style={[styles.zdTableTh, { flex: 2.2 }]}>Form Name & PID</Text>
-                <Text style={[styles.zdTableTh, { flex: 2 }]}>Verification Modules</Text>
-                <Text style={[styles.zdTableTh, { flex: 1 }]}>Status</Text>
-                <Text style={[styles.zdTableTh, { flex: 1.2 }]}>Submissions</Text>
-                <Text style={[styles.zdTableTh, { flex: 1.2 }]}>Date</Text>
-                <Text style={[styles.zdTableTh, { flex: 2.4, textAlign: 'right' }]}>Actions</Text>
+                <Text style={[styles.zdTableTh, { flex: 3.2 }]}>Form Name & Identifier</Text>
+                <Text style={[styles.zdTableTh, { flex: 1.2 }]}>Status</Text>
+                <Text style={[styles.zdTableTh, { flex: 1.6 }]}>Submissions</Text>
+                <Text style={[styles.zdTableTh, { flex: 1.4 }]}>Date Created</Text>
+                <Text style={[styles.zdTableTh, { flex: 2.6, textAlign: 'right' }]}>Actions</Text>
               </View>
 
               {filteredPipelines.map((p, idx) => {
+                const isMenuOpen = activeMenuPid === `table-${p.pid}`;
                 const subs = getSubmissionsForPipeline(p);
                 const subCount = subs.length;
                 const isLive = p.status === 'published';
                 const formattedDate = formatFormDate(p.created_at);
 
                 return (
-                  <View key={p.pid || idx} style={styles.zdTableRow}>
+                  <View 
+                    key={p.pid || idx} 
+                    style={[styles.zdTableRow, isMenuOpen && { zIndex: 9999, elevation: 9999 }]}
+                  >
+                    {/* Left: Form Info */}
                     <TouchableOpacity
-                      style={{ flex: 2.2, flexDirection: 'row', alignItems: 'center', gap: 10 }}
+                      style={{ flex: 3.2, flexDirection: 'row', alignItems: 'center', gap: 12 }}
                       onPress={() => { setSelectedPipeline(p); setPipelineDetailVisible(true); }}
                     >
                       <View style={styles.zdTableIconBox}>
-                        <Text style={{ fontSize: 13, color: '#008080' }}>⚡</Text>
+                        <Text style={{ fontSize: 15 }}>📋</Text>
                       </View>
                       <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text style={styles.zdTableTitle} numberOfLines={1}>{p.name || p.pid}</Text>
-                        <Text style={styles.zdTablePid}>#{p.pid || 'draft'}</Text>
+                        <Text style={styles.zdTableTitle} numberOfLines={1}>{p.name || p.pid || 'Untitled form'}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                          <Text style={styles.zdTablePid}>#{p.pid || 'draft'}</Text>
+                          <Text style={{ fontSize: 10, color: '#cbd5e1' }}>•</Text>
+                          <Text style={{ fontSize: 11, color: '#94a3b8' }}>ID Verification Flow</Text>
+                        </View>
                       </View>
                     </TouchableOpacity>
 
-                    <Text style={[styles.zdTableSubText, { flex: 2 }]} numberOfLines={1}>
-                      {Array.isArray(p.modules) ? p.modules.join(', ') : 'Standard Flow'}
-                    </Text>
-
-                    <View style={{ flex: 1 }}>
-                      <View style={[styles.zdStatusBadge, { alignSelf: 'flex-start', backgroundColor: isLive ? '#ecfdf5' : '#fffbeb', borderColor: isLive ? '#a7f3d0' : '#fde68a' }]}>
-                        <Text style={[styles.zdStatusBadgeText, { color: isLive ? '#059669' : '#b45309' }]}>
-                          {isLive ? 'Live' : 'Draft'}
+                    {/* Status Pill */}
+                    <View style={{ flex: 1.2 }}>
+                      <View style={[styles.zdPillBadge, { alignSelf: 'flex-start', backgroundColor: isLive ? '#ecfdf5' : '#fffbeb', borderColor: isLive ? '#bbf7d0' : '#fde68a' }]}>
+                        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: isLive ? '#16a34a' : '#d97706', marginRight: 5 }} />
+                        <Text style={[styles.zdPillBadgeText, { color: isLive ? '#15803d' : '#b45309' }]}>
+                          {isLive ? 'Active' : 'Draft'}
                         </Text>
                       </View>
                     </View>
 
+                    {/* Submissions Count Badge */}
                     <TouchableOpacity
-                      style={{ flex: 1.2 }}
+                      style={{ flex: 1.6 }}
                       onPress={() => { setSelectedPipeline(p); setPipelineDetailVisible(true); }}
                     >
-                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#008080' }}>
-                        📊 {subCount}
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', backgroundColor: 'rgba(0, 128, 128, 0.06)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 }}>
+                        <Text style={{ fontSize: 12 }}>📊</Text>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#008080' }}>
+                          {subCount} {subCount === 1 ? 'Response' : 'Responses'}
+                        </Text>
+                      </View>
                     </TouchableOpacity>
 
-                    <Text style={[styles.zdTableSubText, { flex: 1.2 }]}>
+                    {/* Created Date */}
+                    <Text style={[styles.zdTableSubText, { flex: 1.4 }]}>
                       {formattedDate}
                     </Text>
 
-                    <View style={{ flex: 2.4, flexDirection: 'row', justifyContent: 'flex-end', gap: 6 }}>
+                    {/* Action Buttons + Dropdown */}
+                    <View style={{ flex: 2.6, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8, position: 'relative' }}>
                       <TouchableOpacity
-                        style={[styles.btnSmall, { backgroundColor: '#008080' }]}
+                        style={styles.zdListManageBtn}
                         onPress={() => { setSelectedPipeline(p); setPipelineDetailVisible(true); }}
                       >
-                        <Text style={[styles.btnSmallText, { color: '#ffffff' }]}>Manage</Text>
+                        <Text style={styles.zdListManageBtnText}>Manage Form</Text>
                       </TouchableOpacity>
+
                       <TouchableOpacity
-                        style={[styles.btnSmall, { backgroundColor: '#ecfdf5', borderWidth: 1, borderColor: '#a7f3d0' }]}
-                        onPress={() => exportSubmissionsToSheets(p, subs)}
-                      >
-                        <Text style={[styles.btnSmallText, { color: '#047857', fontWeight: '700' }]}>Sheets 📊</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.btnSmall}
+                        style={styles.zdListLaunchBtn}
                         onPress={() => openGeneratedLink(p.link)}
                       >
-                        <Text style={styles.btnSmallText}>Launch 🚀</Text>
+                        <Text style={styles.zdListLaunchBtnText}>Launch Flow ↗</Text>
                       </TouchableOpacity>
+
                       <TouchableOpacity
-                        style={[styles.btnSmall, { backgroundColor: '#f1f5f9' }]}
-                        onPress={() => handleEditPipeline(p)}
+                        style={styles.zdCardMoreBtn}
+                        onPress={() => setActiveMenuPid(isMenuOpen ? null : `table-${p.pid}`)}
                       >
-                        <Text style={[styles.btnSmallText, { color: COLORS.textMain }]}>Edit ✏️</Text>
+                        <Text style={{ fontSize: 18, color: '#64748b', fontWeight: 'bold', lineHeight: 18 }}>⋮</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.btnSmall, { backgroundColor: '#f1f5f9' }]}
-                        onPress={() => copyToClipboard(p.link)}
-                      >
-                        <Text style={[styles.btnSmallText, { color: COLORS.textMain }]}>Copy 📋</Text>
-                      </TouchableOpacity>
+
+                      {/* Dropdown Menu */}
+                      {isMenuOpen && (
+                        <View style={[styles.zdMenuDropdown, { top: 38, right: 0, position: 'absolute' }]}>
+                          <TouchableOpacity
+                            style={styles.zdMenuItem}
+                            onPress={() => { exportSubmissionsToSheets(p, subs); setActiveMenuPid(null); }}
+                          >
+                            <Text style={[styles.zdMenuItemText, { fontWeight: '700', color: '#059669' }]}>📊 Export Sheets (.csv)</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={styles.zdMenuItem}
+                            onPress={() => { handleOpenManualReviewForPipeline(p); setActiveMenuPid(null); }}
+                          >
+                            <Text style={[styles.zdMenuItemText, { fontWeight: '700', color: '#b45309' }]}>⚖️ Review Submissions</Text>
+                          </TouchableOpacity>
+
+                          <View style={styles.zdMenuDivider} />
+
+                          <TouchableOpacity
+                            style={styles.zdMenuItem}
+                            onPress={() => { handleEditPipeline(p); setActiveMenuPid(null); }}
+                          >
+                            <Text style={styles.zdMenuItemText}>✏️ Edit in Builder</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={styles.zdMenuItem}
+                            onPress={() => { copyToClipboard(p.link); setActiveMenuPid(null); }}
+                          >
+                            <Text style={styles.zdMenuItemText}>📋 Copy Shareable Link</Text>
+                          </TouchableOpacity>
+
+                          <View style={styles.zdMenuDivider} />
+
+                          <TouchableOpacity
+                            style={styles.zdMenuItem}
+                            onPress={() => { handleDeletePipeline(p.pid); setActiveMenuPid(null); }}
+                          >
+                            <Text style={[styles.zdMenuItemText, { color: COLORS.danger }]}>🗑️ Delete Pipeline</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
                     </View>
                   </View>
                 );
@@ -4573,15 +4599,17 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    overflow: 'hidden',
+    overflow: 'visible',
   },
   zdTableHeader: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
     backgroundColor: '#F8FAFC',
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
   },
   zdTableTh: {
     fontSize: 11,
@@ -4593,32 +4621,58 @@ const styles = StyleSheet.create({
   zdTableRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
+    position: 'relative',
+    backgroundColor: '#ffffff',
   },
   zdTableIconBox: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
+    width: 32,
+    height: 32,
+    borderRadius: 8,
     backgroundColor: 'rgba(0, 128, 128, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   zdTableTitle: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
     color: '#0f172a',
   },
   zdTablePid: {
-    fontSize: 10,
+    fontSize: 11,
     color: '#64748b',
     fontFamily: 'monospace',
   },
   zdTableSubText: {
     fontSize: 12,
-    color: '#475569',
+    color: '#64748b',
+  },
+  zdListManageBtn: {
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 7,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  zdListManageBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#0f172a',
+  },
+  zdListLaunchBtn: {
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 7,
+    backgroundColor: '#008080',
+  },
+  zdListLaunchBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#ffffff',
   },
   zdEmptyState: {
     padding: 48,

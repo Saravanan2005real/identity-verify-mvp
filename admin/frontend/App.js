@@ -2002,53 +2002,79 @@ export default function App() {
     const moduleCount = flowBlocks.filter(b => b.kind === 'module').length;
 
     return (
-      <View style={{ width: '100%', maxWidth: 840, alignSelf: 'center', paddingBottom: 80, paddingHorizontal: 12 }}>
+      <View style={{ width: '100%', maxWidth: 1280, alignSelf: 'center', paddingBottom: 80, paddingHorizontal: 16 }}>
         {/* Top Sticky Builder Bar */}
         <View style={{
           backgroundColor: '#ffffff',
-          borderRadius: 12,
-          paddingHorizontal: 16,
-          paddingVertical: 12,
+          borderRadius: 14,
+          paddingHorizontal: 20,
+          paddingVertical: 14,
           flexDirection: 'row',
           flexWrap: 'wrap',
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: 12,
-          marginBottom: 16,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+          marginBottom: 20,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.04)',
           borderWidth: 1,
           borderColor: '#e2e8f0'
         }}>
-          <TouchableOpacity
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
-            onPress={() => setActiveTab('dashboard')}
-          >
-            <Text style={{ fontSize: 16, color: '#475569' }}>←</Text>
-            <Text style={{ fontSize: 14, color: '#334155', fontWeight: '700' }}>Back to Dashboard</Text>
-          </TouchableOpacity>
+          {/* Left: Breadcrumbs & Back */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <TouchableOpacity
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                backgroundColor: '#f8fafc',
+                paddingHorizontal: 12,
+                paddingVertical: 7,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: '#e2e8f0'
+              }}
+              onPress={() => setActiveTab('dashboard')}
+            >
+              <Text style={{ fontSize: 14, color: '#475569' }}>←</Text>
+              <Text style={{ fontSize: 13, color: '#334155', fontWeight: '700' }}>Dashboard</Text>
+            </TouchableOpacity>
 
+            <View style={{ width: 1, height: 18, backgroundColor: '#cbd5e1' }} />
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: '#0f172a' }}>
+                {formTitle || 'Untitled Verification Form'}
+              </Text>
+              <View style={{ backgroundColor: '#ecfdf5', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#a7f3d0' }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#059669' }}>🟢 Pipeline Studio</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Center: Live Flow Metrics */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <View style={{ backgroundColor: '#f1f5f9', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 }}>
-              <Text style={{ fontSize: 12, color: '#475569', fontWeight: '600' }}>
+            <View style={{ backgroundColor: '#f1f5f9', paddingHorizontal: 11, paddingVertical: 5, borderRadius: 20 }}>
+              <Text style={{ fontSize: 12, color: '#475569', fontWeight: '700' }}>
                 📋 {questionCount} {questionCount === 1 ? 'Question' : 'Questions'}
               </Text>
             </View>
-            <View style={{ backgroundColor: 'rgba(0, 128, 128, 0.06)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(0, 128, 128, 0.22)' }}>
-              <Text style={{ fontSize: 12, color: '#008080', fontWeight: '700' }}>
+            <View style={{ backgroundColor: 'rgba(0, 128, 128, 0.08)', paddingHorizontal: 11, paddingVertical: 5, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(0, 128, 128, 0.25)' }}>
+              <Text style={{ fontSize: 12, color: '#008080', fontWeight: '800' }}>
                 🛡️ {moduleCount} {moduleCount === 1 ? 'Module' : 'Modules'}
               </Text>
             </View>
-            <View style={{ backgroundColor: '#ecfdf5', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1, borderColor: '#a7f3d0' }}>
+            <View style={{ backgroundColor: '#ecfdf5', paddingHorizontal: 11, paddingVertical: 5, borderRadius: 20, borderWidth: 1, borderColor: '#a7f3d0' }}>
               <Text style={{ fontSize: 12, color: '#059669', fontWeight: '700' }}>
                 📄 {pages.length} {pages.length === 1 ? 'Page' : 'Pages'}
               </Text>
             </View>
           </View>
 
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {/* Right: Actions */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <TouchableOpacity
               style={{
-                backgroundColor: '#f8fafc',
+                backgroundColor: '#ffffff',
                 borderWidth: 1.5,
                 borderColor: '#cbd5e1',
                 paddingHorizontal: 14,
@@ -2058,7 +2084,7 @@ export default function App() {
               }}
               onPress={() => { setPreviewActivePageIndex(0); setFormPreviewVisible(true); }}
             >
-              <Text style={{ fontSize: 13, fontWeight: '700', color: '#1e293b' }}>👁️ Preview Form</Text>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#1e293b' }}>👁️ Preview Flow</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -2067,447 +2093,876 @@ export default function App() {
                 paddingHorizontal: 18,
                 paddingVertical: 8,
                 borderRadius: 8,
-                boxShadow: '0 2px 6px rgba(0, 128, 128, 0.35)',
+                boxShadow: '0 2px 8px rgba(0, 128, 128, 0.35)',
                 cursor: 'pointer'
               }}
               onPress={generateLink}
               testID="save-deploy-btn"
             >
-              <Text style={{ fontSize: 13, fontWeight: '700', color: '#ffffff' }}>Save & Publish 💾</Text>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#ffffff' }}>Save & Publish Flow 🚀</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* 1. Header Card (Google Forms Theme) */}
-        <View style={{
-          backgroundColor: '#ffffff',
-          borderRadius: 12,
-          overflow: 'hidden',
-          marginBottom: 16,
-          boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
-          borderWidth: 1,
-          borderColor: '#e2e8f0'
-        }}>
-          <View style={{ height: 10, backgroundColor: '#008080', width: '100%' }} />
-          <View style={{ padding: 24 }}>
-            <TextInput
-              style={{
-                fontSize: 26,
-                fontWeight: '800',
-                color: '#1e293b',
-                borderBottomWidth: 1,
-                borderBottomColor: '#e2e8f0',
-                paddingBottom: 8,
-                marginBottom: 12,
-                outlineStyle: 'none'
-              }}
-              value={formTitle}
-              onChangeText={setFormTitle}
-              placeholder="Untitled Form"
-              placeholderTextColor="#94a3b8"
-            />
-            <TextInput
-              style={{
-                fontSize: 14,
-                color: '#475569',
-                lineHeight: 20,
-                borderBottomWidth: 1,
-                borderBottomColor: '#f1f5f9',
-                paddingVertical: 6,
-                outlineStyle: 'none'
-              }}
-              value={formDescription}
-              onChangeText={setFormDescription}
-              placeholder="Form description and applicant instructions..."
-              placeholderTextColor="#94a3b8"
-              multiline
-            />
-          </View>
-        </View>
-
-        {/* Floating Quick-Add Toolbar */}
-        <View style={{
-          backgroundColor: '#ffffff',
-          borderRadius: 10,
-          padding: 12,
-          marginBottom: 18,
-          flexDirection: 'row',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 10,
-          borderWidth: 1,
-          borderColor: '#e2e8f0',
-          boxShadow: '0 2px 6px rgba(0,0,0,0.05)'
-        }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <Text style={{ fontSize: 13, fontWeight: '700', color: '#334155' }}>+ Add To Flow:</Text>
-
-            <TouchableOpacity
-              style={{
-                backgroundColor: '#008080',
-                paddingHorizontal: 12,
-                paddingVertical: 7,
-                borderRadius: 6,
-                cursor: 'pointer'
-              }}
-              onPress={() => addBlock('question', { type: 'short_answer', title: 'New Question' })}
-            >
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>+ Question</Text>
-            </TouchableOpacity>
-
-            <div style={{ display: 'inline-flex', alignItems: 'center' }}>
-              <select
-                onChange={(e) => {
-                  if (e.target.value) {
-                    const mod = availableModules.find(m => m.id === e.target.value);
-                    if (mod) addBlock('module', mod);
-                    e.target.value = '';
-                  }
-                }}
-                defaultValue=""
-                style={{
-                  padding: '7px 10px',
-                  borderRadius: 6,
-                  border: '1.5px solid #008080',
-                  backgroundColor: 'rgba(0, 128, 128, 0.06)',
-                  color: '#008080',
-                  fontWeight: '700',
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                  outline: 'none',
-                  maxWidth: '100%'
-                }}
-              >
-                <option value="" disabled>🛡️ + Add Verification Module ▾</option>
-                {availableModules.map(m => (
-                  <option key={m.id} value={m.id}>🛡️ {m.name}</option>
-                ))}
-              </select>
+        {/* Two-Column Studio Layout */}
+        <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap', width: '100%' }}>
+          
+          {/* ════════════ LEFT: COMPONENT PALETTE & TOOLBOX (320px) ════════════ */}
+          <div style={{
+            width: 320,
+            flex: '0 0 320px',
+            backgroundColor: '#ffffff',
+            borderRadius: 14,
+            border: '1px solid #e2e8f0',
+            padding: 18,
+            boxShadow: '0 4px 16px rgba(0,0,0,0.03)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 18
+          }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 800, color: '#008080', letterSpacing: 0.6, textTransform: 'uppercase' }}>
+                BUILDING BLOCKS
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', marginTop: 2 }}>
+                Toolbox & Flow Elements
+              </div>
+              <div style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>
+                Click any element to add it directly to your flow
+              </div>
             </div>
 
-            <TouchableOpacity
-              style={{
-                backgroundColor: '#0f766e',
-                paddingHorizontal: 12,
-                paddingVertical: 7,
-                borderRadius: 6,
-                cursor: 'pointer'
-              }}
-              onPress={() => addBlock('page_break', { title: `Page ${pages.length + 1} Section` })}
-            >
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>📄 + Page Break</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-            <Text style={{ fontSize: 11, color: '#64748b', fontWeight: '600' }}>Presets:</Text>
-            <TouchableOpacity
-              style={{ backgroundColor: '#f1f5f9', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 14, borderWidth: 1, borderColor: '#e2e8f0', cursor: 'pointer' }}
-              onPress={() => addBlock('question', { type: 'short_answer', title: 'Full Legal Name' })}
-            >
-              <Text style={{ fontSize: 11, fontWeight: '600', color: '#475569' }}>+ Name</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={{ backgroundColor: '#f1f5f9', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 14, borderWidth: 1, borderColor: '#e2e8f0', cursor: 'pointer' }}
-              onPress={() => addBlock('question', { type: 'short_answer', title: 'Work Email Address' })}
-            >
-              <Text style={{ fontSize: 11, fontWeight: '600', color: '#475569' }}>+ Email</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={{ backgroundColor: '#f1f5f9', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 14, borderWidth: 1, borderColor: '#e2e8f0', cursor: 'pointer' }}
-              onPress={() => addBlock('question', { type: 'file_upload', title: 'Document Upload' })}
-            >
-              <Text style={{ fontSize: 11, fontWeight: '600', color: '#475569' }}>+ Document</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* 2. Interactive Block Canvas */}
-        <div style={{ width: '100%' }}>
-          {flowBlocks.map((block, index) => {
-            let pageNumber = 1;
-            for (let i = 0; i < index; i++) {
-              if (flowBlocks[i].kind === 'page_break') pageNumber++;
-            }
-
-            const isQuestion = block.kind === 'question';
-            const isModule = block.kind === 'module';
-            const isPageBreak = block.kind === 'page_break';
-            const isActive = activeFieldId === block.id;
-
-            return (
-              <div key={block.id} style={{ width: '100%', marginBottom: 14 }}>
-                {/* Drop indicator before card */}
-                {_showDropBefore(index) && (
-                  <div className="dropIndicator" style={styles.dropIndicator} />
-                )}
-
-                <div
-                  draggable={true}
-                  onDragStart={(e) => _onDragStart(e, index)}
-                  onDragOver={(e) => _onDragOver(e, index)}
-                  onDrop={(e) => _onDrop(e, index)}
-                  onDragEnd={_onDragEnd}
-                  className={draggedIndex === index ? "pipelineNodeDragging" : ""}
+            {/* Category 1: Verification Modules */}
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+                🛡️ Verification Modules
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <button
+                  type="button"
+                  onClick={() => addBlock('module', { moduleId: 'AADHAAR_FACE', name: 'Aadhaar & Face Verification', desc: 'Combined Aadhaar Document OCR + Live Face Match & Liveness' })}
                   style={{
-                    backgroundColor: '#ffffff',
-                    borderRadius: 12,
-                    border: isModule
-                      ? '2px solid #008080'
-                      : isPageBreak
-                      ? '2px dashed #0f766e'
-                      : (isActive ? '2px solid #008080' : '1px solid #cbd5e1'),
-                    borderLeftWidth: 6,
-                    borderLeftColor: isModule ? '#008080' : (isPageBreak ? '#0f766e' : (isActive ? '#008080' : '#94a3b8')),
-                    boxShadow: isActive ? '0 4px 14px rgba(0, 128, 128, 0.12)' : '0 2px 6px rgba(0,0,0,0.05)',
-                    padding: '16px 18px',
-                    opacity: draggedIndex === index ? 0.45 : 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '9px 12px',
+                    borderRadius: 8,
+                    border: '1px solid rgba(0, 128, 128, 0.22)',
+                    backgroundColor: 'rgba(0, 128, 128, 0.04)',
+                    cursor: 'pointer',
+                    textAlign: 'left',
                     transition: 'all 0.15s ease'
                   }}
                 >
-                  {/* Card Header Bar */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                      {/* Drag Grip Handle */}
-                      <div
-                        className="dragGrip"
-                        title="Drag to rearrange anywhere"
-                        style={{
-                          cursor: 'grab',
-                          padding: '4px 8px',
-                          borderRadius: 6,
-                          background: '#f1f5f9',
-                          color: '#64748b',
-                          fontSize: 16,
-                          fontWeight: 'bold',
-                          userSelect: 'none'
-                        }}
-                      >
-                        ⠿
-                      </div>
-
-                      {/* Kind Pill Badge */}
-                      <span style={{
-                        padding: '4px 10px',
-                        borderRadius: 16,
-                        fontSize: 12,
-                        fontWeight: 700,
-                        backgroundColor: isModule ? 'rgba(0, 128, 128, 0.06)' : (isPageBreak ? '#f0fdfa' : '#f8fafc'),
-                        color: isModule ? '#008080' : (isPageBreak ? '#0f766e' : '#475569'),
-                        border: isModule ? '1px solid rgba(0, 128, 128, 0.22)' : (isPageBreak ? '1px solid #99f6e4' : '1px solid #e2e8f0')
-                      }}>
-                        {isModule ? '🛡️ Verification Module' : (isPageBreak ? '📄 Page Break / New Section' : `📝 Question ${index + 1}`)}
-                      </span>
-
-                      <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>
-                        Page {pageNumber}
-                      </span>
-                    </div>
-
-                    {/* Actions: Duplicate / Delete */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <button
-                        type="button"
-                        onClick={() => duplicateBlock(block.id)}
-                        title="Duplicate"
-                        style={{
-                          background: '#f8fafc',
-                          border: '1px solid #cbd5e1',
-                          borderRadius: 6,
-                          padding: '5px 9px',
-                          cursor: 'pointer',
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: '#334155'
-                        }}
-                      >
-                        📄 Copy
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => deleteBlock(block.id)}
-                        title="Delete"
-                        style={{
-                          background: '#fee2e2',
-                          border: '1px solid #fca5a5',
-                          borderRadius: 6,
-                          padding: '5px 9px',
-                          cursor: 'pointer',
-                          fontSize: 12,
-                          fontWeight: 700,
-                          color: '#b91c1c'
-                        }}
-                      >
-                        🗑️ Delete
-                      </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 18 }}>🛡️</span>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>Aadhaar eKYC</div>
+                      <div style={{ fontSize: 10, color: '#008080', fontWeight: 600 }}>OCR + Face Biometrics</div>
                     </div>
                   </div>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: '#008080' }}>+ Add</span>
+                </button>
 
-                  {/* ────────────────── QUESTION CARD BODY ────────────────── */}
-                  {isQuestion && (
+                <button
+                  type="button"
+                  onClick={() => addBlock('module', { moduleId: 'PAN_FACE', name: 'PAN & Face Verification', desc: 'Combined PAN Card Document OCR + Live Face Match & Liveness' })}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '9px 12px',
+                    borderRadius: 8,
+                    border: '1px solid #bbf7d0',
+                    backgroundColor: '#f0fdf4',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 18 }}>💳</span>
                     <div>
-                      <div style={{ display: 'flex', gap: 10, marginBottom: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-                        <input
-                          type="text"
-                          value={block.title}
-                          onFocus={() => setActiveFieldId(block.id)}
-                          onChange={(e) => updateBlock(block.id, 'title', e.target.value)}
-                          placeholder="Untitled Question"
-                          style={{
-                            flex: '1 1 200px',
-                            minWidth: 160,
-                            padding: '10px 14px',
-                            fontSize: 15,
-                            fontWeight: 600,
-                            color: '#1e293b',
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>PAN Card Check</div>
+                      <div style={{ fontSize: 10, color: '#16a34a', fontWeight: 600 }}>Govt PAN OCR + Face</div>
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: '#16a34a' }}>+ Add</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => addBlock('module', { moduleId: 'EYE_TRACKING', name: 'Eye Tracking & Attention', desc: 'WebGazer eye tracking calibration' })}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '9px 12px',
+                    borderRadius: 8,
+                    border: '1px solid #e2e8f0',
+                    backgroundColor: '#f8fafc',
+                    cursor: 'pointer',
+                    textAlign: 'left'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 18 }}>👁️</span>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>Biometric Liveness</div>
+                      <div style={{ fontSize: 10, color: '#64748b' }}>Anti-spoof face tracking</div>
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>+ Add</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => addBlock('module', { moduleId: 'HUMAN_REVIEW', name: 'Human Review Queue', desc: 'Manual Human Review Audit Queue' })}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '9px 12px',
+                    borderRadius: 8,
+                    border: '1px solid #fde68a',
+                    backgroundColor: '#fffbeb',
+                    cursor: 'pointer',
+                    textAlign: 'left'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 18 }}>⚖️</span>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>Manual Audit</div>
+                      <div style={{ fontSize: 10, color: '#b45309' }}>Compliance review queue</div>
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: '#b45309' }}>+ Add</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Category 2: Form Questions */}
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+                📝 Applicant Fields & Questions
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                <button
+                  type="button"
+                  onClick={() => addBlock('question', { type: 'short_answer', title: 'Full Legal Name' })}
+                  style={{
+                    padding: '8px 10px',
+                    borderRadius: 6,
+                    border: '1px solid #e2e8f0',
+                    backgroundColor: '#ffffff',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: '#334155'
+                  }}
+                >
+                  👤 Full Name
+                </button>
+                <button
+                  type="button"
+                  onClick={() => addBlock('question', { type: 'short_answer', title: 'Work Email Address' })}
+                  style={{
+                    padding: '8px 10px',
+                    borderRadius: 6,
+                    border: '1px solid #e2e8f0',
+                    backgroundColor: '#ffffff',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: '#334155'
+                  }}
+                >
+                  ✉️ Work Email
+                </button>
+                <button
+                  type="button"
+                  onClick={() => addBlock('question', { type: 'short_answer', title: 'Mobile Phone Number' })}
+                  style={{
+                    padding: '8px 10px',
+                    borderRadius: 6,
+                    border: '1px solid #e2e8f0',
+                    backgroundColor: '#ffffff',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: '#334155'
+                  }}
+                >
+                  📱 Phone No.
+                </button>
+                <button
+                  type="button"
+                  onClick={() => addBlock('question', { type: 'file_upload', title: 'Supporting Document Upload' })}
+                  style={{
+                    padding: '8px 10px',
+                    borderRadius: 6,
+                    border: '1px solid #e2e8f0',
+                    backgroundColor: '#ffffff',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: '#334155'
+                  }}
+                >
+                  📁 File Upload
+                </button>
+                <button
+                  type="button"
+                  onClick={() => addBlock('question', { type: 'multiple_choice', title: 'Select Verification Option', options: ['Option A', 'Option B'] })}
+                  style={{
+                    padding: '8px 10px',
+                    borderRadius: 6,
+                    border: '1px solid #e2e8f0',
+                    backgroundColor: '#ffffff',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: '#334155'
+                  }}
+                >
+                  🔘 Choice
+                </button>
+                <button
+                  type="button"
+                  onClick={() => addBlock('question', { type: 'date', title: 'Date of Birth' })}
+                  style={{
+                    padding: '8px 10px',
+                    borderRadius: 6,
+                    border: '1px solid #e2e8f0',
+                    backgroundColor: '#ffffff',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: '#334155'
+                  }}
+                >
+                  📅 Date Field
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => addBlock('question', { type: 'short_answer', title: 'Custom Question' })}
+                style={{
+                  width: '100%',
+                  marginTop: 8,
+                  padding: '8px',
+                  borderRadius: 6,
+                  border: '1px dashed #cbd5e1',
+                  backgroundColor: '#f8fafc',
+                  cursor: 'pointer',
+                  fontWeight: 700,
+                  fontSize: 12,
+                  color: '#008080'
+                }}
+              >
+                + Add Custom Question
+              </button>
+            </div>
+
+            {/* Category 3: Flow Control */}
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+                📑 Flow Structure
+              </div>
+              <button
+                type="button"
+                onClick={() => addBlock('page_break', { title: `Page ${pages.length + 1} Section` })}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '9px 12px',
+                  borderRadius: 8,
+                  border: '1px solid #99f6e4',
+                  backgroundColor: '#f0fdfa',
+                  cursor: 'pointer',
+                  textAlign: 'left'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 16 }}>📄</span>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#0f766e' }}>Page / Section Break</div>
+                    <div style={{ fontSize: 10, color: '#64748b' }}>Creates multi-page journey</div>
+                  </div>
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 800, color: '#0f766e' }}>+ Add</span>
+              </button>
+            </div>
+
+            {/* Category 4: 1-Click Blueprints */}
+            <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+                ⚡ Quick Presets
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFlowBlocks([
+                      { id: 'q-name', kind: 'question', title: 'Full Legal Name', type: 'short_answer', required: true, options: [] },
+                      { id: 'q-email', kind: 'question', title: 'Work Email Address', type: 'short_answer', required: true, options: [] },
+                      { id: 'm-adh', kind: 'module', moduleId: 'AADHAAR_FACE', name: 'Aadhaar & Face Verification', desc: 'Aadhaar Document OCR + Face Match' }
+                    ]);
+                  }}
+                  style={{
+                    padding: '7px 10px',
+                    borderRadius: 6,
+                    border: '1px solid #e2e8f0',
+                    backgroundColor: '#f8fafc',
+                    cursor: 'pointer',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: '#334155',
+                    textAlign: 'left'
+                  }}
+                >
+                  ⚡ Standard KYC Preset
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFlowBlocks([
+                      { id: 'q-name', kind: 'question', title: 'Full Legal Name', type: 'short_answer', required: true, options: [] },
+                      { id: 'm-pan', kind: 'module', moduleId: 'PAN_FACE', name: 'PAN & Face Verification', desc: 'PAN Card OCR + Face Biometrics' }
+                    ]);
+                  }}
+                  style={{
+                    padding: '7px 10px',
+                    borderRadius: 6,
+                    border: '1px solid #e2e8f0',
+                    backgroundColor: '#f8fafc',
+                    cursor: 'pointer',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: '#334155',
+                    textAlign: 'left'
+                  }}
+                >
+                  ⚡ Financial KYC Preset
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+          {/* ════════════ RIGHT: MAIN CANVAS (FLEX 1) ════════════ */}
+          <div style={{ flex: '1 1 640px', minWidth: 320 }}>
+            {/* 1. Header Card (Form Settings) */}
+            <View style={{
+              backgroundColor: '#ffffff',
+              borderRadius: 14,
+              overflow: 'hidden',
+              marginBottom: 20,
+              boxShadow: '0 4px 16px rgba(0,0,0,0.04)',
+              borderWidth: 1,
+              borderColor: '#e2e8f0'
+            }}>
+              <View style={{ height: 6, backgroundColor: '#008080', width: '100%' }} />
+              <View style={{ padding: 22 }}>
+                <TextInput
+                  style={{
+                    fontSize: 24,
+                    fontWeight: '800',
+                    color: '#0f172a',
+                    borderBottomWidth: 1,
+                    borderBottomColor: '#e2e8f0',
+                    paddingBottom: 8,
+                    marginBottom: 10,
+                    outlineStyle: 'none',
+                    fontFamily: "'Manrope', sans-serif"
+                  }}
+                  value={formTitle}
+                  onChangeText={setFormTitle}
+                  placeholder="Untitled Verification Form"
+                  placeholderTextColor="#94a3b8"
+                />
+                <TextInput
+                  style={{
+                    fontSize: 14,
+                    color: '#475569',
+                    lineHeight: 20,
+                    borderBottomWidth: 1,
+                    borderBottomColor: '#f1f5f9',
+                    paddingVertical: 6,
+                    outlineStyle: 'none',
+                    fontFamily: "'Manrope', sans-serif"
+                  }}
+                  value={formDescription}
+                  onChangeText={setFormDescription}
+                  placeholder="Provide instructions for candidates completing identity verification..."
+                  placeholderTextColor="#94a3b8"
+                  multiline
+                />
+
+                {/* Workflow Feature Badges */}
+                <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 14 }}>
+                  <View style={{ backgroundColor: 'rgba(0, 128, 128, 0.06)', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(0, 128, 128, 0.2)' }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#008080' }}>✓ Auto-OCR Extraction</Text>
+                  </View>
+                  <View style={{ backgroundColor: '#ecfdf5', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#a7f3d0' }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#059669' }}>✓ Live Face Biometrics</Text>
+                  </View>
+                  <View style={{ backgroundColor: '#eff6ff', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#bfdbfe' }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#2563eb' }}>✓ Multi-Page Stepper</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+
+            {/* 2. Interactive Flow Block Sequence */}
+            <div style={{ width: '100%' }}>
+              {flowBlocks.map((block, index) => {
+                let pageNumber = 1;
+                for (let i = 0; i < index; i++) {
+                  if (flowBlocks[i].kind === 'page_break') pageNumber++;
+                }
+
+                const isQuestion = block.kind === 'question';
+                const isModule = block.kind === 'module';
+                const isPageBreak = block.kind === 'page_break';
+                const isActive = activeFieldId === block.id;
+
+                return (
+                  <div key={block.id} style={{ width: '100%', marginBottom: 16 }}>
+                    {/* Drop indicator before card */}
+                    {_showDropBefore(index) && (
+                      <div className="dropIndicator" style={styles.dropIndicator} />
+                    )}
+
+                    <div
+                      draggable={true}
+                      onDragStart={(e) => _onDragStart(e, index)}
+                      onDragOver={(e) => _onDragOver(e, index)}
+                      onDrop={(e) => _onDrop(e, index)}
+                      onDragEnd={_onDragEnd}
+                      className={draggedIndex === index ? "pipelineNodeDragging" : ""}
+                      style={{
+                        backgroundColor: '#ffffff',
+                        borderRadius: 12,
+                        border: isModule
+                          ? '1.5px solid rgba(0, 128, 128, 0.35)'
+                          : isPageBreak
+                          ? '1.5px dashed #0f766e'
+                          : (isActive ? '1.5px solid #008080' : '1px solid #e2e8f0'),
+                        borderLeftWidth: 5,
+                        borderLeftColor: isModule ? '#008080' : (isPageBreak ? '#0f766e' : (isActive ? '#008080' : '#475569')),
+                        boxShadow: isActive ? '0 4px 14px rgba(0, 128, 128, 0.12)' : '0 2px 8px rgba(0,0,0,0.03)',
+                        padding: '16px 20px',
+                        opacity: draggedIndex === index ? 0.45 : 1,
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      {/* Card Header Bar */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          {/* Drag Grip Handle */}
+                          <div
+                            className="dragGrip"
+                            title="Drag to rearrange anywhere"
+                            style={{
+                              cursor: 'grab',
+                              padding: '4px 8px',
+                              borderRadius: 6,
+                              background: '#f1f5f9',
+                              color: '#64748b',
+                              fontSize: 16,
+                              fontWeight: 'bold',
+                              userSelect: 'none'
+                            }}
+                          >
+                            ⠿
+                          </div>
+
+                          {/* Step Number Tag */}
+                          <span style={{
+                            padding: '3px 8px',
                             borderRadius: 6,
-                            border: '1.5px solid #cbd5e1',
-                            outline: 'none',
-                            backgroundColor: '#f8fafc'
-                          }}
-                        />
+                            fontSize: 11,
+                            fontWeight: 800,
+                            backgroundColor: '#0f172a',
+                            color: '#ffffff',
+                            letterSpacing: 0.5
+                          }}>
+                            STEP {index + 1}
+                          </span>
 
-                        <select
-                          value={block.type}
-                          onChange={(e) => updateBlock(block.id, 'type', e.target.value)}
-                          style={{
-                            flex: '0 0 auto',
-                            minWidth: 140,
-                            padding: '10px 12px',
-                            borderRadius: 6,
-                            border: '1.5px solid #cbd5e1',
-                            backgroundColor: '#ffffff',
-                            fontWeight: 600,
-                            fontSize: 13,
-                            color: '#1e293b',
-                            cursor: 'pointer',
-                            outline: 'none'
-                          }}
-                        >
-                          {FIELD_TYPES.map(t => (
-                            <option key={t.id} value={t.id}>{t.icon} {t.label}</option>
-                          ))}
-                        </select>
-                      </div>
+                          {/* Kind Pill Badge */}
+                          <span style={{
+                            padding: '3px 10px',
+                            borderRadius: 16,
+                            fontSize: 11,
+                            fontWeight: 700,
+                            backgroundColor: isModule ? 'rgba(0, 128, 128, 0.08)' : (isPageBreak ? '#f0fdfa' : '#f8fafc'),
+                            color: isModule ? '#008080' : (isPageBreak ? '#0f766e' : '#475569'),
+                            border: isModule ? '1px solid rgba(0, 128, 128, 0.22)' : (isPageBreak ? '1px solid #99f6e4' : '1px solid #e2e8f0')
+                          }}>
+                            {isModule ? '🛡️ Verification Module' : (isPageBreak ? '📄 Page Section Break' : `📝 Form Question`)}
+                          </span>
 
-                      {/* Dynamic Answer Preview */}
-                      <div style={{ paddingVertical: 8, marginBottom: 10 }}>
-                        {block.type === 'short_answer' && (
-                          <div style={{ borderBottom: '1.5px dotted #cbd5e1', width: '50%', padding: '6px 0', color: '#94a3b8', fontSize: 13 }}>
-                            Short-answer text
-                          </div>
-                        )}
-                        {block.type === 'paragraph' && (
-                          <div style={{ borderBottom: '1.5px dotted #cbd5e1', width: '80%', padding: '12px 0', color: '#94a3b8', fontSize: 13 }}>
-                            Long-answer paragraph text
-                          </div>
-                        )}
-                        {['multiple_choice', 'checkboxes', 'dropdown'].includes(block.type) && (
-                          <div style={{ gap: 8, display: 'flex', flexDirection: 'column' }}>
-                            {(block.options || ['Option 1']).map((opt, oIdx) => (
-                              <div key={oIdx} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <span style={{ color: '#64748b' }}>
-                                  {block.type === 'multiple_choice' ? '🔘' : (block.type === 'checkboxes' ? '☑️' : `${oIdx + 1}.`)}
-                                </span>
-                                <input
-                                  type="text"
-                                  value={opt}
-                                  onChange={(e) => updateOption(block.id, oIdx, e.target.value)}
-                                  placeholder={`Option ${oIdx + 1}`}
-                                  style={{
-                                    flex: 1,
-                                    maxWidth: 420,
-                                    padding: '6px 10px',
-                                    border: '1px solid #cbd5e1',
-                                    borderRadius: 4,
-                                    fontSize: 13
-                                  }}
-                                />
-                                {(block.options || []).length > 1 && (
-                                  <button
-                                    type="button"
-                                    onClick={() => deleteOption(block.id, oIdx)}
-                                    style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 16 }}
-                                  >✕</button>
-                                )}
-                              </div>
-                            ))}
-                            <button
-                              type="button"
-                              onClick={() => addOption(block.id)}
-                              style={{
-                                background: 'none',
-                                border: 'none',
-                                color: '#008080',
-                                fontWeight: 700,
-                                fontSize: 13,
-                                cursor: 'pointer',
-                                textAlign: 'left',
-                                padding: '4px 0',
-                                width: 'fit-content'
-                              }}
-                            >
-                              + Add option
-                            </button>
-                          </div>
-                        )}
-                        {block.type === 'date' && (
-                          <div style={{ color: '#64748b', fontSize: 13, padding: '6px 10px', background: '#f8fafc', borderRadius: 4, display: 'inline-block' }}>
-                            📅 Month, day, year
-                          </div>
-                        )}
-                        {block.type === 'file_upload' && (
-                          <div style={{ color: '#008080', fontSize: 13, padding: '8px 12px', background: 'rgba(0, 128, 128, 0.06)', borderRadius: 6, display: 'inline-block', fontWeight: 600 }}>
-                            📁 Applicant document / image file upload
-                          </div>
-                        )}
-                      </div>
+                          <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>
+                            Page {pageNumber}
+                          </span>
+                        </div>
 
-                      {/* Card Footer Bar: Add Below & Required Toggle */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, borderTop: '1px solid #f1f5f9', paddingTop: 10, flexWrap: 'wrap' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: 11, fontWeight: '700', color: '#64748b' }}>+ Add Below:</span>
+                        {/* Actions: Duplicate / Delete */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <button
                             type="button"
-                            onClick={() => addBlock('question', { type: 'short_answer', title: 'New Question' }, index + 1)}
+                            onClick={() => duplicateBlock(block.id)}
+                            title="Duplicate this step"
                             style={{
                               background: '#f8fafc',
                               border: '1px solid #cbd5e1',
-                              borderRadius: 12,
-                              padding: '3px 8px',
-                              fontSize: 11,
+                              borderRadius: 6,
+                              padding: '5px 10px',
+                              cursor: 'pointer',
+                              fontSize: 12,
                               fontWeight: 600,
+                              color: '#334155'
+                            }}
+                          >
+                            📄 Copy
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteBlock(block.id)}
+                            title="Remove this step"
+                            style={{
+                              background: '#fee2e2',
+                              border: '1px solid #fca5a5',
+                              borderRadius: 6,
+                              padding: '5px 10px',
+                              cursor: 'pointer',
+                              fontSize: 12,
+                              fontWeight: 700,
+                              color: '#b91c1c'
+                            }}
+                          >
+                            🗑️ Delete
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* ────────────────── QUESTION CARD BODY ────────────────── */}
+                      {isQuestion && (
+                        <div>
+                          <div style={{ display: 'flex', gap: 10, marginBottom: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <input
+                              type="text"
+                              value={block.title}
+                              onFocus={() => setActiveFieldId(block.id)}
+                              onChange={(e) => updateBlock(block.id, 'title', e.target.value)}
+                              placeholder="Untitled Question"
+                              style={{
+                                flex: '1 1 240px',
+                                minWidth: 180,
+                                padding: '10px 14px',
+                                fontSize: 15,
+                                fontWeight: 600,
+                                color: '#1e293b',
+                                borderRadius: 8,
+                                border: '1.5px solid #cbd5e1',
+                                outline: 'none',
+                                backgroundColor: '#f8fafc'
+                              }}
+                            />
+
+                            <select
+                              value={block.type}
+                              onChange={(e) => updateBlock(block.id, 'type', e.target.value)}
+                              style={{
+                                flex: '0 0 auto',
+                                minWidth: 150,
+                                padding: '10px 12px',
+                                borderRadius: 8,
+                                border: '1.5px solid #cbd5e1',
+                                backgroundColor: '#ffffff',
+                                fontWeight: 600,
+                                fontSize: 13,
+                                color: '#1e293b',
+                                cursor: 'pointer',
+                                outline: 'none'
+                              }}
+                            >
+                              {FIELD_TYPES.map(t => (
+                                <option key={t.id} value={t.id}>{t.icon} {t.label}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Dynamic Answer Preview */}
+                          <div style={{ paddingVertical: 8, marginBottom: 10 }}>
+                            {block.type === 'short_answer' && (
+                              <div style={{ borderBottom: '1.5px dotted #cbd5e1', width: '50%', padding: '6px 0', color: '#94a3b8', fontSize: 13 }}>
+                                Short-answer candidate response
+                              </div>
+                            )}
+                            {block.type === 'paragraph' && (
+                              <div style={{ borderBottom: '1.5px dotted #cbd5e1', width: '80%', padding: '12px 0', color: '#94a3b8', fontSize: 13 }}>
+                                Long-answer paragraph text
+                              </div>
+                            )}
+                            {['multiple_choice', 'checkboxes', 'dropdown'].includes(block.type) && (
+                              <div style={{ gap: 8, display: 'flex', flexDirection: 'column' }}>
+                                {(block.options || ['Option 1']).map((opt, oIdx) => (
+                                  <div key={oIdx} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <span style={{ color: '#64748b' }}>
+                                      {block.type === 'multiple_choice' ? '🔘' : (block.type === 'checkboxes' ? '☑️' : `${oIdx + 1}.`)}
+                                    </span>
+                                    <input
+                                      type="text"
+                                      value={opt}
+                                      onChange={(e) => updateOption(block.id, oIdx, e.target.value)}
+                                      placeholder={`Option ${oIdx + 1}`}
+                                      style={{
+                                        flex: 1,
+                                        maxWidth: 420,
+                                        padding: '7px 12px',
+                                        border: '1px solid #cbd5e1',
+                                        borderRadius: 6,
+                                        fontSize: 13
+                                      }}
+                                    />
+                                    {(block.options || []).length > 1 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => deleteOption(block.id, oIdx)}
+                                        style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 16 }}
+                                      >✕</button>
+                                    )}
+                                  </div>
+                                ))}
+                                <button
+                                  type="button"
+                                  onClick={() => addOption(block.id)}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: '#008080',
+                                    fontWeight: 700,
+                                    fontSize: 13,
+                                    cursor: 'pointer',
+                                    textAlign: 'left',
+                                    padding: '4px 0',
+                                    width: 'fit-content'
+                                  }}
+                                >
+                                  + Add option
+                                </button>
+                              </div>
+                            )}
+                            {block.type === 'date' && (
+                              <div style={{ color: '#64748b', fontSize: 13, padding: '7px 12px', background: '#f8fafc', borderRadius: 6, display: 'inline-block' }}>
+                                📅 Month, day, year picker
+                              </div>
+                            )}
+                            {block.type === 'file_upload' && (
+                              <div style={{ color: '#008080', fontSize: 13, padding: '8px 14px', background: 'rgba(0, 128, 128, 0.06)', borderRadius: 6, display: 'inline-block', fontWeight: 600 }}>
+                                📁 Applicant document upload (PDF, JPG, PNG)
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Card Footer Bar: Required Toggle */}
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, color: '#475569', fontWeight: 600 }}>
+                              <input
+                                type="checkbox"
+                                checked={!!block.required}
+                                onChange={(e) => updateBlock(block.id, 'required', e.target.checked)}
+                              />
+                              Required for submission
+                            </label>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* ────────────────── MODULE CARD BODY ────────────────── */}
+                      {isModule && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: '1 1 240px', minWidth: 180 }}>
+                              <span style={{ fontSize: 28 }}>{block.icon || '🛡️'}</span>
+                              <div>
+                                <div style={{ fontWeight: 800, fontSize: 16, color: '#0f172a' }}>
+                                  {block.name}
+                                </div>
+                                <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
+                                  {block.desc}
+                                </div>
+                              </div>
+                            </div>
+
+                            <select
+                              value={block.moduleId}
+                              onChange={(e) => updateBlock(block.id, 'moduleId', e.target.value)}
+                              style={{
+                                flex: '0 0 auto',
+                                minWidth: 180,
+                                padding: '8px 12px',
+                                borderRadius: 8,
+                                border: '1.5px solid #008080',
+                                backgroundColor: '#ffffff',
+                                color: '#008080',
+                                fontWeight: 700,
+                                fontSize: 13,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              {availableModules.map(m => (
+                                <option key={m.id} value={m.id}>{m.name}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Workflow Capabilities Box */}
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4, background: 'rgba(0, 128, 128, 0.05)', padding: '10px 14px', borderRadius: 8, border: '1px solid rgba(0, 128, 128, 0.18)' }}>
+                            <span style={{ fontSize: 12, color: '#008080', fontWeight: 700 }}>⚡ Automated Verification:</span>
+                            <span style={{ fontSize: 12, color: '#0f766e', fontWeight: 600 }}>✓ AI Document OCR</span>
+                            <span style={{ fontSize: 12, color: '#cbd5e1' }}>•</span>
+                            <span style={{ fontSize: 12, color: '#0f766e', fontWeight: 600 }}>✓ Live Webcam Face Biometrics</span>
+                            <span style={{ fontSize: 12, color: '#cbd5e1' }}>•</span>
+                            <span style={{ fontSize: 12, color: '#0f766e', fontWeight: 600 }}>✓ 3D Anti-Spoof Liveness</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* ────────────────── PAGE BREAK CARD BODY ────────────────── */}
+                      {isPageBreak && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: 22 }}>📑</span>
+                            <input
+                              type="text"
+                              value={block.title}
+                              onChange={(e) => updateBlock(block.id, 'title', e.target.value)}
+                              placeholder="Page Section Title (e.g. Identity Documents)"
+                              style={{
+                                flex: '1 1 220px',
+                                minWidth: 180,
+                                padding: '8px 12px',
+                                fontSize: 15,
+                                fontWeight: 700,
+                                borderRadius: 6,
+                                border: '1px solid #0f766e',
+                                color: '#0f766e',
+                                backgroundColor: '#f0fdfa'
+                              }}
+                            />
+                          </div>
+                          <div style={{ fontSize: 12, color: '#0f766e', background: 'rgba(15, 118, 110, 0.08)', padding: '8px 12px', borderRadius: 6 }}>
+                            ℹ️ Multi-page Section: Questions above this marker appear on Page {pageNumber}. Subsequent items advance to Page {pageNumber + 1}.
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Clean Inserter Line between cards */}
+                    <div
+                      onMouseEnter={() => setHoveredGapIndex(index)}
+                      onMouseLeave={() => setHoveredGapIndex(null)}
+                      style={{
+                        position: 'relative',
+                        height: (hoveredGapIndex === index || openInserterIndex === index) ? 36 : 8,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'all 0.15s ease',
+                        margin: '2px 0'
+                      }}
+                    >
+                      <div style={{
+                        position: 'absolute',
+                        left: 20,
+                        right: 20,
+                        height: 1.5,
+                        backgroundColor: '#008080',
+                        opacity: (hoveredGapIndex === index || openInserterIndex === index) ? 0.35 : 0,
+                        transition: 'opacity 0.15s ease'
+                      }} />
+
+                      {(hoveredGapIndex === index || openInserterIndex === index) ? (
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          backgroundColor: '#ffffff',
+                          padding: '3px 10px',
+                          borderRadius: 20,
+                          border: '1.5px solid #008080',
+                          boxShadow: '0 2px 8px rgba(0, 128, 128, 0.25)',
+                          zIndex: 10
+                        }}>
+                          <button
+                            type="button"
+                            onClick={() => { addBlock('question', { type: 'short_answer', title: 'New Question' }, index + 1); setOpenInserterIndex(null); }}
+                            style={{
+                              background: '#ffffff',
+                              border: '1px solid #cbd5e1',
+                              borderRadius: 12,
+                              padding: '3px 9px',
+                              fontSize: 11,
+                              fontWeight: 700,
                               color: '#334155',
                               cursor: 'pointer'
                             }}
                           >
                             + Question
                           </button>
+
+                          <div style={{ display: 'inline-flex', alignItems: 'center' }}>
+                            <select
+                              onChange={(e) => {
+                                if (e.target.value) {
+                                  const mod = availableModules.find(m => m.id === e.target.value);
+                                  if (mod) addBlock('module', mod, index + 1);
+                                  e.target.value = '';
+                                  setOpenInserterIndex(null);
+                                }
+                              }}
+                              defaultValue=""
+                              style={{
+                                padding: '3px 8px',
+                                borderRadius: 12,
+                                border: '1px solid rgba(0, 128, 128, 0.22)',
+                                backgroundColor: 'rgba(0, 128, 128, 0.06)',
+                                color: '#008080',
+                                fontWeight: 700,
+                                fontSize: '11px',
+                                cursor: 'pointer',
+                                outline: 'none'
+                              }}
+                            >
+                              <option value="" disabled>🛡️ + Module ▾</option>
+                              {availableModules.map(m => (
+                                <option key={m.id} value={m.id}>{m.name}</option>
+                              ))}
+                            </select>
+                          </div>
+
                           <button
                             type="button"
-                            onClick={() => addBlock('module', { moduleId: 'AADHAAR_FACE' }, index + 1)}
-                            style={{
-                              background: 'rgba(0, 128, 128, 0.06)',
-                              border: '1px solid rgba(0, 128, 128, 0.22)',
-                              borderRadius: 12,
-                              padding: '3px 8px',
-                              fontSize: 11,
-                              fontWeight: 700,
-                              color: '#008080',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            🛡️ + Module
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => addBlock('page_break', { title: `Page ${pageNumber + 1} Section` }, index + 1)}
+                            onClick={() => { addBlock('page_break', { title: `Page ${pageNumber + 1} Section` }, index + 1); setOpenInserterIndex(null); }}
                             style={{
                               background: '#f0fdfa',
                               border: '1px solid #99f6e4',
                               borderRadius: 12,
-                              padding: '3px 8px',
+                              padding: '3px 9px',
                               fontSize: 11,
                               fontWeight: 700,
                               color: '#0f766e',
@@ -2517,437 +2972,71 @@ export default function App() {
                             📄 + Section
                           </button>
                         </div>
-
-                        <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, color: '#475569', fontWeight: 600 }}>
-                          <input
-                            type="checkbox"
-                            checked={!!block.required}
-                            onChange={(e) => updateBlock(block.id, 'required', e.target.checked)}
-                          />
-                          Required question
-                        </label>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* ────────────────── MODULE CARD BODY ────────────────── */}
-                  {isModule && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: '1 1 220px', minWidth: 180 }}>
-                          <span style={{ fontSize: 28 }}>{block.icon || '🛡️'}</span>
-                          <div>
-                            <div style={{ fontWeight: 800, fontSize: 16, color: '#1e293b' }}>
-                              {block.name}
-                            </div>
-                            <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
-                              {block.desc}
-                            </div>
-                          </div>
-                        </div>
-
-                        <select
-                          value={block.moduleId}
-                          onChange={(e) => updateBlock(block.id, 'moduleId', e.target.value)}
+                      ) : (
+                        <div
+                          onClick={() => setOpenInserterIndex(openInserterIndex === index ? null : index)}
+                          title="Insert step here"
                           style={{
-                            flex: '0 0 auto',
-                            minWidth: 160,
-                            padding: '8px 12px',
-                            borderRadius: 6,
-                            border: '1.5px solid #008080',
+                            width: 18,
+                            height: 18,
+                            borderRadius: 9,
                             backgroundColor: '#ffffff',
-                            color: '#008080',
-                            fontWeight: 700,
-                            fontSize: 13,
-                            cursor: 'pointer'
-                          }}
-                        >
-                          {availableModules.map(m => (
-                            <option key={m.id} value={m.id}>{m.name}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Workflow Chips */}
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 4, background: 'rgba(0, 128, 128, 0.06)', padding: '10px 14px', borderRadius: 8, border: '1px solid rgba(0, 128, 128, 0.22)' }}>
-                        <span style={{ fontSize: 12, color: '#008080', fontWeight: 700 }}>⚡ Executes on this page:</span>
-                        <span style={{ fontSize: 12, color: '#4c1d95', fontWeight: 600 }}>✓ Document Image OCR</span>
-                        <span style={{ fontSize: 12, color: '#cbd5e1' }}>•</span>
-                        <span style={{ fontSize: 12, color: '#4c1d95', fontWeight: 600 }}>✓ Live Webcam Face Match</span>
-                        <span style={{ fontSize: 12, color: '#cbd5e1' }}>•</span>
-                        <span style={{ fontSize: 12, color: '#4c1d95', fontWeight: 600 }}>✓ Anti-Spoof Liveness</span>
-                      </div>
-
-                      {/* Module Card Footer */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, borderTop: '1px solid rgba(0, 128, 128, 0.06)', paddingTop: 8, flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: 11, fontWeight: '700', color: '#64748b' }}>+ Add Below:</span>
-                        <button
-                          type="button"
-                          onClick={() => addBlock('question', { type: 'short_answer', title: 'New Question' }, index + 1)}
-                          style={{
-                            background: '#f8fafc',
                             border: '1px solid #cbd5e1',
-                            borderRadius: 12,
-                            padding: '3px 8px',
-                            fontSize: 11,
-                            fontWeight: 600,
-                            color: '#334155',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          + Question
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => addBlock('module', { moduleId: 'PAN_FACE' }, index + 1)}
-                          style={{
-                            background: 'rgba(0, 128, 128, 0.06)',
-                            border: '1px solid rgba(0, 128, 128, 0.22)',
-                            borderRadius: 12,
-                            padding: '3px 8px',
-                            fontSize: 11,
-                            fontWeight: 700,
-                            color: '#008080',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          🛡️ + Module
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => addBlock('page_break', { title: `Page ${pageNumber + 1} Section` }, index + 1)}
-                          style={{
-                            background: '#f0fdfa',
-                            border: '1px solid #99f6e4',
-                            borderRadius: 12,
-                            padding: '3px 8px',
-                            fontSize: 11,
-                            fontWeight: 700,
-                            color: '#0f766e',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          📄 + Section
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* ────────────────── PAGE BREAK CARD BODY ────────────────── */}
-                  {isPageBreak && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: 22 }}>📑</span>
-                        <input
-                          type="text"
-                          value={block.title}
-                          onChange={(e) => updateBlock(block.id, 'title', e.target.value)}
-                          placeholder="Page Section Title (e.g. Page 2: Identity Documents)"
-                          style={{
-                            flex: '1 1 220px',
-                            minWidth: 180,
-                            padding: '8px 12px',
-                            fontSize: 15,
-                            fontWeight: 700,
-                            borderRadius: 6,
-                            border: '1px solid #0f766e',
-                            color: '#0f766e',
-                            backgroundColor: '#f0fdfa'
-                          }}
-                        />
-                      </div>
-                      <div style={{ fontSize: 12, color: '#0f766e', background: 'rgba(15, 118, 110, 0.08)', padding: '8px 12px', borderRadius: 6 }}>
-                        ℹ️ Section Break: Questions and modules above this break appear on Page {pageNumber}. Everything below advances to Page {pageNumber + 1}.
-                      </div>
-
-                      {/* Page Break Card Footer */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, borderTop: '1px solid #f0fdfa', paddingTop: 8, flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: 11, fontWeight: '700', color: '#0f766e' }}>+ Add to this section:</span>
-                        <button
-                          type="button"
-                          onClick={() => addBlock('question', { type: 'short_answer', title: 'New Question' }, index + 1)}
-                          style={{
-                            background: '#ffffff',
-                            border: '1px solid #cbd5e1',
-                            borderRadius: 12,
-                            padding: '3px 8px',
-                            fontSize: 11,
-                            fontWeight: 600,
-                            color: '#334155',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          + Question
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => addBlock('module', { moduleId: 'AADHAAR_FACE' }, index + 1)}
-                          style={{
-                            background: 'rgba(0, 128, 128, 0.06)',
-                            border: '1px solid rgba(0, 128, 128, 0.22)',
-                            borderRadius: 12,
-                            padding: '3px 8px',
-                            fontSize: 11,
-                            fontWeight: 700,
-                            color: '#008080',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          🛡️ + Module
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Clean Inserter Line between cards (Notion / Google Forms style - clean & uncluttered) */}
-                <div
-                  onMouseEnter={() => setHoveredGapIndex(index)}
-                  onMouseLeave={() => setHoveredGapIndex(null)}
-                  style={{
-                    position: 'relative',
-                    height: (hoveredGapIndex === index || openInserterIndex === index) ? 36 : 8,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    transition: 'all 0.15s ease',
-                    margin: '2px 0'
-                  }}
-                >
-                  {/* Subtle hairline only shown when hovered or opened */}
-                  <div style={{
-                    position: 'absolute',
-                    left: 20,
-                    right: 20,
-                    height: 1.5,
-                    backgroundColor: '#008080',
-                    opacity: (hoveredGapIndex === index || openInserterIndex === index) ? 0.35 : 0,
-                    transition: 'opacity 0.15s ease'
-                  }} />
-
-                  {/* Clean Mini Inserter Bar shown on hover or when clicked */}
-                  {(hoveredGapIndex === index || openInserterIndex === index) ? (
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      backgroundColor: '#ffffff',
-                      padding: '3px 10px',
-                      borderRadius: 20,
-                      border: '1.5px solid #008080',
-                      boxShadow: '0 2px 8px rgba(0, 128, 128, 0.25)',
-                      zIndex: 10
-                    }}>
-                      <button
-                        type="button"
-                        onClick={() => { addBlock('question', { type: 'short_answer', title: 'New Question' }, index + 1); setOpenInserterIndex(null); }}
-                        style={{
-                          background: '#ffffff',
-                          border: '1px solid #cbd5e1',
-                          borderRadius: 12,
-                          padding: '3px 9px',
-                          fontSize: 11,
-                          fontWeight: 700,
-                          color: '#334155',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        + Question
-                      </button>
-
-                      <div style={{ display: 'inline-flex', alignItems: 'center' }}>
-                        <select
-                          onChange={(e) => {
-                            if (e.target.value) {
-                              const mod = availableModules.find(m => m.id === e.target.value);
-                              if (mod) addBlock('module', mod, index + 1);
-                              e.target.value = '';
-                              setOpenInserterIndex(null);
-                            }
-                          }}
-                          defaultValue=""
-                          style={{
-                            padding: '3px 8px',
-                            borderRadius: 12,
-                            border: '1px solid rgba(0, 128, 128, 0.22)',
-                            backgroundColor: 'rgba(0, 128, 128, 0.06)',
-                            color: '#008080',
-                            fontWeight: 700,
-                            fontSize: '11px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
                             cursor: 'pointer',
-                            outline: 'none'
+                            opacity: 0.2,
+                            transition: 'all 0.15s ease'
                           }}
+                          onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.2'; }}
                         >
-                          <option value="" disabled>🛡️ + Module ▾</option>
-                          {availableModules.map(m => (
-                            <option key={m.id} value={m.id}>{m.name}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => { addBlock('page_break', { title: `Page ${pageNumber + 1} Section` }, index + 1); setOpenInserterIndex(null); }}
-                        style={{
-                          background: '#f0fdfa',
-                          border: '1px solid #99f6e4',
-                          borderRadius: 12,
-                          padding: '3px 9px',
-                          fontSize: 11,
-                          fontWeight: 700,
-                          color: '#0f766e',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        📄 + Section
-                      </button>
+                          <span style={{ fontSize: 11, color: '#64748b', fontWeight: 'bold', lineHeight: '11px' }}>+</span>
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    /* Subtle + dot that appears on hover or tap */
-                    <div
-                      onClick={() => setOpenInserterIndex(openInserterIndex === index ? null : index)}
-                      title="Insert element here"
-                      style={{
-                        width: 18,
-                        height: 18,
-                        borderRadius: 9,
-                        backgroundColor: '#ffffff',
-                        border: '1px solid #cbd5e1',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        opacity: 0.2,
-                        transition: 'all 0.15s ease'
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.2'; }}
-                    >
-                      <span style={{ fontSize: 11, color: '#64748b', fontWeight: 'bold', lineHeight: '11px' }}>+</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+                  </div>
+                );
+              })}
 
-          {/* Clean dashed Add-Element card at the bottom of the canvas */}
-          <div style={{
-            marginTop: 8,
-            padding: '16px 20px',
-            borderRadius: 12,
-            border: '2px dashed #cbd5e1',
-            backgroundColor: '#f8fafc',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: 12
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: 20 }}>➕</span>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 14, color: '#334155' }}>Add Next Element to Flow</div>
-                <div style={{ fontSize: 12, color: '#64748b' }}>Insert a new question, verification step, or page break</div>
-              </div>
+              {/* Drop indicator after last card */}
+              {_showDropBefore(flowBlocks.length) && (
+                <div className="dropIndicator" style={styles.dropIndicator} />
+              )}
             </div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                onClick={() => addBlock('question', { type: 'short_answer', title: 'New Question' })}
-                style={{
-                  backgroundColor: '#008080',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: 8,
-                  padding: '8px 14px',
-                  fontWeight: 700,
-                  fontSize: 13,
-                  cursor: 'pointer'
-                }}
+
+            {/* 3. Bottom Save Action Floating Footer */}
+            <View style={{
+              marginTop: 20,
+              padding: 20,
+              backgroundColor: '#ffffff',
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: '#e2e8f0',
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 14,
+              boxShadow: '0 4px 14px rgba(0,0,0,0.04)'
+            }}>
+              <View style={{ flex: 1, minWidth: 220 }}>
+                <Text style={{ fontSize: 16, fontWeight: '800', color: '#0f172a' }}>Ready to deploy this verification flow?</Text>
+                <Text style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
+                  Configured with {questionCount} questions and {moduleCount} verification steps across {pages.length} {pages.length === 1 ? 'page' : 'pages'}.
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.btn, { backgroundColor: '#008080', paddingHorizontal: 26, paddingVertical: 12, borderRadius: 8, marginBottom: 0 }]}
+                onPress={generateLink}
+                testID="save-deploy-bottom-btn"
               >
-                + Add Question
-              </button>
-              <select
-                onChange={(e) => {
-                  if (e.target.value) {
-                    const mod = availableModules.find(m => m.id === e.target.value);
-                    if (mod) addBlock('module', mod);
-                    e.target.value = '';
-                  }
-                }}
-                defaultValue=""
-                style={{
-                  padding: '7px 12px',
-                  borderRadius: 8,
-                  border: '1.5px solid #008080',
-                  backgroundColor: '#ffffff',
-                  color: '#008080',
-                  fontWeight: 700,
-                  fontSize: 13,
-                  cursor: 'pointer',
-                  outline: 'none'
-                }}
-              >
-                <option value="" disabled>🛡️ + Add Verification Module ▾</option>
-                {availableModules.map(m => (
-                  <option key={m.id} value={m.id}>🛡️ {m.name}</option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => addBlock('page_break', { title: `Page ${pages.length + 1} Section` })}
-                style={{
-                  backgroundColor: '#0f766e',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: 8,
-                  padding: '8px 14px',
-                  fontWeight: 700,
-                  fontSize: 13,
-                  cursor: 'pointer'
-                }}
-              >
-                📄 + Page Break
-              </button>
-            </div>
+                <Text style={[styles.btnText, { fontWeight: '700' }]}>Save & Review for Publish 🚀</Text>
+              </TouchableOpacity>
+            </View>
           </div>
-
-          {/* Drop indicator after last card */}
-          {_showDropBefore(flowBlocks.length) && (
-            <div className="dropIndicator" style={styles.dropIndicator} />
-          )}
         </div>
-
-        {/* 3. Bottom Save Action Floating Footer */}
-        <View style={{
-          marginTop: 24,
-          padding: 18,
-          backgroundColor: '#ffffff',
-          borderRadius: 12,
-          borderWidth: 1,
-          borderColor: '#e2e8f0',
-          flexDirection: 'row',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 14,
-          boxShadow: '0 4px 12px rgba(0,0,0,0.06)'
-        }}>
-          <View style={{ flex: 1, minWidth: 220 }}>
-            <Text style={{ fontSize: 16, fontWeight: '700', color: '#1e293b' }}>Ready to deploy this verification flow?</Text>
-            <Text style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
-              Configured with {questionCount} questions and {moduleCount} verification steps across {pages.length} {pages.length === 1 ? 'page' : 'pages'}.
-            </Text>
-          </View>
-          <TouchableOpacity
-            style={[styles.btn, { backgroundColor: '#008080', paddingHorizontal: 28, marginBottom: 0 }]}
-            onPress={generateLink}
-            testID="save-deploy-bottom-btn"
-          >
-            <Text style={styles.btnText}>Save & Review for Publish 🚀</Text>
-          </TouchableOpacity>
-        </View>
 
         {/* Form Interactive Preview Modal */}
         <Modal visible={formPreviewVisible} transparent={true} animationType="fade">

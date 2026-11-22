@@ -41,44 +41,24 @@ const PLACEHOLDER_IMAGE = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org
 
 const DEFAULT_PREBUILT_PIPELINES = [
   {
-    pid: 'FLOW-ADH01',
-    name: 'Aadhaar eKYC Onboarding',
-    modules: ['Aadhaar & Face Verification', 'PAN Verification (OCR)'],
-    flowParams: 'AADHAAR_FACE,PAN',
-    link: 'http://localhost:5174/verify.html?flow=AADHAAR_FACE%2CPAN&pid=FLOW-ADH01',
+    pid: 'FLOW-AADHAAR',
+    name: 'Aadhaar & Face Verification',
+    modules: ['Aadhaar & Face Verification'],
+    flowParams: 'FORM,AADHAAR_FACE',
+    link: 'http://localhost:5174/verify.html?flow=FORM%2CAADHAAR_FACE&pid=FLOW-AADHAAR',
     status: 'published',
-    created_at: 'Opened 10:45 AM',
-    themeColor: '#673ab7'
+    created_at: 'Live',
+    themeColor: '#008080'
   },
   {
-    pid: 'FLOW-EMP02',
-    name: 'Employee Background Check',
-    modules: ['Aadhaar & Face Verification', 'Eye Tracking & Attention'],
-    flowParams: 'AADHAAR_FACE,EYE_TRACKING',
-    link: 'http://localhost:5174/verify.html?flow=AADHAAR_FACE%2CEYE_TRACKING&pid=FLOW-EMP02',
+    pid: 'FLOW-PAN',
+    name: 'PAN & Face Verification',
+    modules: ['PAN & Face Verification'],
+    flowParams: 'FORM,PAN_FACE',
+    link: 'http://localhost:5174/verify.html?flow=FORM%2CPAN_FACE&pid=FLOW-PAN',
     status: 'published',
-    created_at: 'Opened Yesterday',
-    themeColor: '#0f766e'
-  },
-  {
-    pid: 'FLOW-TAX03',
-    name: 'Vendor Tax & PAN Audit',
-    modules: ['PAN Verification (OCR)', 'Human Review Queue'],
-    flowParams: 'PAN,HUMAN_REVIEW',
-    link: 'http://localhost:5174/verify.html?flow=PAN%2CHUMAN_REVIEW&pid=FLOW-TAX03',
-    status: 'published',
-    created_at: 'Opened Nov 12, 2026',
-    themeColor: '#0284c7'
-  },
-  {
-    pid: 'FLOW-BIO04',
-    name: 'High-Risk Biometric Liveness',
-    modules: ['PAN & Face Verification', 'Eye Tracking & Attention', 'Human Review Queue'],
-    flowParams: 'PAN_FACE,EYE_TRACKING,HUMAN_REVIEW',
-    link: 'http://localhost:5174/verify.html?flow=PAN_FACE%2CEYE_TRACKING%2CHUMAN_REVIEW&pid=FLOW-BIO04',
-    status: 'published',
-    created_at: 'Opened Nov 8, 2026',
-    themeColor: '#d97706'
+    created_at: 'Live',
+    themeColor: '#008080'
   }
 ];
 
@@ -348,13 +328,23 @@ export default function App() {
     Linking.getInitialURL().then(handleAuthUrl);
     const linkSub = Linking.addEventListener('url', ({ url }) => handleAuthUrl(url));
 
-    // 2. Load local storage persistence
-    let localStats = { pipelines_built: 4, links_generated: 4, verifications_completed: 0 };
+    // 2. Load local storage persistence & flush previous stale forms
+    let localStats = { pipelines_built: 2, links_generated: 2, verifications_completed: 0 };
     let localVers = [];
     let localPipes = [];
 
+    const STORAGE_CLEAN_VERSION = 'verifyyy_v2026_11_22_new_clean';
+
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
+        // Automatically purge old mock forms from previous sessions
+        if (localStorage.getItem('verifyyy_app_clean_ver') !== STORAGE_CLEAN_VERSION) {
+          localStorage.removeItem('verifyyy_saved_pipelines');
+          localStorage.removeItem('verifyyy_recent_verifications');
+          localStorage.removeItem('verifyyy_local_submissions');
+          localStorage.setItem('verifyyy_app_clean_ver', STORAGE_CLEAN_VERSION);
+        }
+
         const savedStats = localStorage.getItem('verifyyy_admin_stats');
         if (savedStats) localStats = JSON.parse(savedStats);
 
@@ -365,11 +355,23 @@ export default function App() {
         if (savedP) {
           const parsed = JSON.parse(savedP);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            localPipes = parsed.map(p => ({
-              ...p,
-              link: (p.link || '').replace(/\/verify\.html\/+verify\.html/g, '/verify.html'),
-              status: p.status || 'published'
-            }));
+            localPipes = parsed
+              .filter(p => {
+                const n = (p.name || '').toLowerCase();
+                return !(
+                  n.includes('employee background') ||
+                  n.includes('vendor tax') ||
+                  n.includes('biometric liveness') ||
+                  n.includes('workforce') ||
+                  n.includes('tax & pan') ||
+                  n.includes('high-risk')
+                );
+              })
+              .map(p => ({
+                ...p,
+                link: (p.link || '').replace(/\/verify\.html\/+verify\.html/g, '/verify.html'),
+                status: p.status || 'published'
+              }));
           }
         }
       }
@@ -462,27 +464,46 @@ export default function App() {
 
         // 3. Hydrate savedPipelines from Supabase
         if (pipelineRecords.length > 0) {
-          const cloudPipes = pipelineRecords.map(r => {
-            const meta = r.metadata || {};
-            const cleanLink = (meta.link || '').replace(/\/verify\.html\/+verify\.html/g, '/verify.html');
-            return {
-              pid: meta.pid || r.session_id.replace(/^pipeline_/, ''),
-              name: meta.name || r.extracted_name || 'Untitled form',
-              description: meta.description || '',
-              fields: meta.fields || [],
-              modules: meta.modules || [],
-              flowParams: meta.flowParams || '',
-              link: cleanLink,
-              status: meta.status || (r.overall_status === 'SUCCESS' ? 'published' : 'draft'),
-              created_at: r.created_at ? new Date(r.created_at).toLocaleDateString() : 'Recently',
-              themeColor: meta.themeColor || '#008080'
-            };
+          const cloudPipes = pipelineRecords
+            .map(r => {
+              const meta = r.metadata || {};
+              const cleanLink = (meta.link || '').replace(/\/verify\.html\/+verify\.html/g, '/verify.html');
+              return {
+                pid: meta.pid || r.session_id.replace(/^pipeline_/, ''),
+                name: meta.name || r.extracted_name || 'Untitled form',
+                description: meta.description || '',
+                fields: meta.fields || [],
+                modules: meta.modules || [],
+                flowParams: meta.flowParams || '',
+                link: cleanLink,
+                status: meta.status || (r.overall_status === 'SUCCESS' ? 'published' : 'draft'),
+                created_at: r.created_at ? new Date(r.created_at).toLocaleDateString() : 'Live',
+                themeColor: meta.themeColor || '#008080'
+              };
+            })
+            .filter(p => {
+              const n = (p.name || '').toLowerCase();
+              return !(
+                n.includes('employee background') ||
+                n.includes('vendor tax') ||
+                n.includes('biometric liveness') ||
+                n.includes('workforce') ||
+                n.includes('tax & pan') ||
+                n.includes('high-risk')
+              );
+            });
+
+          const merged = [...DEFAULT_PREBUILT_PIPELINES];
+          cloudPipes.forEach(cp => {
+            if (!merged.some(m => m.pid === cp.pid || m.name === cp.name)) {
+              merged.push(cp);
+            }
           });
 
-          setSavedPipelines(cloudPipes);
+          setSavedPipelines(merged);
           try {
             if (typeof window !== 'undefined' && window.localStorage) {
-              localStorage.setItem('verifyyy_saved_pipelines', JSON.stringify(cloudPipes));
+              localStorage.setItem('verifyyy_saved_pipelines', JSON.stringify(merged));
             }
           } catch (e) {}
         }
@@ -1484,109 +1505,7 @@ export default function App() {
           </View>
         </View>
 
-        {/* 3. FLOW BLUEPRINTS / TEMPLATES (Pre-built pipelines) */}
-        <View style={styles.zdPanelCard}>
-          <View style={styles.zdPanelHeader}>
-            <View>
-              <Text style={styles.zdPanelTitle}>Quick-Start Flow Blueprints</Text>
-              <Text style={styles.zdPanelSubtitle}>Select a pre-configured verification blueprint or start with a custom canvas</Text>
-            </View>
-          </View>
-
-          <View style={styles.zdBlueprintGrid}>
-            {/* Blueprint 1: Custom Blank Flow */}
-            <TouchableOpacity
-              style={styles.zdBlueprintCard}
-              activeOpacity={0.88}
-              onPress={handleCreateBlankForm}
-            >
-              <View style={[styles.zdBlueprintIcon, { backgroundColor: 'rgba(0, 128, 128, 0.08)' }]}>
-                <Text style={{ fontSize: 20 }}>⚡</Text>
-              </View>
-              <Text style={styles.zdBlueprintTitle}>Custom Blank Flow</Text>
-              <Text style={styles.zdBlueprintDesc}>
-                Build from scratch with empty canvas. Add custom form questions and plug in any modules.
-              </Text>
-              <View style={styles.zdBlueprintTags}>
-                <Text style={styles.zdBlueprintTag}>Custom Form</Text>
-                <Text style={styles.zdBlueprintTag}>Any Module</Text>
-              </View>
-              <View style={styles.zdBlueprintFooter}>
-                <Text style={styles.zdBlueprintCta}>Start Blank Flow →</Text>
-              </View>
-            </TouchableOpacity>
-
-            {/* Blueprint 2: Full eKYC Suite */}
-            <TouchableOpacity
-              style={styles.zdBlueprintCard}
-              activeOpacity={0.88}
-              onPress={() => handleLoadTemplate(['AADHAAR_FACE', 'PAN', 'EYE_TRACKING'])}
-            >
-              <View style={[styles.zdBlueprintIcon, { backgroundColor: '#ecfdf5' }]}>
-                <Text style={{ fontSize: 20 }}>🆔</Text>
-              </View>
-              <Text style={styles.zdBlueprintTitle}>Full eKYC Suite</Text>
-              <Text style={styles.zdBlueprintDesc}>
-                Full onboarding + Aadhaar OCR + PAN OCR + Face Biometrics & Liveness detection.
-              </Text>
-              <View style={styles.zdBlueprintTags}>
-                <Text style={styles.zdBlueprintTag}>Aadhaar</Text>
-                <Text style={styles.zdBlueprintTag}>PAN</Text>
-                <Text style={styles.zdBlueprintTag}>Face Match</Text>
-              </View>
-              <View style={styles.zdBlueprintFooter}>
-                <Text style={[styles.zdBlueprintCta, { color: '#059669' }]}>Use Blueprint →</Text>
-              </View>
-            </TouchableOpacity>
-
-            {/* Blueprint 3: Workforce Onboarding */}
-            <TouchableOpacity
-              style={styles.zdBlueprintCard}
-              activeOpacity={0.88}
-              onPress={() => handleLoadTemplate(['PAN', 'HUMAN_REVIEW'])}
-            >
-              <View style={[styles.zdBlueprintIcon, { backgroundColor: '#eff6ff' }]}>
-                <Text style={{ fontSize: 20 }}>💼</Text>
-              </View>
-              <Text style={styles.zdBlueprintTitle}>Workforce Onboarding</Text>
-              <Text style={styles.zdBlueprintDesc}>
-                Employee questionnaire + PAN tax verification with HR manual audit pipeline.
-              </Text>
-              <View style={styles.zdBlueprintTags}>
-                <Text style={styles.zdBlueprintTag}>Employee Bio</Text>
-                <Text style={styles.zdBlueprintTag}>PAN Tax</Text>
-                <Text style={styles.zdBlueprintTag}>HR Audit</Text>
-              </View>
-              <View style={styles.zdBlueprintFooter}>
-                <Text style={[styles.zdBlueprintCta, { color: '#2563eb' }]}>Use Blueprint →</Text>
-              </View>
-            </TouchableOpacity>
-
-            {/* Blueprint 4: Document OCR Extraction */}
-            <TouchableOpacity
-              style={styles.zdBlueprintCard}
-              activeOpacity={0.88}
-              onPress={() => handleLoadTemplate(['AADHAAR_FACE', 'PAN'])}
-            >
-              <View style={[styles.zdBlueprintIcon, { backgroundColor: '#fef3c7' }]}>
-                <Text style={{ fontSize: 20 }}>📄</Text>
-              </View>
-              <Text style={styles.zdBlueprintTitle}>Document Extraction</Text>
-              <Text style={styles.zdBlueprintDesc}>
-                Rapid document scanning and automated field extraction for Aadhaar & PAN ID cards.
-              </Text>
-              <View style={styles.zdBlueprintTags}>
-                <Text style={styles.zdBlueprintTag}>Aadhaar OCR</Text>
-                <Text style={styles.zdBlueprintTag}>PAN OCR</Text>
-              </View>
-              <View style={styles.zdBlueprintFooter}>
-                <Text style={[styles.zdBlueprintCta, { color: '#b45309' }]}>Use Blueprint →</Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* 4. VERIFICATION PIPELINES DIRECTORY */}
+        {/* 3. VERIFICATION PIPELINES DIRECTORY */}
         <View style={styles.zdPanelCard}>
           {/* Controls Bar: Search, Status Filters, Sort, View Toggle */}
           <View style={styles.zdDirectoryToolbar}>

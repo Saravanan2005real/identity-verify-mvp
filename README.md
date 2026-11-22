@@ -1,4 +1,4 @@
-# Verifyyy — Enterprise eKYC, AML & Digital Identity Verification Platform
+# Zudoc — Enterprise eKYC, AML & Digital Identity Verification Platform
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
@@ -10,7 +10,7 @@
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 
-**Verifyyy** is an enterprise-grade, multi-tenant Electronic Know Your Customer (**eKYC**), Anti-Money Laundering (**AML**), and digital identity verification platform. Built with a modular microservice architecture, it combines cutting-edge computer vision (PaddleOCR, RetinaFace 5-point alignment, SFace ONNX 128-D neural network, ArcFace 512-D), real-time camera biometric liveness detection, browser-based eye gaze tracking (WebGazer & FGI-Net), a visual drag-and-drop verification pipeline builder for enterprise clients, dynamic workflow runner, and centralized superadmin governance with hardened Supabase cloud database synchronization and zero-trust security controls.
+**Zudoc** is an enterprise-grade, multi-tenant Electronic Know Your Customer (**eKYC**), Anti-Money Laundering (**AML**), and digital identity verification platform powered by the [Zudoc](https://www.zudoc.co/) design system., Anti-Money Laundering (**AML**), and digital identity verification platform. Built with a modular microservice architecture, it combines cutting-edge computer vision (PaddleOCR, RetinaFace 5-point alignment, SFace ONNX 128-D neural network, ArcFace 512-D), real-time camera biometric liveness detection, browser-based eye gaze tracking (WebGazer & FGI-Net), a visual drag-and-drop verification pipeline builder for enterprise clients, dynamic workflow runner, and centralized superadmin governance with hardened Supabase cloud database synchronization and zero-trust security controls.
 
 ---
 
@@ -18,6 +18,8 @@
 - [Executive Overview](#executive-overview)
   - [Core Problems Solved](#core-problems-solved)
 - [Key Features & Innovations](#key-features--innovations)
+  - [🎨 Zudoc Enterprise Design System & Brand Identity](#-zudoc-enterprise-design-system--brand-identity)
+  - [🔗 Connected Pipeline Graph Studio (Zapier & Retool Style)](#-connected-pipeline-graph-studio-zapier--retool-style)
   - [📋 Google Forms-Style Verification Studio & Interactive Flow Canvas](#-google-forms-style-verification-studio--interactive-flow-canvas)
   - [📁 Comprehensive Form Management & Submission Inspector (3-Dots Menu & Manual Review)](#-comprehensive-form-management--submission-inspector-3-dots-menu--manual-review)
   - [⚡ Decoupled AI Architecture: Fast Employee Intake & Admin Local AI Execution](#-decoupled-ai-architecture-fast-employee-intake--admin-local-ai-execution)
@@ -100,6 +102,27 @@ Modern digital enterprises (fintechs, neobanks, crypto exchanges, gig economy ma
 ---
 
 ## Key Features & Innovations
+
+### 🎨 Zudoc Enterprise Design System & Brand Identity
+- **Official Zudoc Brand Identity:** Designed to match the official [Zudoc website](https://www.zudoc.co/), unifying the Admin Dashboard, Pipeline Studio, and applicant verification journeys.
+- **Typography Stack:** High-end typography featuring **Rival Sans** for brand lockups and primary headings coupled with **Manrope** for crisp, highly readable dashboard and data interfaces.
+- **Modern Palette:** Deep signature teal (`#008080`), dark slate neutrals (`#0F172A`), cool canvas surfaces (`#F8FAFC`), crisp white cards (`#FFFFFF`), and refined borders (`#E2E8F0`).
+- **Responsive Navigation Segment:** Top app bar featuring breadcrumbs, live environment indicators (`🟢 Live Production`), active flow counters, and one-click quick actions.
+
+### 🔗 Connected Pipeline Graph Studio (Zapier & Retool Style)
+- **Centered Flow Canvas (`maxWidth: 840`):** Replaces cluttered sidebars with a spacious, centered workflow canvas connected by sleek vertical pipeline stems (`│`).
+- **Pre-Populated Demo Flow:** New forms instantly open with realistic, ready-to-edit demo steps (`Full Legal Name`, `Work Email Address`, and `Aadhaar & Face Verification`) so admins never face an intimidating blank screen.
+- **Direct 1-Click Action Dock:** Prominently positioned directly under the flow canvas:
+  - **`➕ Add Question`**: 1-click instantly appends a new question card right below.
+  - **`🛡️ + Add Verification Module ▾`**: 1-click quick-select for Aadhaar eKYC, PAN Verification, Biometric Liveness, or Manual Review.
+  - **`📑 + Page Break`**: 1-click inserts a multi-page section break with stepper navigation.
+- **In-Line Between-Step Quick Inserters:** Compact inserter bars (`+ Question` • `🛡️ + Module` • `📄 + Break`) between steps allow inserting elements anywhere in the sequence without opening modal dialogs.
+- **Pure React Native Web Custom Controls:**
+  - **Custom iOS-Style Switches:** Replaced raw browser checkboxes with animated toggle switches for "Required for applicant".
+  - **Horizontal Type Pills:** Instant 1-click switching between Short Answer, Paragraph, Multiple Choice, Checkboxes, Dropdown, Date, and File Upload.
+  - **Dynamic Inline Option Editor:** Add, modify, or remove options inline with immediate preview.
+  - **Card Drag-and-Drop:** Smooth drag grip (`⠿`) reordering with active drop zone indicators and zero arrow-button friction.
+  - **Quick Actions:** In-line Duplicate (`📋 Copy`) and Delete (`🗑️ Delete`) per card.
 
 ### 📋 Google Forms-Style Verification Studio & Interactive Flow Canvas
 - **Minimalist Studio Hub:** Clean, focused interface inspired by Google Forms. Displays strictly the **Blank form** (`+`) creator card under *"Start a new form"* and previously created pipelines under *"Recent forms"*, stripping out unnecessary clutter.

@@ -313,16 +313,23 @@ export default function App() {
       }
     };
 
-    // Inject Zudoc Brand Font (Manrope) & Tab Title
+    // Inject Zudoc Brand Fonts (Rival Sans & Manrope) & Tab Title
     if (typeof document !== 'undefined') {
-      if (!document.getElementById('zudoc-font-manrope')) {
-        const link = document.createElement('link');
-        link.id = 'zudoc-font-manrope';
-        link.rel = 'stylesheet';
-        link.href = 'https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap';
-        document.head.appendChild(link);
+      if (!document.getElementById('zudoc-font-rival-sans')) {
+        const linkRival = document.createElement('link');
+        linkRival.id = 'zudoc-font-rival-sans';
+        linkRival.rel = 'stylesheet';
+        linkRival.href = 'https://api.fontshare.com/v2/css?f[]=rival-sans@700,800&display=swap';
+        document.head.appendChild(linkRival);
       }
-      document.title = 'Zudoc | eKYC & Identity Studio';
+      if (!document.getElementById('zudoc-font-manrope')) {
+        const linkManrope = document.createElement('link');
+        linkManrope.id = 'zudoc-font-manrope';
+        linkManrope.rel = 'stylesheet';
+        linkManrope.href = 'https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap';
+        document.head.appendChild(linkManrope);
+      }
+      document.title = 'Zudoc | eKYC Studio';
     }
 
     Linking.getInitialURL().then(handleAuthUrl);
@@ -3158,7 +3165,7 @@ export default function App() {
   if (!isAuthenticated) {
     return (
       <SignInScreen
-        portalName="Zudoc Identity & eKYC Studio"
+        portalName="eKYC Studio"
         portalRole="admin"
         defaultEmail="admin@zudoc.co"
         onLoginSuccess={(user) => {
@@ -3176,17 +3183,16 @@ export default function App() {
       {/* Modern Zudoc Enterprise Header */}
       <View style={styles.header}>
         {/* Left: Brand Identity */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           {/* Official Zudoc Brand Logo */}
-          <svg width="32" height="32" viewBox="0 0 43 42" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg width="30" height="30" viewBox="0 0 43 42" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M0 9V2C0 0.895431 0.89543 0 2 0H33.4529C38.4418 0 42.4788 4.0581 42.4528 9.04694L42.3224 34.0417C42.2995 38.4437 38.7245 42 34.3225 42H2C0.895431 42 0 41.1046 0 40V31.7938C0 30.6341 0.403121 29.5105 1.14035 28.6153L13.4 13.7286C13.7799 13.2673 14.3462 13 14.9438 13H24.2974C25.5692 13 26.2639 14.4833 25.4498 15.4603L12.5 31H29C30.6569 31 32 29.6569 32 28V14C32 12.3431 30.6569 11 29 11H2C0.895431 11 0 10.1046 0 9Z" fill="#008080"/>
           </svg>
 
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={[styles.headerLogo, { fontFamily: "'Manrope', sans-serif", fontSize: 22, fontWeight: '800', color: '#0f172a', letterSpacing: -0.6 }]}>zudoc</Text>
-            <View style={{ backgroundColor: 'rgba(0, 128, 128, 0.08)', borderColor: 'rgba(0, 128, 128, 0.22)', borderWidth: 1, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
-              <Text style={{ color: '#008080', fontSize: 10, fontWeight: '800', letterSpacing: 0.5 }}>EKYC STUDIO</Text>
-            </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={[styles.headerLogo, { fontFamily: "'Rival Sans', 'Manrope', sans-serif", fontSize: 22, fontWeight: '800', color: '#0f172a', letterSpacing: -0.6 }]}>zudoc</Text>
+            <View style={{ width: 1.5, height: 16, backgroundColor: '#cbd5e1', marginHorizontal: 10, borderRadius: 1 }} />
+            <Text style={{ fontFamily: "'Manrope', sans-serif", fontSize: 14, fontWeight: '600', color: '#008080', letterSpacing: -0.2 }}>eKYC Studio</Text>
           </View>
         </View>
 

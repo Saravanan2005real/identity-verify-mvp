@@ -127,6 +127,19 @@ Modern digital enterprises (fintechs, neobanks, crypto exchanges, gig economy ma
   - Automatically isolates and displays submissions received specifically through that form's unique `pipelineId` (`FLOW-XXXXXX`).
   - Lists candidate name/email, session ID, document type, submission date, and overall verification result badge (`✓ APPROVED`, `⚖️ NEEDS REVIEW`, `❌ REJECTED`).
   - Clear empty state guiding administrators to copy and share the link when no submissions have arrived yet.
+- **📊 Export Submissions to Sheets (CSV / Excel / Google Sheets):**
+  - Download all candidate submissions and form responses for any particular form as a formatted spreadsheet with one click.
+  - **Dynamic Column Mapping:** Automatically maps all custom questions as distinct columns alongside standardized identity verification fields:
+    - Candidate Identifier & Session ID
+    - Submission Date & Time
+    - Overall Verification Status (`APPROVED`, `NEEDS_REVIEW`, `REJECTED`)
+    - Document Type & Extracted ID / Document Number
+    - OCR Extracted Name & Date of Birth
+    - Biometric Face Match Verdict, Similarity Confidence Score, and Liveness Check
+    - Dynamic Question Responses (every custom form question answered by the applicant)
+    - Document & Selfie Photo attachment status
+  - **Universal Spreadsheet Compatibility:** Generated with UTF-8 Byte Order Mark (`\uFEFF`) and RFC 4180 escaping so the downloaded file opens seamlessly in **Google Sheets**, **Microsoft Excel**, **Apple Numbers**, and **LibreOffice Calc** without character corruption.
+  - **Multiple Export Touchpoints:** Available via the **"📊 Download as Sheets"** button inside the *Manage Form* dashboard, the **"📊 Download as Sheets (CSV)"** option in the Recent Forms 3-dots menu, the **"Sheets 📊"** button in List view, and the **"Export Sheets 📥"** button in *Manage Links*.
 - **Integrated Submission Inspector & Manual Review Modal:**
   - **Form Questions & Answers:** Displays all custom question responses submitted by the employee (e.g., Full Legal Name, Work Email, Employee ID).
   - **Side-by-Side Photo Previews:** Full-resolution preview of attached ID document photo and live webcam selfie.

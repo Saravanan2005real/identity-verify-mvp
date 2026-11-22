@@ -1168,6 +1168,147 @@ export default function App() {
     }
   };
 
+  const exportSubmissionsToSheets = (pipeline, specificSubmissions) => {
+    if (!pipeline) return;
+    const pid = pipeline.pid;
+    const targetSubs = specificSubmissions || recentVerifications.filter(v => {
+      return (
+        v.pipeline_id === pid ||
+        v.session_id?.includes(pid) ||
+        v.rawRow?.metadata?.pipelineId === pid ||
+        v.rawRow?.session_id?.includes(pid)
+      );
+    });
+
+    if (!targetSubs || targetSubs.length === 0) {
+      alert(`No submissions found for "${pipeline.name || pipeline.pid}" to export.\n\nOnce candidates submit responses through this form link, you can download them as a spreadsheet.`);
+      return;
+    }
+
+    // 1. Gather all custom question keys in order
+    const questionKeys = [];
+    const questionKeySet = new Set();
+
+    // From configured flowBlocks / fields if present
+    const formQuestions = (pipeline.flowBlocks || []).filter(b => b.kind === 'question');
+    formQuestions.forEach(q => {
+      const qTitle = q.title || `Question ${q.id}`;
+      if (!questionKeySet.has(qTitle)) {
+        questionKeySet.add(qTitle);
+        questionKeys.push(qTitle);
+      }
+    });
+
+    // Also check submissions for any additional question keys answered
+    targetSubs.forEach(s => {
+      const answers = s.answers || s.rawRow?.metadata?.answers || {};
+      Object.keys(answers).forEach(k => {
+        if (!questionKeySet.has(k)) {
+          questionKeySet.add(k);
+          questionKeys.push(k);
+        }
+      });
+    });
+
+    // 2. Define standard columns
+    const standardHeaders = [
+      'Submission ID',
+      'Session ID',
+      'Submitted Date',
+      'Candidate Name',
+      'Verification Status',
+      'Document Type',
+      'Document / ID #',
+      'Name on Document (OCR)',
+      'Date of Birth (OCR)',
+      'Face Match Verified',
+      'Biometric Match Confidence',
+      'Liveness Status'
+    ];
+
+    const allHeaders = [
+      ...standardHeaders,
+      ...questionKeys,
+      'Document Photo Attached',
+      'Selfie Photo Captured'
+    ];
+
+    // Helper to safely format cell values for CSV (RFC 4180)
+    const formatCsvCell = (val) => {
+      if (val === null || val === undefined) return '""';
+      let str = typeof val === 'object' ? (Array.isArray(val) ? val.join('; ') : JSON.stringify(val)) : String(val);
+      str = str.replace(/[\r\n]+/g, ' ');
+      str = str.replace(/"/g, '""');
+      return `"${str}"`;
+    };
+
+    // 3. Build CSV Rows
+    const rows = targetSubs.map((s, idx) => {
+      const answers = s.answers || s.rawRow?.metadata?.answers || {};
+      const aiResults = s.pipeline_results || s.rawRow?.metadata?.ai_results || {};
+      const ocrFields = aiResults.ocrFields || s.rawRow?.metadata?.ocr_fields || {};
+
+      const subId = s.id || `SUB-${idx + 1}`;
+      const sessId = s.session_id || s.rawRow?.session_id || '';
+      const dateStr = s.date || (s.rawRow?.created_at ? new Date(s.rawRow.created_at).toLocaleString() : '');
+      const candidateName = s.user || s.rawRow?.extracted_name || '';
+      const status = s.status || s.rawRow?.overall_status || 'PENDING';
+      const docType = s.doc_type || s.rawRow?.document_type || 'ID';
+      const idNum = s.id_number || ocrFields.id_number || ocrFields.pan_number || ocrFields.aadhaar_number || s.rawRow?.id_number || 'N/A';
+      const ocrName = ocrFields.name || s.rawRow?.extracted_name || '';
+      const ocrDob = ocrFields.dob || s.rawRow?.dob || '';
+
+      const isMatched = s.matched || s.rawRow?.face_match_verified || (status === 'APPROVED');
+      const faceMatchStr = isMatched ? 'VERIFIED' : (status === 'REJECTED' ? 'UNMATCHED' : 'PENDING REVIEW');
+      const confidence = aiResults.similarityScore || (isMatched ? '95%' : (s.rawRow?.face_match_distance ? `${Math.round((1 - s.rawRow.face_match_distance) * 100)}%` : '—'));
+      const liveness = aiResults.livenessPassed !== undefined ? (aiResults.livenessPassed ? 'PASSED' : 'FAILED') : (s.rawRow?.liveness_verified ? 'PASSED' : '—');
+
+      const docAttached = (s.extracted_face_url || s.rawRow?.metadata?.document_image || s.rawRow?.extracted_face_url) ? 'YES' : 'NO';
+      const selfieCaptured = (s.live_holder_face_url || s.rawRow?.metadata?.selfie_image || s.rawRow?.live_holder_face_url) ? 'YES' : 'NO';
+
+      const questionValues = questionKeys.map(k => answers[k] ?? '');
+
+      return [
+        formatCsvCell(subId),
+        formatCsvCell(sessId),
+        formatCsvCell(dateStr),
+        formatCsvCell(candidateName),
+        formatCsvCell(status),
+        formatCsvCell(docType),
+        formatCsvCell(idNum),
+        formatCsvCell(ocrName),
+        formatCsvCell(ocrDob),
+        formatCsvCell(faceMatchStr),
+        formatCsvCell(confidence),
+        formatCsvCell(liveness),
+        ...questionValues.map(v => formatCsvCell(v)),
+        formatCsvCell(docAttached),
+        formatCsvCell(selfieCaptured)
+      ].join(',');
+    });
+
+    const csvHeaderLine = allHeaders.map(h => formatCsvCell(h)).join(',');
+    // Prepend UTF-8 BOM (\uFEFF) for Microsoft Excel and Google Sheets automatic UTF-8 decoding
+    const csvContent = '\uFEFF' + [csvHeaderLine, ...rows].join('\r\n');
+
+    try {
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const cleanName = (pipeline.name || pipeline.pid || 'form').replace(/[^a-zA-Z0-9_-]/g, '_');
+      const nowStr = new Date().toISOString().split('T')[0];
+      link.setAttribute('href', url);
+      link.setAttribute('download', `verifyyy_submissions_${cleanName}_${pipeline.pid}_${nowStr}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 500);
+    } catch (e) {
+      console.error('Export CSV error:', e);
+      alert('Could not trigger download: ' + e.message);
+    }
+  };
+
   const handleDeletePipeline = async (pidToDelete) => {
     setSavedPipelines(prev => {
       const updated = prev.filter(item => item.pid !== pidToDelete);
@@ -1403,6 +1544,13 @@ export default function App() {
                             <Text style={[styles.gfDropdownItemText, { fontWeight: '700', color: '#b45309' }]}>⚖️ Manual Review</Text>
                           </TouchableOpacity>
 
+                          <TouchableOpacity
+                            style={styles.gfDropdownItem}
+                            onPress={() => { exportSubmissionsToSheets(p); setActiveMenuPid(null); }}
+                          >
+                            <Text style={[styles.gfDropdownItemText, { fontWeight: '700', color: '#059669' }]}>📊 Download as Sheets (CSV)</Text>
+                          </TouchableOpacity>
+
                           <View style={{ height: 1, backgroundColor: '#f1f5f9', marginVertical: 4 }} />
 
                           <TouchableOpacity
@@ -1478,7 +1626,7 @@ export default function App() {
                       {p.created_at || 'Recently'}
                     </Text>
 
-                    <View style={{ flex: 2, flexDirection: 'row', justifyContent: 'flex-end', gap: 6 }}>
+                    <View style={{ flex: 2.3, flexDirection: 'row', justifyContent: 'flex-end', gap: 6 }}>
                       <TouchableOpacity
                         style={[styles.btnSmall, { backgroundColor: '#7248B9' }]}
                         onPress={() => { setSelectedPipeline(p); setPipelineDetailVisible(true); }}
@@ -1490,6 +1638,12 @@ export default function App() {
                         onPress={() => handleOpenManualReviewForPipeline(p)}
                       >
                         <Text style={[styles.btnSmallText, { color: '#b45309' }]}>Review ⚖️</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.btnSmall, { backgroundColor: '#ecfdf5', borderWidth: 1, borderColor: '#a7f3d0' }]}
+                        onPress={() => exportSubmissionsToSheets(p)}
+                      >
+                        <Text style={[styles.btnSmallText, { color: '#047857', fontWeight: '700' }]}>Sheets 📊</Text>
                       </TouchableOpacity>
                       <TouchableOpacity style={styles.btnSmall} onPress={() => openGeneratedLink(p.link)}>
                         <Text style={styles.btnSmallText}>Test 🚀</Text>
@@ -2633,10 +2787,18 @@ export default function App() {
         <View style={styles.tableRow} key={idx}>
           <Text style={[styles.tableCell, { flex: 1, fontWeight: '700', fontFamily: 'monospace', color: COLORS.primary }]}>{p.pid}</Text>
           <Text style={[styles.tableCell, { flex: 2 }]}>{Array.isArray(p.modules) ? p.modules.join(', ') : p.name}</Text>
-          <Text style={[styles.tableCell, { flex: 1, fontWeight: '800' }]}>{recentVerifications.length} Applicants</Text>
-          <View style={{flexDirection: 'row', gap: 8, flex: 1.5}}>
+          <Text style={[styles.tableCell, { flex: 1, fontWeight: '800' }]}>
+            {recentVerifications.filter(v => v.pipeline_id === p.pid || v.session_id?.includes(p.pid) || v.rawRow?.metadata?.pipelineId === p.pid).length} Applicants
+          </Text>
+          <View style={{flexDirection: 'row', gap: 6, flex: 2}}>
             <TouchableOpacity style={styles.btnSmall} onPress={() => { setSelectedPipeline(p); setPipelineDetailVisible(true); }}>
-              <Text style={styles.btnSmallText}>View Analytics & Applicants 📊</Text>
+              <Text style={styles.btnSmallText}>View Analytics 📊</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.btnSmall, { backgroundColor: '#ecfdf5', borderWidth: 1, borderColor: '#a7f3d0' }]}
+              onPress={() => exportSubmissionsToSheets(p)}
+            >
+              <Text style={[styles.btnSmallText, { color: '#047857', fontWeight: '700' }]}>Export Sheets 📥</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.btnSmall, {backgroundColor: '#f1f5f9'}]} onPress={() => openGeneratedLink(p.link)}>
               <Text style={[styles.btnSmallText, {color: COLORS.textMain}]}>Test Link 🚀</Text>
@@ -3023,6 +3185,12 @@ export default function App() {
                             </View>
                             <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
                               <TouchableOpacity
+                                style={[styles.btnSmall, { backgroundColor: '#10b981' }]}
+                                onPress={() => exportSubmissionsToSheets(selectedPipeline, formSubmissions)}
+                              >
+                                <Text style={[styles.btnSmallText, { color: '#ffffff', fontWeight: '700' }]}>📊 Download as Sheets</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
                                 style={[styles.btnSmall, { backgroundColor: '#7248B9' }]}
                                 onPress={() => copyToClipboard(selectedPipeline?.link)}
                               >
@@ -3054,10 +3222,30 @@ export default function App() {
                         </View>
 
                         {/* Submissions List Header */}
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 10 }}>
-                          <Text style={{ fontSize: 14, fontWeight: '700', color: '#1e293b' }}>
-                            👥 Submissions Received via Link ({formSubmissions.length})
-                          </Text>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                            <Text style={{ fontSize: 14, fontWeight: '700', color: '#1e293b' }}>
+                              👥 Submissions Received via Link ({formSubmissions.length})
+                            </Text>
+                            {formSubmissions.length > 0 && (
+                              <TouchableOpacity
+                                style={{
+                                  flexDirection: 'row',
+                                  alignItems: 'center',
+                                  gap: 5,
+                                  backgroundColor: '#ecfdf5',
+                                  borderColor: '#a7f3d0',
+                                  borderWidth: 1,
+                                  paddingHorizontal: 8,
+                                  paddingVertical: 3,
+                                  borderRadius: 6
+                                }}
+                                onPress={() => exportSubmissionsToSheets(selectedPipeline, formSubmissions)}
+                              >
+                                <Text style={{ fontSize: 11, fontWeight: '700', color: '#047857' }}>📥 Download Sheets (.csv)</Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
                           <Text style={{ fontSize: 12, color: '#64748b' }}>
                             Pipeline ID: <Text style={{ fontWeight: '700', color: COLORS.primary }}>{selectedPipeline?.pid}</Text>
                           </Text>

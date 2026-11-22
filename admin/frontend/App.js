@@ -236,6 +236,7 @@ export default function App() {
 
   // --- Google Forms Hub State ---
   const [formSearchQuery, setFormSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'published' | 'draft'
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list'
   const [sortOrder, setSortOrder] = useState('newest'); // 'newest' | 'az' | 'za'
   const [activeMenuPid, setActiveMenuPid] = useState(null);
@@ -1348,10 +1349,43 @@ export default function App() {
     }
   };
 
-  // --- Render 1: Dashboard (Google Forms Hub) ---
+  const formatFormDate = (raw) => {
+    if (!raw) return 'Recently';
+    let clean = String(raw).replace(/^Opened\s+/i, '').trim();
+    const d = new Date(clean);
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+    return clean;
+  };
+
+  const getSubmissionsForPipeline = (p) => {
+    if (!p) return [];
+    const pid = p.pid;
+    return recentVerifications.filter(v => {
+      return (
+        v.pipeline_id === pid ||
+        v.pid === pid ||
+        (v.rawRow?.metadata?.pipeline_id === pid) ||
+        (v.rawRow?.metadata?.pid === pid) ||
+        (v.rawRow?.metadata?.form_title && v.rawRow.metadata.form_title === p.name)
+      );
+    });
+  };
+
+  // --- Render 1: Dashboard (Zudoc Identity & eKYC Studio) ---
   const renderDashboard = () => {
-    // 1. Filter pipelines based on search
+    const liveCount = savedPipelines.filter(p => p.status === 'published').length;
+    const draftCount = savedPipelines.length - liveCount;
+    const totalSubmissions = recentVerifications.length;
+
+    // 1. Filter pipelines based on search and status
     let filteredPipelines = savedPipelines.filter(p => {
+      if (statusFilter !== 'all') {
+        const isPub = p.status === 'published';
+        if (statusFilter === 'published' && !isPub) return false;
+        if (statusFilter === 'draft' && isPub) return false;
+      }
       if (!formSearchQuery.trim()) return true;
       const q = formSearchQuery.toLowerCase();
       const name = (p.name || '').toLowerCase();
@@ -1367,193 +1401,413 @@ export default function App() {
     }
 
     return (
-      <View style={{ width: '100%' }}>
-        {/* TOP SECTION: Start a new form - Only the Create Option */}
-        <View style={styles.gfStartSection}>
-          <View style={styles.gfSectionInner}>
-            <View style={styles.gfSectionHeader}>
-              <Text style={styles.gfSectionTitle}>Start a new form</Text>
+      <View style={styles.zudocDashboardRoot}>
+        {/* HERO / WELCOME BANNER */}
+        <View style={styles.zdHeroBanner}>
+          <View style={styles.zdHeroLeft}>
+            <View style={styles.zdHeroBadge}>
+              <View style={styles.zdPulseDot} />
+              <Text style={styles.zdHeroBadgeText}>eKYC & Identity Operations Center</Text>
             </View>
-
-            <View style={styles.gfTemplateCardsRow}>
-              {/* Blank Form / Create Option */}
+            <Text style={styles.zdHeroTitle}>Identity Verification Studio</Text>
+            <Text style={styles.zdHeroSubtitle}>
+              Configure automated identity verification pipelines, customize candidate questionnaire forms, and monitor real-time onboarding compliance.
+            </Text>
+            
+            <View style={styles.zdHeroActionsRow}>
               <TouchableOpacity
-                style={styles.gfTemplateCardWrapper}
+                style={styles.zdBtnPrimary}
                 activeOpacity={0.85}
                 accessibilityRole="button"
                 testID="blank-form-btn"
                 onPress={handleCreateBlankForm}
               >
-                <View style={styles.gfBlankCard}>
-                  {/* Google 4-color plus icon */}
-                  <svg width="44" height="44" viewBox="0 0 44 44">
-                    <path fill="#EA4335" d="M22 18v8h10a4 4 0 0 0 0-8H22z"/>
-                    <path fill="#4285F4" d="M18 12a4 4 0 0 1 8 0v10h-8V12z"/>
-                    <path fill="#FBBC05" d="M12 18a4 4 0 0 0 0 8h10v-8H12z"/>
-                    <path fill="#34A853" d="M18 22h8v10a4 4 0 0 1-8 0V22z"/>
-                  </svg>
-                </View>
-                <Text style={styles.gfTemplateTitle}>Blank form</Text>
+                <Text style={{ fontSize: 16, color: '#ffffff', marginRight: 8, fontWeight: '800' }}>+</Text>
+                <Text style={styles.zdBtnPrimaryText}>Create New Form</Text>
               </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.zdBtnSecondary}
+                activeOpacity={0.85}
+                onPress={() => setActiveTab('links')}
+              >
+                <Text style={styles.zdBtnSecondaryText}>Manage Form Links 🔗</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.zdBtnSecondary}
+                activeOpacity={0.85}
+                onPress={() => setActiveTab('review')}
+              >
+                <Text style={styles.zdBtnSecondaryText}>
+                  Manual Review {reviewQueue.length > 0 ? `(${reviewQueue.length})` : ''} ⚖️
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* KPI STATS CARDS */}
+          <View style={styles.zdKpiGrid}>
+            <View style={styles.zdKpiCard}>
+              <View style={styles.zdKpiTop}>
+                <Text style={styles.zdKpiLabel}>TOTAL PIPELINES</Text>
+                <Text style={{ fontSize: 18 }}>📋</Text>
+              </View>
+              <Text style={styles.zdKpiValue}>{savedPipelines.length}</Text>
+              <Text style={styles.zdKpiSub}>Configured eKYC flows</Text>
+            </View>
+
+            <View style={styles.zdKpiCard}>
+              <View style={styles.zdKpiTop}>
+                <Text style={styles.zdKpiLabel}>LIVE & ACTIVE</Text>
+                <Text style={{ fontSize: 18 }}>🟢</Text>
+              </View>
+              <Text style={[styles.zdKpiValue, { color: '#059669' }]}>{liveCount}</Text>
+              <Text style={styles.zdKpiSub}>Ready for candidates</Text>
+            </View>
+
+            <View style={styles.zdKpiCard}>
+              <View style={styles.zdKpiTop}>
+                <Text style={styles.zdKpiLabel}>SUBMISSIONS</Text>
+                <Text style={{ fontSize: 18 }}>👥</Text>
+              </View>
+              <Text style={[styles.zdKpiValue, { color: '#008080' }]}>{totalSubmissions}</Text>
+              <Text style={styles.zdKpiSub}>Responses collected</Text>
+            </View>
+
+            <View style={styles.zdKpiCard}>
+              <View style={styles.zdKpiTop}>
+                <Text style={styles.zdKpiLabel}>MANUAL REVIEW</Text>
+                <Text style={{ fontSize: 18 }}>⚖️</Text>
+              </View>
+              <Text style={[styles.zdKpiValue, { color: reviewQueue.length > 0 ? '#d97706' : '#64748b' }]}>
+                {reviewQueue.length}
+              </Text>
+              <Text style={styles.zdKpiSub}>Pending review</Text>
             </View>
           </View>
         </View>
 
-        {/* BOTTOM SECTION: Recently built forms */}
-        <View style={styles.gfRecentSection}>
-          <View style={styles.gfSectionInner}>
-            <View style={styles.gfSectionHeader}>
-              <Text style={styles.gfSectionTitle}>Recent forms</Text>
-              
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-                {/* Owned by anyone dropdown */}
-                <TouchableOpacity style={styles.gfFilterDropdown}>
-                  <Text style={styles.gfFilterText}>Owned by anyone</Text>
-                  <Text style={{ fontSize: 11, color: '#5f6368', marginLeft: 4 }}>▾</Text>
-                </TouchableOpacity>
+        {/* QUICK-START BLUEPRINTS / TEMPLATES */}
+        <View style={styles.zdSectionCard}>
+          <View style={styles.zdSectionHeaderRow}>
+            <View>
+              <Text style={styles.zdSectionHeading}>Quick-Start Identity Blueprints</Text>
+              <Text style={styles.zdSectionSubheading}>Launch pre-configured verification pipelines or build custom journeys</Text>
+            </View>
+          </View>
 
-                {/* View Mode Toggle: Grid / List */}
-                <View style={styles.gfViewToggleGroup}>
-                  <TouchableOpacity
-                    onPress={() => setViewMode('grid')}
-                    style={[styles.gfToggleBtn, viewMode === 'grid' && styles.gfToggleBtnActive]}
-                  >
-                    <Text style={{ fontSize: 15, color: viewMode === 'grid' ? '#202124' : '#5f6368' }}>▦</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => setViewMode('list')}
-                    style={[styles.gfToggleBtn, viewMode === 'list' && styles.gfToggleBtnActive]}
-                  >
-                    <Text style={{ fontSize: 15, color: viewMode === 'list' ? '#202124' : '#5f6368' }}>☰</Text>
-                  </TouchableOpacity>
+          <View style={styles.zdTemplateGrid}>
+            {/* Template 1: Custom Blank Form */}
+            <TouchableOpacity
+              style={styles.zdTemplateCard}
+              activeOpacity={0.88}
+              onPress={handleCreateBlankForm}
+            >
+              <View style={[styles.zdTemplateIconWrap, { backgroundColor: 'rgba(0, 128, 128, 0.1)' }]}>
+                <Text style={{ fontSize: 22, color: '#008080' }}>⚡</Text>
+              </View>
+              <Text style={styles.zdTemplateTitle}>Blank Verification Form</Text>
+              <Text style={styles.zdTemplateDesc}>
+                Start with an empty canvas. Add custom form questions and plug in any verification modules.
+              </Text>
+              <View style={styles.zdTemplateTagsRow}>
+                <Text style={styles.zdTemplateTag}>📝 Custom Questions</Text>
+                <Text style={styles.zdTemplateTag}>🛡️ Any Module</Text>
+              </View>
+              <View style={styles.zdTemplateCtaRow}>
+                <Text style={styles.zdTemplateCtaText}>Create Blank Flow →</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Template 2: Comprehensive eKYC Suite */}
+            <TouchableOpacity
+              style={styles.zdTemplateCard}
+              activeOpacity={0.88}
+              onPress={() => handleLoadTemplate(['AADHAAR_FACE', 'PAN', 'EYE_TRACKING'])}
+            >
+              <View style={[styles.zdTemplateIconWrap, { backgroundColor: '#ecfdf5' }]}>
+                <Text style={{ fontSize: 22, color: '#059669' }}>🆔</Text>
+              </View>
+              <Text style={styles.zdTemplateTitle}>Full eKYC Suite</Text>
+              <Text style={styles.zdTemplateDesc}>
+                Candidate questionnaire + Aadhaar OCR + PAN OCR with biometric face match and liveness.
+              </Text>
+              <View style={styles.zdTemplateTagsRow}>
+                <Text style={styles.zdTemplateTag}>Aadhaar</Text>
+                <Text style={styles.zdTemplateTag}>PAN</Text>
+                <Text style={styles.zdTemplateTag}>Face Match</Text>
+              </View>
+              <View style={styles.zdTemplateCtaRow}>
+                <Text style={[styles.zdTemplateCtaText, { color: '#059669' }]}>Use Blueprint →</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Template 3: Workforce Onboarding */}
+            <TouchableOpacity
+              style={styles.zdTemplateCard}
+              activeOpacity={0.88}
+              onPress={() => handleLoadTemplate(['PAN', 'HUMAN_REVIEW'])}
+            >
+              <View style={[styles.zdTemplateIconWrap, { backgroundColor: '#eff6ff' }]}>
+                <Text style={{ fontSize: 22, color: '#2563eb' }}>💼</Text>
+              </View>
+              <Text style={styles.zdTemplateTitle}>Workforce Onboarding</Text>
+              <Text style={styles.zdTemplateDesc}>
+                Collect employee bio, work email, verify PAN tax identity, and route to human HR review.
+              </Text>
+              <View style={styles.zdTemplateTagsRow}>
+                <Text style={styles.zdTemplateTag}>Employee Bio</Text>
+                <Text style={styles.zdTemplateTag}>PAN Tax</Text>
+                <Text style={styles.zdTemplateTag}>HR Review</Text>
+              </View>
+              <View style={styles.zdTemplateCtaRow}>
+                <Text style={[styles.zdTemplateCtaText, { color: '#2563eb' }]}>Use Blueprint →</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Template 4: Government ID OCR */}
+            <TouchableOpacity
+              style={styles.zdTemplateCard}
+              activeOpacity={0.88}
+              onPress={() => handleLoadTemplate(['AADHAAR_FACE', 'PAN'])}
+            >
+              <View style={[styles.zdTemplateIconWrap, { backgroundColor: '#fef3c7' }]}>
+                <Text style={{ fontSize: 22, color: '#b45309' }}>📄</Text>
+              </View>
+              <Text style={styles.zdTemplateTitle}>Document OCR Extraction</Text>
+              <Text style={styles.zdTemplateDesc}>
+                Rapid document scanning and automated field extraction for Aadhaar and PAN documents.
+              </Text>
+              <View style={styles.zdTemplateTagsRow}>
+                <Text style={styles.zdTemplateTag}>Aadhaar OCR</Text>
+                <Text style={styles.zdTemplateTag}>PAN OCR</Text>
+              </View>
+              <View style={styles.zdTemplateCtaRow}>
+                <Text style={[styles.zdTemplateCtaText, { color: '#b45309' }]}>Use Blueprint →</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* FORMS & PIPELINES DIRECTORY */}
+        <View style={styles.zdSectionCard}>
+          {/* Controls Bar: Search, Status Filters, Sort, View Switcher */}
+          <View style={styles.zdControlsBar}>
+            {/* Left: Section Title & Status Filters */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={styles.zdSectionHeading}>Verification Pipelines</Text>
+                <View style={styles.zdCountPill}>
+                  <Text style={styles.zdCountPillText}>{filteredPipelines.length}</Text>
                 </View>
+              </View>
 
-                {/* Sort Order Button */}
+              {/* Status Filter Tabs */}
+              <View style={styles.zdStatusFilterGroup}>
                 <TouchableOpacity
-                  onPress={() => setSortOrder(prev => prev === 'newest' ? 'az' : prev === 'az' ? 'za' : 'newest')}
-                  style={styles.gfIconBtn}
+                  style={[styles.zdStatusTab, statusFilter === 'all' && styles.zdStatusTabActive]}
+                  onPress={() => setStatusFilter('all')}
                 >
-                  <Text style={{ fontSize: 13, color: '#5f6368', fontWeight: '700' }}>
-                    {sortOrder === 'az' ? 'A-Z ↑' : sortOrder === 'za' ? 'Z-A ↓' : 'A-Z ⇅'}
+                  <Text style={[styles.zdStatusTabText, statusFilter === 'all' && styles.zdStatusTabTextActive]}>
+                    All ({savedPipelines.length})
                   </Text>
                 </TouchableOpacity>
 
-                {/* Folder Icon */}
-                <TouchableOpacity style={styles.gfIconBtn}>
-                  <Text style={{ fontSize: 16 }}>📁</Text>
+                <TouchableOpacity
+                  style={[styles.zdStatusTab, statusFilter === 'published' && styles.zdStatusTabActive]}
+                  onPress={() => setStatusFilter('published')}
+                >
+                  <Text style={[styles.zdStatusTabText, statusFilter === 'published' && styles.zdStatusTabTextActive]}>
+                    🟢 Live ({liveCount})
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.zdStatusTab, statusFilter === 'draft' && styles.zdStatusTabActive]}
+                  onPress={() => setStatusFilter('draft')}
+                >
+                  <Text style={[styles.zdStatusTabText, statusFilter === 'draft' && styles.zdStatusTabTextActive]}>
+                    🟡 Drafts ({draftCount})
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
 
-            {/* If Search Active, show search feedback */}
-            {formSearchQuery.trim() !== '' && (
-              <View style={{ marginBottom: 16, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Text style={{ fontSize: 13, color: '#5f6368' }}>
-                  Showing {filteredPipelines.length} results for "{formSearchQuery}"
+            {/* Right: Sort & View Toggle */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              {/* Sort Order Button */}
+              <TouchableOpacity
+                onPress={() => setSortOrder(prev => prev === 'newest' ? 'az' : prev === 'az' ? 'za' : 'newest')}
+                style={styles.zdSortBtn}
+              >
+                <Text style={styles.zdSortBtnText}>
+                  {sortOrder === 'az' ? 'Sort: A-Z ↑' : sortOrder === 'za' ? 'Sort: Z-A ↓' : 'Sort: Newest ⇅'}
                 </Text>
-                <TouchableOpacity onPress={() => setFormSearchQuery('')}>
-                  <Text style={{ fontSize: 12, color: COLORS.primary, fontWeight: '700' }}>Clear Search ✕</Text>
+              </TouchableOpacity>
+
+              {/* View Switcher */}
+              <View style={styles.zdViewToggleGroup}>
+                <TouchableOpacity
+                  onPress={() => setViewMode('grid')}
+                  style={[styles.zdViewToggleBtn, viewMode === 'grid' && styles.zdViewToggleBtnActive]}
+                >
+                  <Text style={{ fontSize: 13, color: viewMode === 'grid' ? '#008080' : '#64748b', fontWeight: '700' }}>▦ Grid</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setViewMode('list')}
+                  style={[styles.zdViewToggleBtn, viewMode === 'list' && styles.zdViewToggleBtnActive]}
+                >
+                  <Text style={{ fontSize: 13, color: viewMode === 'list' ? '#008080' : '#64748b', fontWeight: '700' }}>☰ Table</Text>
                 </TouchableOpacity>
               </View>
-            )}
+            </View>
+          </View>
 
-            {/* Grid of Form Cards */}
-            {viewMode === 'grid' && (
-              <View style={styles.gfFormsGrid}>
-                {filteredPipelines.map((p, idx) => {
-                  const cardColor = p.themeColor || (idx % 4 === 0 ? '#673ab7' : idx % 4 === 1 ? '#0f766e' : idx % 4 === 2 ? '#0284c7' : '#d97706');
-                  const isMenuOpen = activeMenuPid === p.pid;
+          {/* Active Search Notification */}
+          {formSearchQuery.trim() !== '' && (
+            <View style={styles.zdSearchTagRow}>
+              <Text style={{ fontSize: 13, color: '#64748b' }}>
+                Showing {filteredPipelines.length} results matching <Text style={{ fontWeight: '700', color: '#0f172a' }}>"{formSearchQuery}"</Text>
+              </Text>
+              <TouchableOpacity onPress={() => setFormSearchQuery('')}>
+                <Text style={{ fontSize: 12, color: '#008080', fontWeight: '700' }}>Clear Search ✕</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
-                  return (
-                    <View key={p.pid || idx} style={styles.gfFormCard}>
-                      {/* Top Preview Banner (clickable -> opens test link or builder) */}
-                      <TouchableOpacity
-                        style={styles.gfCardPreview}
-                        activeOpacity={0.85}
-                        onPress={() => openGeneratedLink(p.link)}
-                      >
-                        {/* Accent Header Stripe */}
-                        <View style={[styles.gfCardPreviewStripe, { backgroundColor: cardColor }]} />
-                        {/* Mockup Form Paper */}
-                        <View style={styles.gfMockPaper}>
-                          <View style={[styles.gfMockPaperTitle, { backgroundColor: cardColor }]} />
-                          <View style={styles.gfMockPaperSub} />
-                          <View style={styles.gfMockPaperCard}>
-                            <View style={styles.gfMockPaperFieldLine} />
-                            <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center', marginTop: 4 }}>
-                              <View style={[styles.gfMockPaperRadioDot, { backgroundColor: cardColor }]} />
-                              <View style={{ width: 45, height: 3, backgroundColor: '#cbd5e1', borderRadius: 2 }} />
-                            </View>
-                          </View>
-                          <View style={styles.gfMockPaperInput} />
-                        </View>
+          {/* GRID VIEW */}
+          {viewMode === 'grid' && (
+            <View style={styles.zdPipelineGrid}>
+              {filteredPipelines.map((p, idx) => {
+                const isMenuOpen = activeMenuPid === p.pid;
+                const subs = getSubmissionsForPipeline(p);
+                const subCount = subs.length;
+                const isLive = p.status === 'published';
+                const formattedDate = formatFormDate(p.created_at);
+                const moduleList = Array.isArray(p.modules) ? p.modules : [];
 
-                        {/* Module count pill in preview */}
-                        <View style={styles.gfCardModuleBadge}>
-                          <Text style={styles.gfCardModuleBadgeText}>
-                            {Array.isArray(p.modules) ? `${p.modules.length} Modules` : 'eKYC Flow'}
-                          </Text>
-                        </View>
-                      </TouchableOpacity>
+                return (
+                  <View key={p.pid || idx} style={styles.zdPipelineCard}>
+                    {/* Top Accent Strip */}
+                    <View style={[styles.zdCardAccent, { backgroundColor: isLive ? '#008080' : '#f59e0b' }]} />
 
-                      {/* Bottom Info Footer */}
-                      <View style={styles.gfCardFooter}>
-                        {/* Form Title */}
-                        <TouchableOpacity onPress={() => openGeneratedLink(p.link)}>
-                          <Text style={styles.gfCardTitle} numberOfLines={1}>
-                            {p.name || p.pid || 'Untitled form'}
-                          </Text>
-                        </TouchableOpacity>
-
-                        {/* Sub Row: Icon + Opened Date + 3-dots Menu */}
-                        <View style={styles.gfCardSubRow}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
-                            {/* Purple Google Forms Icon */}
-                            <svg width="16" height="16" viewBox="0 0 16 16">
-                              <rect width="16" height="16" rx="3" fill="#008080"/>
-                              <rect x="3.5" y="4.5" width="3" height="1.5" rx="0.75" fill="#ffffff"/>
-                              <rect x="7.5" y="4.5" width="5" height="1.5" rx="0.75" fill="#ffffff"/>
-                              <rect x="3.5" y="7.5" width="3" height="1.5" rx="0.75" fill="#ffffff"/>
-                              <rect x="7.5" y="7.5" width="5" height="1.5" rx="0.75" fill="#ffffff"/>
-                              <rect x="3.5" y="10.5" width="3" height="1.5" rx="0.75" fill="#ffffff"/>
-                              <rect x="7.5" y="10.5" width="5" height="1.5" rx="0.75" fill="#ffffff"/>
+                    <View style={styles.zdCardContent}>
+                      {/* Header Row: Logo Icon + Title + Status Pill */}
+                      <View style={styles.zdCardHeaderRow}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                          <View style={styles.zdCardIconBox}>
+                            <svg width="18" height="18" viewBox="0 0 43 42" fill="none">
+                              <path d="M0 9V2C0 0.895431 0.89543 0 2 0H33.4529C38.4418 0 42.4788 4.0581 42.4528 9.04694L42.3224 34.0417C42.2995 38.4437 38.7245 42 34.3225 42H2C0.895431 42 0 41.1046 0 40V31.7938C0 30.6341 0.403121 29.5105 1.14035 28.6153L13.4 13.7286C13.7799 13.2673 14.3462 13 14.9438 13H24.2974C25.5692 13 26.2639 14.4833 25.4498 15.4603L12.5 31H29C30.6569 31 32 29.6569 32 28V14C32 12.3431 30.6569 11 29 11H2C0.895431 11 0 10.1046 0 9Z" fill="#008080"/>
                             </svg>
-                            <Text style={{ fontSize: 11, color: '#5f6368' }}>👥</Text>
-                            <Text style={styles.gfCardOpenedText} numberOfLines={1}>
-                              {p.created_at ? (p.created_at.startsWith('Opened') ? p.created_at : `Opened ${p.created_at}`) : 'Opened recently'}
-                            </Text>
-                            <View style={{
-                              paddingHorizontal: 6,
-                              paddingVertical: 1,
-                              borderRadius: 4,
-                              backgroundColor: p.status === 'published' ? '#ecfdf5' : '#fffbeb',
-                              borderWidth: 1,
-                              borderColor: p.status === 'published' ? '#a7f3d0' : '#fde68a'
-                            }}>
-                              <Text style={{ fontSize: 9, fontWeight: '700', color: p.status === 'published' ? '#059669' : '#b45309' }}>
-                                {p.status === 'published' ? '🟢 Live' : '🟡 Draft'}
-                              </Text>
-                            </View>
                           </View>
 
-                          {/* 3-dots Action Menu Button */}
-                          <TouchableOpacity
-                            style={styles.gfCardMenuBtn}
-                            onPress={() => setActiveMenuPid(isMenuOpen ? null : p.pid)}
-                          >
-                            <Text style={{ fontSize: 18, color: '#5f6368', fontWeight: 'bold', lineHeight: 18 }}>⋮</Text>
-                          </TouchableOpacity>
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text style={styles.zdCardTitle} numberOfLines={1}>
+                              {p.name || p.pid || 'Untitled form'}
+                            </Text>
+                            <Text style={styles.zdCardPid} numberOfLines={1}>
+                              {p.pid ? `#${p.pid}` : 'Draft Pipeline'}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* Status Badge */}
+                        <View style={[styles.zdStatusBadge, { backgroundColor: isLive ? '#ecfdf5' : '#fffbeb', borderColor: isLive ? '#a7f3d0' : '#fde68a' }]}>
+                          <Text style={[styles.zdStatusBadgeText, { color: isLive ? '#059669' : '#b45309' }]}>
+                            {isLive ? '🟢 Live' : '🟡 Draft'}
+                          </Text>
                         </View>
                       </View>
 
-                      {/* Dropdown Menu Popup when 3-dots clicked */}
+                      {/* Configured Modules / Pipeline Steps */}
+                      <View style={styles.zdModuleStepsContainer}>
+                        <Text style={styles.zdModuleStepsLabel}>VERIFICATION STAGES</Text>
+                        <View style={styles.zdModuleChipsRow}>
+                          <View style={styles.zdModuleChip}>
+                            <Text style={styles.zdModuleChipText}>📝 Form Fields</Text>
+                          </View>
+                          {moduleList.map((m, mIdx) => (
+                            <View key={mIdx} style={[styles.zdModuleChip, styles.zdModuleChipTeal]}>
+                              <Text style={[styles.zdModuleChipText, { color: '#008080' }]}>
+                                {m === 'AADHAAR_FACE' ? '🛡️ Aadhaar' : m === 'PAN' ? '💳 PAN' : m === 'PAN_FACE' ? '💳 PAN + Face' : m === 'EYE_TRACKING' ? '👁️ Liveness' : m === 'HUMAN_REVIEW' ? '⚖️ Review' : m}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+
+                      {/* Metrics Row: Submissions + Created Date */}
+                      <View style={styles.zdCardMetaRow}>
+                        <TouchableOpacity
+                          style={styles.zdMetaSubsBtn}
+                          onPress={() => { setSelectedPipeline(p); setPipelineDetailVisible(true); }}
+                        >
+                          <Text style={styles.zdMetaSubsText}>
+                            📊 <Text style={{ fontWeight: '800', color: '#008080' }}>{subCount}</Text> {subCount === 1 ? 'Submission' : 'Submissions'}
+                          </Text>
+                        </TouchableOpacity>
+
+                        <Text style={styles.zdMetaDateText}>
+                          Updated {formattedDate}
+                        </Text>
+                      </View>
+
+                      {/* Action Bar */}
+                      <View style={styles.zdCardActionRow}>
+                        <TouchableOpacity
+                          style={styles.zdCardManageBtn}
+                          onPress={() => { setSelectedPipeline(p); setPipelineDetailVisible(true); }}
+                        >
+                          <Text style={styles.zdCardManageBtnText}>📁 Manage</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.zdCardSheetsBtn}
+                          onPress={() => exportSubmissionsToSheets(p, subs)}
+                        >
+                          <Text style={styles.zdCardSheetsBtnText}>Sheets 📊</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.zdCardLaunchBtn}
+                          onPress={() => openGeneratedLink(p.link)}
+                        >
+                          <Text style={styles.zdCardLaunchBtnText}>Launch 🚀</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.zdCardIconBtn}
+                          onPress={() => copyToClipboard(p.link)}
+                          title="Copy Link"
+                        >
+                          <Text style={{ fontSize: 13 }}>📋</Text>
+                        </TouchableOpacity>
+
+                        {/* 3-dots Menu */}
+                        <TouchableOpacity
+                          style={styles.zdCardMenuBtn}
+                          onPress={() => setActiveMenuPid(isMenuOpen ? null : p.pid)}
+                        >
+                          <Text style={{ fontSize: 18, color: '#64748b', fontWeight: 'bold', lineHeight: 18 }}>⋮</Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* 3-dots Dropdown Menu */}
                       {isMenuOpen && (
                         <View style={styles.gfActionDropdown}>
                           <TouchableOpacity
                             style={styles.gfDropdownItem}
                             onPress={() => { setSelectedPipeline(p); setPipelineDetailVisible(true); setActiveMenuPid(null); }}
                           >
-                            <Text style={[styles.gfDropdownItemText, { fontWeight: '700', color: '#008080' }]}>📁 Manage Form</Text>
+                            <Text style={[styles.gfDropdownItemText, { fontWeight: '700', color: '#008080' }]}>📁 Manage Submissions</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={styles.gfDropdownItem}
+                            onPress={() => { exportSubmissionsToSheets(p, subs); setActiveMenuPid(null); }}
+                          >
+                            <Text style={[styles.gfDropdownItemText, { fontWeight: '700', color: '#059669' }]}>📊 Download Sheets (.csv)</Text>
                           </TouchableOpacity>
 
                           <TouchableOpacity
@@ -1563,28 +1817,7 @@ export default function App() {
                             <Text style={[styles.gfDropdownItemText, { fontWeight: '700', color: '#b45309' }]}>⚖️ Manual Review</Text>
                           </TouchableOpacity>
 
-                          <TouchableOpacity
-                            style={styles.gfDropdownItem}
-                            onPress={() => { exportSubmissionsToSheets(p); setActiveMenuPid(null); }}
-                          >
-                            <Text style={[styles.gfDropdownItemText, { fontWeight: '700', color: '#059669' }]}>📊 Download as Sheets (CSV)</Text>
-                          </TouchableOpacity>
-
                           <View style={{ height: 1, backgroundColor: '#f1f5f9', marginVertical: 4 }} />
-
-                          <TouchableOpacity
-                            style={styles.gfDropdownItem}
-                            onPress={() => { openGeneratedLink(p.link); setActiveMenuPid(null); }}
-                          >
-                            <Text style={styles.gfDropdownItemText}>🚀 Open / Test Form</Text>
-                          </TouchableOpacity>
-
-                          <TouchableOpacity
-                            style={styles.gfDropdownItem}
-                            onPress={() => { copyToClipboard(p.link); setActiveMenuPid(null); }}
-                          >
-                            <Text style={styles.gfDropdownItemText}>📋 Copy Link</Text>
-                          </TouchableOpacity>
 
                           <TouchableOpacity
                             style={styles.gfDropdownItem}
@@ -1593,108 +1826,146 @@ export default function App() {
                             <Text style={styles.gfDropdownItemText}>✏️ Edit in Builder</Text>
                           </TouchableOpacity>
 
+                          <TouchableOpacity
+                            style={styles.gfDropdownItem}
+                            onPress={() => { copyToClipboard(p.link); setActiveMenuPid(null); }}
+                          >
+                            <Text style={styles.gfDropdownItemText}>📋 Copy Shareable Link</Text>
+                          </TouchableOpacity>
+
                           <View style={{ height: 1, backgroundColor: '#f1f5f9', marginVertical: 4 }} />
 
                           <TouchableOpacity
                             style={styles.gfDropdownItem}
-                            onPress={() => handleDeletePipeline(p.pid)}
+                            onPress={() => { handleDeletePipeline(p.pid); setActiveMenuPid(null); }}
                           >
-                            <Text style={[styles.gfDropdownItemText, { color: COLORS.danger }]}>🗑️ Delete Form</Text>
+                            <Text style={[styles.gfDropdownItemText, { color: COLORS.danger }]}>🗑️ Delete Pipeline</Text>
                           </TouchableOpacity>
                         </View>
                       )}
                     </View>
-                  );
-                })}
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
+          {/* TABLE / LIST VIEW */}
+          {viewMode === 'list' && (
+            <View style={styles.zdTableWrapper}>
+              <View style={styles.zdTableHeader}>
+                <Text style={[styles.zdTableTh, { flex: 2.2 }]}>Form Name & PID</Text>
+                <Text style={[styles.zdTableTh, { flex: 2 }]}>Verification Modules</Text>
+                <Text style={[styles.zdTableTh, { flex: 1 }]}>Status</Text>
+                <Text style={[styles.zdTableTh, { flex: 1.2 }]}>Submissions</Text>
+                <Text style={[styles.zdTableTh, { flex: 1.2 }]}>Date</Text>
+                <Text style={[styles.zdTableTh, { flex: 2.4, textAlign: 'right' }]}>Actions</Text>
               </View>
-            )}
 
-            {/* List View */}
-            {viewMode === 'list' && (
-              <View style={styles.gfListViewContainer}>
-                <View style={styles.gfListHeader}>
-                  <Text style={[styles.gfListCol, { flex: 2.5 }]}>Name</Text>
-                  <Text style={[styles.gfListCol, { flex: 2 }]}>Configured Modules</Text>
-                  <Text style={[styles.gfListCol, { flex: 1.5 }]}>Last Opened</Text>
-                  <Text style={[styles.gfListCol, { flex: 1.5, textAlign: 'right' }]}>Actions</Text>
-                </View>
+              {filteredPipelines.map((p, idx) => {
+                const subs = getSubmissionsForPipeline(p);
+                const subCount = subs.length;
+                const isLive = p.status === 'published';
+                const formattedDate = formatFormDate(p.created_at);
 
-                {filteredPipelines.map((p, idx) => (
-                  <View key={p.pid || idx} style={styles.gfListRow}>
+                return (
+                  <View key={p.pid || idx} style={styles.zdTableRow}>
                     <TouchableOpacity
-                      style={{ flex: 2.5, flexDirection: 'row', alignItems: 'center', gap: 10 }}
-                      onPress={() => openGeneratedLink(p.link)}
+                      style={{ flex: 2.2, flexDirection: 'row', alignItems: 'center', gap: 10 }}
+                      onPress={() => { setSelectedPipeline(p); setPipelineDetailVisible(true); }}
                     >
-                      <svg width="22" height="22" viewBox="0 0 22 22">
-                        <rect width="22" height="22" rx="4" fill="#008080"/>
-                        <rect x="5" y="6" width="4" height="2" rx="1" fill="#ffffff"/>
-                        <rect x="10.5" y="6" width="6.5" height="2" rx="1" fill="#ffffff"/>
-                        <rect x="5" y="10" width="4" height="2" rx="1" fill="#ffffff"/>
-                        <rect x="10.5" y="10" width="6.5" height="2" rx="1" fill="#ffffff"/>
-                        <rect x="5" y="14" width="4" height="2" rx="1" fill="#ffffff"/>
-                        <rect x="10.5" y="14" width="6.5" height="2" rx="1" fill="#ffffff"/>
-                      </svg>
-                      <Text style={styles.gfListTitle} numberOfLines={1}>{p.name || p.pid}</Text>
+                      <View style={styles.zdTableIconBox}>
+                        <Text style={{ fontSize: 13, color: '#008080' }}>⚡</Text>
+                      </View>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={styles.zdTableTitle} numberOfLines={1}>{p.name || p.pid}</Text>
+                        <Text style={styles.zdTablePid}>#{p.pid || 'draft'}</Text>
+                      </View>
                     </TouchableOpacity>
 
-                    <Text style={[styles.gfListSubText, { flex: 2 }]} numberOfLines={1}>
-                      {Array.isArray(p.modules) ? p.modules.join(', ') : p.name}
+                    <Text style={[styles.zdTableSubText, { flex: 2 }]} numberOfLines={1}>
+                      {Array.isArray(p.modules) ? p.modules.join(', ') : 'Standard Flow'}
                     </Text>
 
-                    <Text style={[styles.gfListSubText, { flex: 1.5 }]}>
-                      {p.created_at || 'Recently'}
+                    <View style={{ flex: 1 }}>
+                      <View style={[styles.zdStatusBadge, { alignSelf: 'flex-start', backgroundColor: isLive ? '#ecfdf5' : '#fffbeb', borderColor: isLive ? '#a7f3d0' : '#fde68a' }]}>
+                        <Text style={[styles.zdStatusBadgeText, { color: isLive ? '#059669' : '#b45309' }]}>
+                          {isLive ? 'Live' : 'Draft'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <TouchableOpacity
+                      style={{ flex: 1.2 }}
+                      onPress={() => { setSelectedPipeline(p); setPipelineDetailVisible(true); }}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#008080' }}>
+                        📊 {subCount}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <Text style={[styles.zdTableSubText, { flex: 1.2 }]}>
+                      {formattedDate}
                     </Text>
 
-                    <View style={{ flex: 2.3, flexDirection: 'row', justifyContent: 'flex-end', gap: 6 }}>
+                    <View style={{ flex: 2.4, flexDirection: 'row', justifyContent: 'flex-end', gap: 6 }}>
                       <TouchableOpacity
                         style={[styles.btnSmall, { backgroundColor: '#008080' }]}
                         onPress={() => { setSelectedPipeline(p); setPipelineDetailVisible(true); }}
                       >
-                        <Text style={[styles.btnSmallText, { color: '#ffffff' }]}>Manage 📁</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.btnSmall, { backgroundColor: '#fef3c7', borderWidth: 1, borderColor: '#fde68a' }]}
-                        onPress={() => handleOpenManualReviewForPipeline(p)}
-                      >
-                        <Text style={[styles.btnSmallText, { color: '#b45309' }]}>Review ⚖️</Text>
+                        <Text style={[styles.btnSmallText, { color: '#ffffff' }]}>Manage</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={[styles.btnSmall, { backgroundColor: '#ecfdf5', borderWidth: 1, borderColor: '#a7f3d0' }]}
-                        onPress={() => exportSubmissionsToSheets(p)}
+                        onPress={() => exportSubmissionsToSheets(p, subs)}
                       >
                         <Text style={[styles.btnSmallText, { color: '#047857', fontWeight: '700' }]}>Sheets 📊</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity style={styles.btnSmall} onPress={() => openGeneratedLink(p.link)}>
-                        <Text style={styles.btnSmallText}>Test 🚀</Text>
+                      <TouchableOpacity
+                        style={styles.btnSmall}
+                        onPress={() => openGeneratedLink(p.link)}
+                      >
+                        <Text style={styles.btnSmallText}>Launch 🚀</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity style={[styles.btnSmall, { backgroundColor: '#f1f5f9' }]} onPress={() => handleEditPipeline(p)}>
+                      <TouchableOpacity
+                        style={[styles.btnSmall, { backgroundColor: '#f1f5f9' }]}
+                        onPress={() => handleEditPipeline(p)}
+                      >
                         <Text style={[styles.btnSmallText, { color: COLORS.textMain }]}>Edit ✏️</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity style={[styles.btnSmall, { backgroundColor: '#f1f5f9' }]} onPress={() => copyToClipboard(p.link)}>
+                      <TouchableOpacity
+                        style={[styles.btnSmall, { backgroundColor: '#f1f5f9' }]}
+                        onPress={() => copyToClipboard(p.link)}
+                      >
                         <Text style={[styles.btnSmallText, { color: COLORS.textMain }]}>Copy 📋</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
-                ))}
-              </View>
-            )}
+                );
+              })}
+            </View>
+          )}
 
-            {filteredPipelines.length === 0 && (
-              <View style={styles.gfEmptyState}>
-                <Text style={{ fontSize: 32, marginBottom: 12 }}>📄</Text>
-                <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.textMain, marginBottom: 6 }}>
-                  No verification forms found
-                </Text>
-                <Text style={{ fontSize: 13, color: COLORS.textMuted, marginBottom: 16 }}>
-                  Click "Blank form" above to create and configure your first verification pipeline.
-                </Text>
-                <TouchableOpacity style={styles.btn} onPress={handleCreateBlankForm}>
-                  <Text style={styles.btnText}>+ Create Blank Form</Text>
-                </TouchableOpacity>
+          {/* EMPTY STATE */}
+          {filteredPipelines.length === 0 && (
+            <View style={styles.zdEmptyState}>
+              <View style={styles.zdEmptyIconBox}>
+                <Text style={{ fontSize: 28 }}>🔍</Text>
               </View>
-            )}
-
-          </View>
+              <Text style={styles.zdEmptyTitle}>No verification pipelines found</Text>
+              <Text style={styles.zdEmptySub}>
+                {formSearchQuery
+                  ? `No pipelines match your search "${formSearchQuery}". Try clearing the search.`
+                  : "You haven't created any verification pipelines yet. Choose a blueprint above or create a blank flow."}
+              </Text>
+              <TouchableOpacity
+                style={styles.zdBtnPrimary}
+                onPress={handleCreateBlankForm}
+              >
+                <Text style={styles.zdBtnPrimaryText}>+ Create Verification Form</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </View>
     );
@@ -3800,296 +4071,507 @@ const styles = StyleSheet.create({
       fontSize: 12,
       fontWeight: '700',
   },
-  gfStartSection: {
-    backgroundColor: '#f1f3f4',
-    width: '100%',
-    paddingVertical: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#dadce0',
-  },
-  gfRecentSection: {
-    backgroundColor: '#ffffff',
-    width: '100%',
-    paddingVertical: 24,
-    minHeight: 500,
-  },
-  gfSectionInner: {
-    maxWidth: 1140,
+  // --- Zudoc Identity Studio Dashboard Styles ---
+  zudocDashboardRoot: {
+    maxWidth: 1320,
     width: '100%',
     alignSelf: 'center',
-    paddingHorizontal: width > 768 ? 24 : 14,
+    paddingHorizontal: width > 768 ? 28 : 14,
+    paddingVertical: 24,
   },
-  gfSectionHeader: {
+  zdHeroBanner: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: width > 768 ? 24 : 16,
+    marginBottom: 20,
+    boxShadow: '0 4px 20px rgba(0, 128, 128, 0.05)',
+    flexDirection: width > 1024 ? 'row' : 'column',
+    gap: 20,
+  },
+  zdHeroLeft: {
+    flex: 1.4,
+    minWidth: 280,
+  },
+  zdHeroBadge: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
-  },
-  gfSectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#202124',
-    letterSpacing: 0.1,
-  },
-  gfTemplateGalleryBtn: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#5f6368',
-  },
-  gfTemplateCardsRow: {
-    flexDirection: 'row',
-    gap: 16,
+    gap: 8,
+    backgroundColor: 'rgba(0, 128, 128, 0.08)',
+    borderColor: 'rgba(0, 128, 128, 0.22)',
+    borderWidth: 1,
+    paddingHorizontal: 12,
     paddingVertical: 4,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+    marginBottom: 12,
+  },
+  zdPulseDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#008080',
+  },
+  zdHeroBadgeText: {
+    color: '#008080',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  zdHeroTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#0f172a',
+    letterSpacing: -0.6,
+    marginBottom: 8,
+  },
+  zdHeroSubtitle: {
+    fontSize: 14,
+    color: '#64748b',
+    lineHeight: 22,
+    marginBottom: 20,
+    maxWidth: 620,
+  },
+  zdHeroActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     flexWrap: 'wrap',
   },
-  gfTemplateCardWrapper: {
-    alignItems: 'flex-start',
-    width: 154,
-  },
-  gfBlankCard: {
-    width: 154,
-    height: 120,
-    backgroundColor: '#ffffff',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#dadce0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    cursor: 'pointer',
-    boxShadow: '0 1px 3px rgba(60,64,67,0.08)',
-  },
-  gfTemplateCard: {
-    width: 154,
-    height: 120,
-    backgroundColor: '#ffffff',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#dadce0',
-    overflow: 'hidden',
-    cursor: 'pointer',
-    boxShadow: '0 1px 3px rgba(60,64,67,0.08)',
-  },
-  gfTemplateBanner: {
-    height: 38,
-    width: '100%',
-  },
-  gfTemplateMockBody: {
-    padding: 10,
-    flex: 1,
-    justifyContent: 'space-between',
-  },
-  gfMockTitleLine: {
-    height: 6,
-    width: '60%',
-    borderRadius: 3,
-  },
-  gfMockSubtitleLine: {
-    height: 4,
-    width: '40%',
-    backgroundColor: '#e2e8f0',
-    borderRadius: 2,
-  },
-  gfMockQuestionBox: {
-    backgroundColor: '#f8fafc',
-    padding: 6,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  gfMockQuestionHeader: {
-    height: 4,
-    width: '50%',
-    backgroundColor: '#94a3b8',
-    borderRadius: 2,
-  },
-  gfMockRadio: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    borderWidth: 1.5,
-  },
-  gfMockInputOutline: {
-    height: 8,
-    width: '80%',
-    borderRadius: 2,
-    borderWidth: 1,
-    borderColor: '#cbd5e1',
-  },
-  gfTemplateTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#202124',
-    marginTop: 8,
-    lineHeight: 18,
-  },
-  gfFilterDropdown: {
+  zdBtnPrimary: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#008080',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 10,
+    boxShadow: '0 4px 14px rgba(0, 128, 128, 0.25)',
+    cursor: 'pointer',
+  },
+  zdBtnPrimaryText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  zdBtnSecondary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    cursor: 'pointer',
+  },
+  zdBtnSecondaryText: {
+    color: '#1e293b',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  zdKpiGrid: {
+    flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    minWidth: 280,
+  },
+  zdKpiCard: {
+    flex: 1,
+    minWidth: 130,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 16,
+    justifyContent: 'space-between',
+  },
+  zdKpiTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  zdKpiLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748b',
+    letterSpacing: 0.5,
+  },
+  zdKpiValue: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginBottom: 2,
+  },
+  zdKpiSub: {
+    fontSize: 11,
+    color: '#94a3b8',
+  },
+  zdSectionCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: width > 768 ? 22 : 16,
+    marginBottom: 20,
+    boxShadow: '0 2px 10px rgba(0,0,0,0.02)',
+  },
+  zdSectionHeaderRow: {
+    marginBottom: 16,
+  },
+  zdSectionHeading: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  zdSectionSubheading: {
+    fontSize: 13,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  zdTemplateGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
+  zdTemplateCard: {
+    flex: 1,
+    minWidth: 230,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 16,
+    cursor: 'pointer',
+    justifyContent: 'space-between',
+    boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
+  },
+  zdTemplateIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  zdTemplateTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 6,
+  },
+  zdTemplateDesc: {
+    fontSize: 12,
+    color: '#64748b',
+    lineHeight: 18,
+    marginBottom: 12,
+    minHeight: 36,
+  },
+  zdTemplateTagsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 14,
+  },
+  zdTemplateTag: {
+    backgroundColor: '#F1F5F9',
+    color: '#475569',
+    fontSize: 10,
+    fontWeight: '600',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  zdTemplateCtaRow: {
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    paddingTop: 10,
+  },
+  zdTemplateCtaText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#008080',
+  },
+  zdControlsBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 14,
+    marginBottom: 16,
+  },
+  zdCountPill: {
+    backgroundColor: 'rgba(0, 128, 128, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+  },
+  zdCountPillText: {
+    color: '#008080',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  zdStatusFilterGroup: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    padding: 3,
+    borderRadius: 8,
+  },
+  zdStatusTab: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6,
-    backgroundColor: '#f8f9fa',
-    borderWidth: 1,
-    borderColor: '#dadce0',
+    cursor: 'pointer',
   },
-  gfFilterText: {
-    fontSize: 13,
-    color: '#3c4043',
-    fontWeight: '500',
-  },
-  gfViewToggleGroup: {
-    flexDirection: 'row',
-    backgroundColor: '#f1f3f4',
-    borderRadius: 6,
-    padding: 2,
-  },
-  gfToggleBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  gfToggleBtnActive: {
+  zdStatusTabActive: {
     backgroundColor: '#ffffff',
-    boxShadow: '0 1px 2px rgba(60,64,67,0.15)',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
   },
-  gfIconBtn: {
-    padding: 6,
-    borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
+  zdStatusTabText: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '600',
   },
-  gfFormsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 20,
-    marginTop: 8,
+  zdStatusTabTextActive: {
+    color: '#008080',
+    fontWeight: '700',
   },
-  gfFormCard: {
-    width: 210,
-    minWidth: 160,
-    flexGrow: 1,
-    flexShrink: 1,
-    flexBasis: 200,
-    maxWidth: 280,
+  zdSortBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#dadce0',
+    borderColor: '#CBD5E1',
     backgroundColor: '#ffffff',
+    cursor: 'pointer',
+  },
+  zdSortBtnText: {
+    fontSize: 12,
+    color: '#334155',
+    fontWeight: '600',
+  },
+  zdViewToggleGroup: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    padding: 3,
+    borderRadius: 8,
+  },
+  zdViewToggleBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    cursor: 'pointer',
+  },
+  zdViewToggleBtnActive: {
+    backgroundColor: '#ffffff',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+  },
+  zdSearchTagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 14,
+    backgroundColor: '#F8FAFC',
+    padding: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  zdPipelineGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
+  zdPipelineCard: {
+    flex: 1,
+    minWidth: 280,
+    maxWidth: width > 1200 ? 380 : undefined,
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     overflow: 'visible',
     position: 'relative',
-    boxShadow: '0 1px 3px rgba(60,64,67,0.1)',
+    boxShadow: '0 3px 12px rgba(0,0,0,0.03)',
   },
-  gfCardPreview: {
-    height: 140,
-    backgroundColor: '#f8f9fa',
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
-    overflow: 'hidden',
+  zdCardAccent: {
+    height: 4,
+    width: '100%',
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
+  },
+  zdCardContent: {
+    padding: 16,
     position: 'relative',
-    cursor: 'pointer',
+  },
+  zdCardHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  zdCardIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0, 128, 128, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  gfCardPreviewStripe: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 16,
+  zdCardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0f172a',
   },
-  gfMockPaper: {
-    width: '75%',
-    height: '75%',
-    backgroundColor: '#ffffff',
-    borderRadius: 4,
-    marginTop: 10,
-    padding: 8,
-    boxShadow: '0 1px 4px rgba(0,0,0,0.12)',
-    justifyContent: 'space-between',
+  zdCardPid: {
+    fontSize: 11,
+    color: '#64748b',
+    fontFamily: 'monospace',
+    marginTop: 1,
   },
-  gfMockPaperTitle: {
-    height: 6,
-    width: '55%',
-    borderRadius: 3,
-  },
-  gfMockPaperSub: {
-    height: 4,
-    width: '35%',
-    backgroundColor: '#e2e8f0',
-    borderRadius: 2,
-  },
-  gfMockPaperCard: {
-    backgroundColor: '#f8fafc',
-    padding: 4,
-    borderRadius: 3,
+  zdStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#f1f5f9',
   },
-  gfMockPaperFieldLine: {
-    height: 3,
-    width: '60%',
-    backgroundColor: '#94a3b8',
-    borderRadius: 2,
+  zdStatusBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
   },
-  gfMockPaperRadioDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-  },
-  gfMockPaperInput: {
-    height: 7,
-    width: '70%',
-    borderRadius: 2,
+  zdModuleStepsContainer: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#cbd5e1',
+    borderColor: '#F1F5F9',
   },
-  gfCardModuleBadge: {
-    position: 'absolute',
-    bottom: 6,
-    right: 8,
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  gfCardModuleBadgeText: {
+  zdModuleStepsLabel: {
     fontSize: 9,
     fontWeight: '700',
-    color: '#64748b',
-  },
-  gfCardFooter: {
-    padding: 12,
-    backgroundColor: '#ffffff',
-    borderBottomLeftRadius: 8,
-    borderBottomRightRadius: 8,
-  },
-  gfCardTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#202124',
+    color: '#94a3b8',
+    letterSpacing: 0.5,
     marginBottom: 6,
   },
-  gfCardSubRow: {
+  zdModuleChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  zdModuleChip: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  zdModuleChipTeal: {
+    borderColor: 'rgba(0, 128, 128, 0.3)',
+    backgroundColor: 'rgba(0, 128, 128, 0.04)',
+  },
+  zdModuleChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  zdCardMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+    paddingTop: 4,
+  },
+  zdMetaSubsBtn: {
+    backgroundColor: 'rgba(0, 128, 128, 0.06)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 128, 128, 0.15)',
+    cursor: 'pointer',
+  },
+  zdMetaSubsText: {
+    fontSize: 11,
+    color: '#334155',
+    fontWeight: '600',
+  },
+  zdMetaDateText: {
+    fontSize: 11,
+    color: '#94a3b8',
+  },
+  zdCardActionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    paddingTop: 12,
   },
-  gfCardOpenedText: {
-    fontSize: 11,
-    color: '#5f6368',
+  zdCardManageBtn: {
     flex: 1,
+    backgroundColor: '#008080',
+    paddingVertical: 7,
+    borderRadius: 6,
+    alignItems: 'center',
+    cursor: 'pointer',
   },
-  gfCardMenuBtn: {
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-    borderRadius: 4,
+  zdCardManageBtnText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  zdCardSheetsBtn: {
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+    borderRadius: 6,
+    alignItems: 'center',
+    cursor: 'pointer',
+  },
+  zdCardSheetsBtnText: {
+    color: '#047857',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  zdCardLaunchBtn: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+    borderRadius: 6,
+    alignItems: 'center',
+    cursor: 'pointer',
+  },
+  zdCardLaunchBtnText: {
+    color: '#334155',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  zdCardIconBtn: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 7,
+    paddingVertical: 6,
+    borderRadius: 6,
+    alignItems: 'center',
+    cursor: 'pointer',
+  },
+  zdCardMenuBtn: {
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 6,
     cursor: 'pointer',
   },
   gfActionDropdown: {
     position: 'absolute',
-    top: 195,
+    bottom: 45,
     right: 8,
     backgroundColor: '#ffffff',
     borderRadius: 8,
@@ -4097,7 +4579,7 @@ const styles = StyleSheet.create({
     borderColor: '#dadce0',
     boxShadow: '0 4px 14px rgba(0,0,0,0.15)',
     paddingVertical: 6,
-    width: 200,
+    width: 205,
     zIndex: 9999,
   },
   gfDropdownItem: {
@@ -4110,50 +4592,84 @@ const styles = StyleSheet.create({
     color: '#202124',
     fontWeight: '500',
   },
-  gfListViewContainer: {
+  zdTableWrapper: {
     backgroundColor: '#ffffff',
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#dadce0',
-    marginTop: 8,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
   },
-  gfListHeader: {
+  zdTableHeader: {
     flexDirection: 'row',
     paddingHorizontal: 16,
     paddingVertical: 12,
+    backgroundColor: '#F8FAFC',
     borderBottomWidth: 1,
-    borderBottomColor: '#dadce0',
-    backgroundColor: '#f8f9fa',
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
+    borderBottomColor: '#E2E8F0',
   },
-  gfListCol: {
-    fontSize: 12,
+  zdTableTh: {
+    fontSize: 11,
     fontWeight: '700',
-    color: '#5f6368',
+    color: '#64748b',
     textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  gfListRow: {
+  zdTableRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderBottomColor: '#F1F5F9',
   },
-  gfListTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#202124',
+  zdTableIconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: 'rgba(0, 128, 128, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  gfListSubText: {
+  zdTableTitle: {
     fontSize: 13,
-    color: '#5f6368',
+    fontWeight: '700',
+    color: '#0f172a',
   },
-  gfEmptyState: {
+  zdTablePid: {
+    fontSize: 10,
+    color: '#64748b',
+    fontFamily: 'monospace',
+  },
+  zdTableSubText: {
+    fontSize: 12,
+    color: '#475569',
+  },
+  zdEmptyState: {
     padding: 48,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  zdEmptyIconBox: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  zdEmptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 6,
+  },
+  zdEmptySub: {
+    fontSize: 13,
+    color: '#64748b',
+    textAlign: 'center',
+    maxWidth: 440,
+    marginBottom: 18,
   },
   gfDashboardScroll: {
     padding: 0,

@@ -1668,55 +1668,98 @@ export default function App() {
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                          style={styles.zdCardMoreBtn}
+                          style={[styles.zdCardMoreBtn, isMenuOpen && styles.zdCardMoreBtnActive]}
+                          activeOpacity={0.7}
                           onPress={() => setActiveMenuPid(isMenuOpen ? null : p.pid)}
                         >
-                          <Text style={{ fontSize: 18, color: '#64748b', fontWeight: 'bold', lineHeight: 18 }}>⋮</Text>
+                          <Text style={[styles.zdCardMoreBtnText, isMenuOpen && styles.zdCardMoreBtnTextActive]}>•••</Text>
                         </TouchableOpacity>
                       </View>
 
                       {/* Professional Overflow Dropdown */}
                       {isMenuOpen && (
-                        <View style={styles.zdMenuDropdown}>
+                        <>
                           <TouchableOpacity
-                            style={styles.zdMenuItem}
-                            onPress={() => { exportSubmissionsToSheets(p, subs); setActiveMenuPid(null); }}
-                          >
-                            <Text style={[styles.zdMenuItemText, { fontWeight: '700', color: '#059669' }]}>📊 Export Sheets (.csv)</Text>
-                          </TouchableOpacity>
+                            style={styles.zdMenuBackdrop}
+                            activeOpacity={1}
+                            onPress={() => setActiveMenuPid(null)}
+                          />
+                          <View style={styles.zdMenuDropdown}>
+                            <View style={styles.zdMenuHeader}>
+                              <Text style={styles.zdMenuHeaderText}>FORM ACTIONS</Text>
+                              <Text style={styles.zdMenuHeaderSub}>#{p.pid || 'draft'}</Text>
+                            </View>
 
-                          <TouchableOpacity
-                            style={styles.zdMenuItem}
-                            onPress={() => { handleOpenManualReviewForPipeline(p); setActiveMenuPid(null); }}
-                          >
-                            <Text style={[styles.zdMenuItemText, { fontWeight: '700', color: '#b45309' }]}>⚖️ Review Submissions</Text>
-                          </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.zdMenuItem}
+                              onPress={() => { exportSubmissionsToSheets(p, subs); setActiveMenuPid(null); }}
+                            >
+                              <View style={[styles.zdMenuIconBox, { backgroundColor: '#ecfdf5' }]}>
+                                <Text style={{ fontSize: 13 }}>📊</Text>
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={[styles.zdMenuItemTitle, { color: '#059669' }]}>Export Responses</Text>
+                                <Text style={styles.zdMenuItemSub}>Download spreadsheet (.csv)</Text>
+                              </View>
+                            </TouchableOpacity>
 
-                          <View style={styles.zdMenuDivider} />
+                            <TouchableOpacity
+                              style={styles.zdMenuItem}
+                              onPress={() => { handleOpenManualReviewForPipeline(p); setActiveMenuPid(null); }}
+                            >
+                              <View style={[styles.zdMenuIconBox, { backgroundColor: '#fffbeb' }]}>
+                                <Text style={{ fontSize: 13 }}>⚖️</Text>
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={[styles.zdMenuItemTitle, { color: '#b45309' }]}>Review Submissions</Text>
+                                <Text style={styles.zdMenuItemSub}>Manual audit & approval queue</Text>
+                              </View>
+                            </TouchableOpacity>
 
-                          <TouchableOpacity
-                            style={styles.zdMenuItem}
-                            onPress={() => { handleEditPipeline(p); setActiveMenuPid(null); }}
-                          >
-                            <Text style={styles.zdMenuItemText}>✏️ Edit in Builder</Text>
-                          </TouchableOpacity>
+                            <View style={styles.zdMenuDivider} />
 
-                          <TouchableOpacity
-                            style={styles.zdMenuItem}
-                            onPress={() => { copyToClipboard(p.link); setActiveMenuPid(null); }}
-                          >
-                            <Text style={styles.zdMenuItemText}>📋 Copy Shareable Link</Text>
-                          </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.zdMenuItem}
+                              onPress={() => { copyToClipboard(p.link); setActiveMenuPid(null); }}
+                            >
+                              <View style={[styles.zdMenuIconBox, { backgroundColor: '#eff6ff' }]}>
+                                <Text style={{ fontSize: 13 }}>📋</Text>
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.zdMenuItemTitle}>Copy Shareable Link</Text>
+                                <Text style={styles.zdMenuItemSub}>Direct applicant verification URL</Text>
+                              </View>
+                            </TouchableOpacity>
 
-                          <View style={styles.zdMenuDivider} />
+                            <TouchableOpacity
+                              style={styles.zdMenuItem}
+                              onPress={() => { handleEditPipeline(p); setActiveMenuPid(null); }}
+                            >
+                              <View style={[styles.zdMenuIconBox, { backgroundColor: '#f8fafc' }]}>
+                                <Text style={{ fontSize: 13 }}>✏️</Text>
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.zdMenuItemTitle}>Edit in Builder</Text>
+                                <Text style={styles.zdMenuItemSub}>Modify form questions & flow</Text>
+                              </View>
+                            </TouchableOpacity>
 
-                          <TouchableOpacity
-                            style={styles.zdMenuItem}
-                            onPress={() => { handleDeletePipeline(p.pid); setActiveMenuPid(null); }}
-                          >
-                            <Text style={[styles.zdMenuItemText, { color: COLORS.danger }]}>🗑️ Delete Pipeline</Text>
-                          </TouchableOpacity>
-                        </View>
+                            <View style={styles.zdMenuDivider} />
+
+                            <TouchableOpacity
+                              style={styles.zdMenuItem}
+                              onPress={() => { handleDeletePipeline(p.pid); setActiveMenuPid(null); }}
+                            >
+                              <View style={[styles.zdMenuIconBox, { backgroundColor: '#fef2f2' }]}>
+                                <Text style={{ fontSize: 13 }}>🗑️</Text>
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={[styles.zdMenuItemTitle, { color: '#dc2626' }]}>Delete Pipeline</Text>
+                                <Text style={styles.zdMenuItemSub}>Permanently delete this form</Text>
+                              </View>
+                            </TouchableOpacity>
+                          </View>
+                        </>
                       )}
                     </View>
                   </View>
@@ -1811,54 +1854,97 @@ export default function App() {
                       </TouchableOpacity>
 
                       <TouchableOpacity
-                        style={styles.zdCardMoreBtn}
+                        style={[styles.zdCardMoreBtn, isMenuOpen && styles.zdCardMoreBtnActive]}
+                        activeOpacity={0.7}
                         onPress={() => setActiveMenuPid(isMenuOpen ? null : `table-${p.pid}`)}
                       >
-                        <Text style={{ fontSize: 18, color: '#64748b', fontWeight: 'bold', lineHeight: 18 }}>⋮</Text>
+                        <Text style={[styles.zdCardMoreBtnText, isMenuOpen && styles.zdCardMoreBtnTextActive]}>•••</Text>
                       </TouchableOpacity>
 
-                      {/* Dropdown Menu */}
+                      {/* Professional Overflow Dropdown */}
                       {isMenuOpen && (
-                        <View style={[styles.zdMenuDropdown, { top: 38, right: 0, position: 'absolute' }]}>
+                        <>
                           <TouchableOpacity
-                            style={styles.zdMenuItem}
-                            onPress={() => { exportSubmissionsToSheets(p, subs); setActiveMenuPid(null); }}
-                          >
-                            <Text style={[styles.zdMenuItemText, { fontWeight: '700', color: '#059669' }]}>📊 Export Sheets (.csv)</Text>
-                          </TouchableOpacity>
+                            style={styles.zdMenuBackdrop}
+                            activeOpacity={1}
+                            onPress={() => setActiveMenuPid(null)}
+                          />
+                          <View style={styles.zdMenuDropdown}>
+                            <View style={styles.zdMenuHeader}>
+                              <Text style={styles.zdMenuHeaderText}>FORM OPTIONS</Text>
+                              <Text style={styles.zdMenuHeaderSub}>#{p.pid || 'draft'}</Text>
+                            </View>
 
-                          <TouchableOpacity
-                            style={styles.zdMenuItem}
-                            onPress={() => { handleOpenManualReviewForPipeline(p); setActiveMenuPid(null); }}
-                          >
-                            <Text style={[styles.zdMenuItemText, { fontWeight: '700', color: '#b45309' }]}>⚖️ Review Submissions</Text>
-                          </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.zdMenuItem}
+                              onPress={() => { exportSubmissionsToSheets(p, subs); setActiveMenuPid(null); }}
+                            >
+                              <View style={[styles.zdMenuIconBox, { backgroundColor: '#ecfdf5' }]}>
+                                <Text style={{ fontSize: 13 }}>📊</Text>
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={[styles.zdMenuItemTitle, { color: '#059669' }]}>Export Responses</Text>
+                                <Text style={styles.zdMenuItemSub}>Download spreadsheet (.csv)</Text>
+                              </View>
+                            </TouchableOpacity>
 
-                          <View style={styles.zdMenuDivider} />
+                            <TouchableOpacity
+                              style={styles.zdMenuItem}
+                              onPress={() => { handleOpenManualReviewForPipeline(p); setActiveMenuPid(null); }}
+                            >
+                              <View style={[styles.zdMenuIconBox, { backgroundColor: '#fffbeb' }]}>
+                                <Text style={{ fontSize: 13 }}>⚖️</Text>
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={[styles.zdMenuItemTitle, { color: '#b45309' }]}>Manual Audit Queue</Text>
+                                <Text style={styles.zdMenuItemSub}>Review flagged submissions</Text>
+                              </View>
+                            </TouchableOpacity>
 
-                          <TouchableOpacity
-                            style={styles.zdMenuItem}
-                            onPress={() => { handleEditPipeline(p); setActiveMenuPid(null); }}
-                          >
-                            <Text style={styles.zdMenuItemText}>✏️ Edit in Builder</Text>
-                          </TouchableOpacity>
+                            <View style={styles.zdMenuDivider} />
 
-                          <TouchableOpacity
-                            style={styles.zdMenuItem}
-                            onPress={() => { copyToClipboard(p.link); setActiveMenuPid(null); }}
-                          >
-                            <Text style={styles.zdMenuItemText}>📋 Copy Shareable Link</Text>
-                          </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.zdMenuItem}
+                              onPress={() => { copyToClipboard(p.link); setActiveMenuPid(null); }}
+                            >
+                              <View style={[styles.zdMenuIconBox, { backgroundColor: '#eff6ff' }]}>
+                                <Text style={{ fontSize: 13 }}>📋</Text>
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.zdMenuItemTitle}>Copy Shareable Link</Text>
+                                <Text style={styles.zdMenuItemSub}>Direct applicant verification URL</Text>
+                              </View>
+                            </TouchableOpacity>
 
-                          <View style={styles.zdMenuDivider} />
+                            <TouchableOpacity
+                              style={styles.zdMenuItem}
+                              onPress={() => { handleEditPipeline(p); setActiveMenuPid(null); }}
+                            >
+                              <View style={[styles.zdMenuIconBox, { backgroundColor: '#f8fafc' }]}>
+                                <Text style={{ fontSize: 13 }}>✏️</Text>
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.zdMenuItemTitle}>Edit in Builder</Text>
+                                <Text style={styles.zdMenuItemSub}>Modify form questions & flow</Text>
+                              </View>
+                            </TouchableOpacity>
 
-                          <TouchableOpacity
-                            style={styles.zdMenuItem}
-                            onPress={() => { handleDeletePipeline(p.pid); setActiveMenuPid(null); }}
-                          >
-                            <Text style={[styles.zdMenuItemText, { color: COLORS.danger }]}>🗑️ Delete Pipeline</Text>
-                          </TouchableOpacity>
-                        </View>
+                            <View style={styles.zdMenuDivider} />
+
+                            <TouchableOpacity
+                              style={styles.zdMenuItem}
+                              onPress={() => { handleDeletePipeline(p.pid); setActiveMenuPid(null); }}
+                            >
+                              <View style={[styles.zdMenuIconBox, { backgroundColor: '#fef2f2' }]}>
+                                <Text style={{ fontSize: 13 }}>🗑️</Text>
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={[styles.zdMenuItemTitle, { color: '#dc2626' }]}>Delete Pipeline</Text>
+                                <Text style={styles.zdMenuItemSub}>Permanently delete this form</Text>
+                              </View>
+                            </TouchableOpacity>
+                          </View>
+                        </>
                       )}
                     </View>
                   </View>
@@ -4477,41 +4563,111 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   zdCardMoreBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 6,
+    width: 32,
+    height: 32,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    borderColor: '#CBD5E1',
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
     cursor: 'pointer',
+  },
+  zdCardMoreBtnActive: {
+    backgroundColor: 'rgba(0, 128, 128, 0.08)',
+    borderColor: '#008080',
+  },
+  zdCardMoreBtnText: {
+    fontSize: 14,
+    color: '#475569',
+    fontWeight: '900',
+    letterSpacing: 1.5,
+    lineHeight: 14,
+    textAlign: 'center',
+  },
+  zdCardMoreBtnTextActive: {
+    color: '#008080',
+  },
+  zdMenuBackdrop: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 99990,
+    backgroundColor: 'transparent',
+    cursor: 'default',
   },
   zdMenuDropdown: {
     position: 'absolute',
-    bottom: 50,
-    right: 12,
+    top: 38,
+    right: 0,
     backgroundColor: '#ffffff',
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
-    paddingVertical: 6,
-    width: 210,
-    zIndex: 10000,
+    boxShadow: '0 12px 30px -4px rgba(15, 23, 42, 0.16), 0 4px 12px -2px rgba(15, 23, 42, 0.08)',
+    paddingVertical: 8,
+    width: 250,
+    zIndex: 100000,
+    elevation: 100000,
+  },
+  zdMenuHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingTop: 4,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    marginBottom: 4,
+  },
+  zdMenuHeaderText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#94a3b8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  zdMenuHeaderSub: {
+    fontSize: 10,
+    color: '#64748b',
+    fontFamily: 'monospace',
+    fontWeight: '600',
   },
   zdMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingVertical: 8,
     paddingHorizontal: 12,
+    marginHorizontal: 6,
+    borderRadius: 8,
+    gap: 10,
     cursor: 'pointer',
   },
-  zdMenuItemText: {
+  zdMenuIconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  zdMenuItemTitle: {
     fontSize: 12,
-    color: '#1e293b',
-    fontWeight: '500',
+    fontWeight: '600',
+    color: '#0f172a',
+  },
+  zdMenuItemSub: {
+    fontSize: 10,
+    color: '#94a3b8',
+    marginTop: 1,
   },
   zdMenuDivider: {
     height: 1,
     backgroundColor: '#F1F5F9',
     marginVertical: 4,
+    marginHorizontal: 8,
   },
   zdTableWrapper: {
     backgroundColor: '#ffffff',

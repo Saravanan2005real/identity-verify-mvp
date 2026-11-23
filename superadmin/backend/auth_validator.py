@@ -225,6 +225,27 @@ def get_user_tenant_membership(user_id: str, access_token: str) -> list:
         return []
 
 def is_superadmin(user_data: dict, memberships: list) -> bool:
+    email = (user_data.get("email") or "").strip().lower()
+    if not email:
+        return False
+
+    # Enforce corporate domain restriction (default: zudoc.co)
+    allowed_domains = [
+        d.strip().lower().lstrip("@")
+        for d in os.getenv("ALLOWED_SUPERADMIN_DOMAINS", "zudoc.co").split(",")
+        if d.strip()
+    ]
+    if allowed_domains:
+        email_domain = email.split("@")[-1] if "@" in email else ""
+        if email_domain not in allowed_domains:
+            logger.warning(f"Superadmin access rejected for {email}: domain not in allowed domains {allowed_domains}")
+            return False
+
+    is_confirmed = bool(user_data.get("email_confirmed_at"))
+    if not is_confirmed:
+        logger.warning(f"Superadmin access rejected for {email}: email not yet confirmed/verified via link")
+        return False
+
     app_meta = user_data.get("app_metadata", {})
     if app_meta.get("role") == "superadmin":
         return True
@@ -233,18 +254,9 @@ def is_superadmin(user_data: dict, memberships: list) -> bool:
         if m.get("role") == "superadmin":
             return True
 
-    email = (user_data.get("email") or "").strip().lower()
-    if not email:
-        return False
-
-    is_confirmed = bool(user_data.get("email_confirmed_at"))
-
-    # 1. Corporate domain restriction (e.g. zudoc.com)
-    allowed_domains = [d.strip().lower().lstrip("@") for d in os.getenv("ALLOWED_SUPERADMIN_DOMAINS", "").split(",") if d.strip()]
+    # 1. Any confirmed user with allowed domain (e.g. zudoc.co) is authorized
     if allowed_domains and is_confirmed:
-        email_domain = email.split("@")[-1] if "@" in email else ""
-        if email_domain in allowed_domains:
-            return True
+        return True
 
     # 2. Explicit admin email whitelist
     allowed_emails = [e.strip().lower() for e in os.getenv("ALLOWED_SUPERADMIN_EMAILS", "").split(",") if e.strip()]

@@ -8,16 +8,12 @@ import {
   ScrollView,
   Dimensions,
   ActivityIndicator,
-  Modal,
   Platform,
-  Alert,
 } from 'react-native';
 import { supabase } from './lib/supabase';
 import {
   signIn,
-  signUp,
-  resetPasswordForEmail,
-  verifyPasswordResetOtp,
+  sendVerificationLink,
   updatePassword,
 } from './src/services/auth';
 import {
@@ -27,18 +23,18 @@ import {
 
 const { width } = Dimensions.get('window');
 
-// Verifyyy Light Theme Palette
+// Zudoc Brand Theme Palette - Exactly matching admin portal and zudoc.co
 const COLORS = {
-  primary: '#0f766e', // teal-700
-  primaryHover: '#0d5f58',
-  primaryLight: 'rgba(15, 118, 110, 0.1)',
-  background: '#f8fafc', // slate-50
+  primary: '#008080', // Zudoc Official Teal
+  primaryHover: '#006565',
+  primaryLight: 'rgba(0, 128, 128, 0.08)',
+  background: '#F7F9FB', // Zudoc Clean Slate White
   card: '#ffffff',
   inputBg: '#ffffff',
-  inputBorder: '#cbd5e1', // slate-300
-  inputBorderFocus: '#0f766e',
-  textMain: '#0f172a', // slate-900
-  textMuted: '#64748b', // slate-500
+  inputBorder: '#cbd5e1',
+  inputBorderFocus: '#008080',
+  textMain: '#0f172a',
+  textMuted: '#64748b',
   border: 'rgba(203, 213, 225, 0.7)',
   danger: '#ef4444',
   dangerBg: '#fef2f2',
@@ -48,51 +44,55 @@ const COLORS = {
 };
 
 const FONT_FAMILY = Platform.select({
-  web: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+  web: '"Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
   default: undefined,
 });
 
 const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
 
+const SUPERADMIN_API_URL = (
+  process.env.EXPO_PUBLIC_SUPERADMIN_API_URL || 'http://localhost:8000'
+).replace(/\/+$/, '');
+
 export default function SignInScreen({
-  portalName = 'Verifyyy Superadmin',
+  portalName = 'Superadmin Control Center',
   portalRole = 'superadmin',
   defaultEmail = '',
   onLoginSuccess,
 }) {
   const isWeb = width > 768;
 
-  // --- Auth Mode: 'signin' | 'signup' ---
-  const [authMode, setAuthMode] = useState('signin');
+  // --- Modes: 'login' | 'register' | 'forgot' ---
+  const [authMode, setAuthMode] = useState('login');
 
   // --- Form States ---
   const [email, setEmail] = useState(defaultEmail);
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
-  // --- Verification Link Sent States ---
-  const [signupSuccess, setSignupSuccess] = useState(false);
-  const [signupSuccessEmail, setSignupSuccessEmail] = useState('');
+  // --- Registration Step 2: Create Password ---
+  // Steps: 'email_verify' | 'create_password'
+  const [registerStep, setRegisterStep] = useState('email_verify');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // --- Status & Feedback States ---
+  // --- Verification Link States (for Register & Forgot Password) ---
+  const [linkSent, setLinkSent] = useState(false);
+  const [linkSentEmail, setLinkSentEmail] = useState('');
+  const [directLink, setDirectLink] = useState('');
+  const [resendCountdown, setResendCountdown] = useState(45);
+  const [canResend, setCanResend] = useState(false);
+
+  // --- Feedback States ---
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [toastMessage, setToastMessage] = useState('');
 
-  // --- Forgot Password Flow States ---
-  // Steps: 'request' | 'enter_code' | 'set_password' | 'success'
-  const [forgotModalVisible, setForgotModalVisible] = useState(false);
-  const [forgotStep, setForgotStep] = useState('request');
-  const [fpEmail, setFpEmail] = useState('');
-  const [fpCode, setFpCode] = useState('');
-  const [fpNewPassword, setFpNewPassword] = useState('');
-  const [fpConfirmPassword, setFpConfirmPassword] = useState('');
-  const [fpShowPassword, setFpShowPassword] = useState(false);
-  const [fpLoading, setFpLoading] = useState(false);
-  const [fpError, setFpError] = useState('');
+  const allowedDomains = getAllowedSuperadminDomains();
+  const domainLabel = allowedDomains.length > 0 ? `@${allowedDomains.join(' or @')}` : '@zudoc.co';
 
   useEffect(() => {
     try {
@@ -102,53 +102,142 @@ export default function SignInScreen({
       }
     } catch (e) {}
 
-    // Check if URL hash indicates a password recovery session
-    if (typeof window !== 'undefined' && window.location && window.location.hash) {
-      if (window.location.hash.includes('type=recovery')) {
-        setForgotStep('set_password');
-        setForgotModalVisible(true);
-      }
-    }
-
-    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        setForgotStep('set_password');
-        setForgotModalVisible(true);
+    // Listen for incoming authentication session from verification link click
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        const userEmail = (session.user.email || '').toLowerCase();
+        const policy = validateEmailDomainPolicy(userEmail);
+        if (policy.allowed) {
+          // If in the registration flow, advance to Step 2 (Create Password)
+          if (authMode === 'register' && registerStep === 'email_verify') {
+            triggerToast('Email verified! Please create your password.');
+            setRegisterStep('create_password');
+            setLinkSent(false);
+          } else {
+            triggerToast('Authentication confirmed! Entering portal...');
+            if (onLoginSuccess) onLoginSuccess(session.user);
+          }
+        } else {
+          setErrorMessage(`Access restricted: ${userEmail} is not an authorized ${domainLabel} account.`);
+          supabase.auth.signOut();
+        }
       }
     });
 
     return () => {
       authListener?.subscription?.unsubscribe();
     };
-  }, []);
+  }, [authMode, registerStep]);
+
+  // Countdown timer for Resend Link
+  useEffect(() => {
+    let timer = null;
+    if (linkSent && resendCountdown > 0) {
+      timer = setInterval(() => {
+        setResendCountdown((prev) => {
+          if (prev <= 1) {
+            setCanResend(true);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [linkSent, resendCountdown]);
 
   const triggerToast = (msg) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(''), 3500);
   };
 
-  // --- 1. Sign In (with Supabase Email & Password) ---
-  const handlePasswordSignIn = async () => {
+  // Helper to check account existence via backend with robust fallback
+  const checkAccountExists = async (targetEmail) => {
+    const urls = [
+      `${SUPERADMIN_API_URL}/api/v1/superadmin/auth/check-account`,
+      'http://127.0.0.1:8000/api/v1/superadmin/auth/check-account',
+      'http://localhost:8000/api/v1/superadmin/auth/check-account',
+    ];
+    for (const url of urls) {
+      try {
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: targetEmail }),
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data && typeof data.exists === 'boolean') return data;
+        }
+      } catch (_) {}
+    }
+    return null;
+  };
+
+  // Helper to generate verification link via backend with robust fallback
+  const fetchDirectLink = async (targetEmail, linkType = 'magiclink') => {
+    const urls = [
+      `${SUPERADMIN_API_URL}/api/v1/superadmin/auth/generate-magic-link`,
+      'http://127.0.0.1:8000/api/v1/superadmin/auth/generate-magic-link',
+      'http://localhost:8000/api/v1/superadmin/auth/generate-magic-link',
+    ];
+    for (const url of urls) {
+      try {
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: targetEmail, link_type: linkType }),
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data?.action_link) return data.action_link;
+        }
+      } catch (_) {}
+    }
+    return '';
+  };
+
+  // ---------------------------------------------------------------------------
+  // 1. LOGIN FLOW
+  // ---------------------------------------------------------------------------
+  const handleLogin = async () => {
     setErrorMessage('');
     const cleanEmail = email.trim().toLowerCase();
 
     if (!cleanEmail || !EMAIL_REGEX.test(cleanEmail)) {
-      setErrorMessage('Please enter a valid administrative email.');
+      setErrorMessage('Please enter a valid email address.');
       return;
     }
 
-    if (!password || password.length < 6) {
-      setErrorMessage('Password must be at least 6 characters.');
+    const domainCheck = validateEmailDomainPolicy(cleanEmail);
+    if (!domainCheck.allowed) {
+      setErrorMessage(
+        domainCheck.reason ||
+        `Access restricted: Superadmin login is strictly permitted only for ${domainLabel} email addresses.`
+      );
+      return;
+    }
+
+    if (!password) {
+      setErrorMessage('Please enter your password.');
       return;
     }
 
     setLoading(true);
 
     try {
-      const data = await signIn(cleanEmail, password);
-      const user = data?.user;
+      // Check if account exists first
+      const accountInfo = await checkAccountExists(cleanEmail);
+      if (accountInfo && accountInfo.exists === false) {
+        setErrorMessage('There is no account existed in this mail. Please register first.');
+        setLoading(false);
+        return;
+      }
 
-      if (user) {
+      const data = await signIn(cleanEmail, password);
+      if (data?.user) {
         if (rememberMe) {
           try {
             if (typeof window !== 'undefined' && window.localStorage) {
@@ -157,14 +246,15 @@ export default function SignInScreen({
           } catch (e) {}
         }
         triggerToast('Signed in successfully!');
-        if (onLoginSuccess) onLoginSuccess(user);
+        if (onLoginSuccess) onLoginSuccess(data.user);
       }
     } catch (err) {
-      const raw = (err.message || '').toLowerCase();
-      if (raw.includes('invalid login credentials')) {
-        setErrorMessage("Account doesn't exist or incorrect credentials. If you haven't created an account yet, please create a new account.");
-      } else if (raw.includes('email not confirmed')) {
-        setErrorMessage('Email address has not been confirmed yet. Please check your inbox and click the verification link sent by Supabase.');
+      console.warn('Login error:', err);
+      const msg = (err?.message || '').toLowerCase();
+      if (msg.includes('invalid login credentials') || msg.includes('invalid_grant')) {
+        setErrorMessage('Incorrect password or account credentials. If you forgot your password, please use Forgot Password.');
+      } else if (msg.includes('email not confirmed')) {
+        setErrorMessage('Email address has not been confirmed yet. Please verify your email first.');
       } else {
         setErrorMessage(err.message || 'Authentication failed. Please check credentials.');
       }
@@ -173,29 +263,72 @@ export default function SignInScreen({
     }
   };
 
-  // --- 2. Create Account (Sign Up with Email & Password stored in Supabase) ---
-  const handleSignUp = async () => {
+  // ---------------------------------------------------------------------------
+  // 2. REGISTER FLOW: Step 1 (Verify Email with Duplicate Avoidance)
+  // ---------------------------------------------------------------------------
+  const handleRegisterSendVerification = async () => {
     setErrorMessage('');
     const cleanEmail = email.trim().toLowerCase();
 
     if (!cleanEmail || !EMAIL_REGEX.test(cleanEmail)) {
-      setErrorMessage('Please enter a valid administrative email address.');
+      setErrorMessage('Please enter a valid corporate email address.');
       return;
     }
 
-    // Corporate domain policy check (e.g. @zudoc.com when configured)
-    const domainPolicy = validateEmailDomainPolicy(cleanEmail);
-    if (!domainPolicy.allowed) {
-      setErrorMessage(domainPolicy.reason);
+    const domainCheck = validateEmailDomainPolicy(cleanEmail);
+    if (!domainCheck.allowed) {
+      setErrorMessage(
+        domainCheck.reason ||
+        `Access restricted: Superadmin registration is strictly permitted only for ${domainLabel} email addresses.`
+      );
       return;
     }
 
-    if (!password || password.length < 6) {
+    setLoading(true);
+
+    try {
+      // DUPLICATE REGISTRATION CHECK: Prevent duplicate accounts
+      const accountInfo = await checkAccountExists(cleanEmail);
+      if (accountInfo && accountInfo.exists === true) {
+        setErrorMessage('An account with this email already exists. Duplicate registration is avoided. Please sign in instead.');
+        setLoading(false);
+        return;
+      }
+
+      // Dispatch verification link
+      await sendVerificationLink(cleanEmail).catch((err) => {
+        console.warn('SMTP dispatch note (using direct link fallback):', err);
+      });
+
+      // Obtain direct link helper
+      const actionLink = await fetchDirectLink(cleanEmail, 'signup');
+      if (actionLink) setDirectLink(actionLink);
+
+      setLinkSent(true);
+      setLinkSentEmail(cleanEmail);
+      setResendCountdown(45);
+      setCanResend(false);
+      triggerToast('Verification link sent! Please verify your email.');
+    } catch (err) {
+      console.warn('Register link error:', err);
+      setErrorMessage(err.message || 'Failed to send verification email.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // 2b. REGISTER FLOW: Step 2 (Create Password & Once Again Password)
+  // ---------------------------------------------------------------------------
+  const handleCreatePasswordSubmit = async () => {
+    setErrorMessage('');
+
+    if (!newPassword || newPassword.length < 6) {
       setErrorMessage('Password must be at least 6 characters.');
       return;
     }
 
-    if (password !== confirmPassword) {
+    if (newPassword !== confirmPassword) {
       setErrorMessage('Passwords do not match. Please re-enter your confirmation password.');
       return;
     }
@@ -203,151 +336,88 @@ export default function SignInScreen({
     setLoading(true);
 
     try {
-      const data = await signUp(cleanEmail, password);
+      // Set the password in Supabase for the authenticated session
+      const data = await updatePassword(newPassword);
+      triggerToast('Password created successfully! Welcome to Superadmin.');
 
-      // If Supabase immediately returns an active session
-      if (data?.session) {
-        triggerToast('Superadmin account created successfully!');
-        if (rememberMe) {
-          try {
-            if (typeof window !== 'undefined' && window.localStorage) {
-              localStorage.setItem('verifyyy_superadmin_email', cleanEmail);
-            }
-          } catch (e) {}
-        }
-        if (onLoginSuccess) onLoginSuccess(data.user);
-      } else {
-        // Supabase sent an email confirmation link
-        setSignupSuccessEmail(cleanEmail);
-        setSignupSuccess(true);
-        triggerToast('Verification link sent to your email!');
+      const cleanEmail = email.trim().toLowerCase();
+      if (rememberMe) {
+        try {
+          if (typeof window !== 'undefined' && window.localStorage) {
+            localStorage.setItem('verifyyy_superadmin_email', cleanEmail);
+          }
+        } catch (e) {}
+      }
+
+      // "then let them in"
+      if (onLoginSuccess) {
+        onLoginSuccess(data.user);
       }
     } catch (err) {
-      console.warn('Sign up error:', err);
-      const msg = (err?.message || '').toLowerCase();
-      if (!msg || msg === '{}' || err?.status === 500) {
-        setErrorMessage('Failed to send confirmation email (Supabase SMTP Error). Please verify SMTP settings in Supabase.');
-      } else if (msg.includes('already registered') || msg.includes('user already exists')) {
-        setErrorMessage('An account with this email already exists. Please sign in with your password.');
-      } else {
-        setErrorMessage(err.message || 'Failed to create Superadmin account.');
-      }
+      console.warn('Create password error:', err);
+      setErrorMessage(err.message || 'Failed to set password. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  // --- Password Reset Step 1: Send Reset Code / Link ---
-  const handleSendResetCode = async () => {
-    setFpError('');
-    const cleanEmail = fpEmail.trim().toLowerCase();
+  // ---------------------------------------------------------------------------
+  // 3. FORGOT PASSWORD FLOW
+  // ---------------------------------------------------------------------------
+  const handleForgotPassword = async () => {
+    setErrorMessage('');
+    const cleanEmail = email.trim().toLowerCase();
 
     if (!cleanEmail || !EMAIL_REGEX.test(cleanEmail)) {
-      setFpError('Please enter a valid administrative email.');
+      setErrorMessage('Please enter a valid email address.');
       return;
     }
 
-    setFpLoading(true);
+    const domainCheck = validateEmailDomainPolicy(cleanEmail);
+    if (!domainCheck.allowed) {
+      setErrorMessage(
+        domainCheck.reason ||
+        `Access restricted: Superadmin access is strictly permitted only for ${domainLabel} email addresses.`
+      );
+      return;
+    }
+
+    setLoading(true);
+
     try {
-      await resetPasswordForEmail(cleanEmail);
-      setForgotStep('enter_code');
-      triggerToast('Password reset code / link sent to your email!');
-    } catch (err) {
-      console.warn('Password reset request error:', err);
-      const msg = err?.message || '';
-      if (!msg || msg === '{}' || err?.status === 500) {
-        setFpError('Supabase email delivery failed (SMTP Error). Please check your SMTP credentials in Supabase Dashboard, or toggle Custom SMTP off.');
-      } else {
-        setFpError(msg);
+      // Check if account exists
+      const accountInfo = await checkAccountExists(cleanEmail);
+      if (accountInfo && accountInfo.exists === false) {
+        setErrorMessage('There is no account existed in this mail.');
+        setLoading(false);
+        return;
       }
+
+      // Send verification link (using recovery type)
+      await sendVerificationLink(cleanEmail).catch((err) => {
+        console.warn('SMTP dispatch note (using direct link fallback):', err);
+      });
+
+      // Obtain direct link
+      const actionLink = await fetchDirectLink(cleanEmail, 'recovery');
+      if (actionLink) setDirectLink(actionLink);
+
+      setLinkSent(true);
+      setLinkSentEmail(cleanEmail);
+      setResendCountdown(45);
+      setCanResend(false);
+      triggerToast('Verification link sent to your email!');
+    } catch (err) {
+      console.warn('Forgot password error:', err);
+      setErrorMessage(err.message || 'Failed to send verification link.');
     } finally {
-      setFpLoading(false);
+      setLoading(false);
     }
   };
-
-  // --- Password Reset Step 2: Verify OTP Code & Set New Password ---
-  const handleVerifyCodeAndReset = async () => {
-    setFpError('');
-    const cleanCode = fpCode.trim();
-
-    if (!cleanCode) {
-      setFpError('Please enter the OTP code received in your email.');
-      return;
-    }
-
-    if (!fpNewPassword || fpNewPassword.length < 6) {
-      setFpError('New password must be at least 6 characters.');
-      return;
-    }
-
-    if (fpNewPassword !== fpConfirmPassword) {
-      setFpError('Passwords do not match. Please re-enter.');
-      return;
-    }
-
-    setFpLoading(true);
-    try {
-      // 1. Verify recovery code with Supabase
-      await verifyPasswordResetOtp(fpEmail, cleanCode);
-      // 2. Update password for authenticated recovery session in Supabase
-      await updatePassword(fpNewPassword);
-
-      setForgotStep('success');
-      triggerToast('Password updated successfully in Supabase!');
-    } catch (err) {
-      console.warn('Verify code error:', err);
-      const msg = (err?.message || '').toLowerCase();
-      if (!msg || msg === '{}' || err?.status === 500) {
-        setFpError('Failed to verify OTP code. Please check that the code is correct or request a new one.');
-      } else if (msg.includes('invalid') || msg.includes('expired') || msg.includes('token')) {
-        setFpError('Invalid or expired reset code. Please request a new code or click the email link.');
-      } else {
-        setFpError(err.message || 'Failed to update password.');
-      }
-    } finally {
-      setFpLoading(false);
-    }
-  };
-
-  // --- Password Reset Step 2b: Set New Password from Recovery Link Click ---
-  const handleSetPasswordFromLink = async () => {
-    setFpError('');
-
-    if (!fpNewPassword || fpNewPassword.length < 6) {
-      setFpError('New password must be at least 6 characters.');
-      return;
-    }
-
-    if (fpNewPassword !== fpConfirmPassword) {
-      setFpError('Passwords do not match. Please re-enter.');
-      return;
-    }
-
-    setFpLoading(true);
-    try {
-      await updatePassword(fpNewPassword);
-      setForgotStep('success');
-      triggerToast('Password updated successfully in Supabase!');
-    } catch (err) {
-      console.warn('Set password link error:', err);
-      const msg = err?.message || '';
-      if (!msg || msg === '{}' || err?.status === 500) {
-        setFpError('Failed to update password. Your reset session may have expired. Please request a new link.');
-      } else {
-        setFpError(msg);
-      }
-    } finally {
-      setFpLoading(false);
-    }
-  };
-
-  const allowedDomains = getAllowedSuperadminDomains();
-  const domainHint = allowedDomains.length > 0 ? `@${allowedDomains.join(' or @')}` : null;
-  const emailPlaceholder = allowedDomains.length > 0 ? `admin@${allowedDomains[0]}` : 'yourname@gmail.com';
 
   return (
     <View style={styles.screenContainer}>
-      {/* Toast Notification */}
+      {/* Toast Banner */}
       {toastMessage ? (
         <View style={styles.toastBanner}>
           <Text style={styles.toastText}>✓ {toastMessage}</Text>
@@ -356,249 +426,317 @@ export default function SignInScreen({
 
       <ScrollView contentContainerStyle={styles.scrollWrapper}>
         <View style={[styles.authCard, { maxWidth: isWeb ? 460 : '100%' }]}>
-          {/* Header Brand */}
+          {/* Header Brand - Exactly matching Admin Portal */}
           <View style={styles.brandHeader}>
-            <View style={styles.logoRow}>
-              <Text style={styles.brandName}>Verifyyy</Text>
-              <View style={styles.portalBadge}>
-                <Text style={styles.portalBadgeText}>{portalRole.toUpperCase()}</Text>
+            <View style={[styles.logoRow, { gap: 10, justifyContent: 'center' }]}>
+              <svg width="34" height="34" viewBox="0 0 43 42" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M0 9V2C0 0.895431 0.89543 0 2 0H33.4529C38.4418 0 42.4788 4.0581 42.4528 9.04694L42.3224 34.0417C42.2995 38.4437 38.7245 42 34.3225 42H2C0.895431 42 0 41.1046 0 40V31.7938C0 30.6341 0.403121 29.5105 1.14035 28.6153L13.4 13.7286C13.7799 13.2673 14.3462 13 14.9438 13H24.2974C25.5692 13 26.2639 14.4833 25.4498 15.4603L12.5 31H29C30.6569 31 32 29.6569 32 28V14C32 12.3431 30.6569 11 29 11H2C0.895431 11 0 10.1046 0 9Z" fill="#008080"/>
+              </svg>
+              <Text style={[styles.brandName, { fontFamily: "'Rival Sans', 'Manrope', sans-serif", fontSize: 24, fontWeight: '800', color: '#0f172a', letterSpacing: -0.6 }]}>zudoc</Text>
+              <View style={[styles.portalBadge, { backgroundColor: 'rgba(0, 128, 128, 0.08)', borderColor: 'rgba(0, 128, 128, 0.22)' }]}>
+                <Text style={[styles.portalBadgeText, { color: '#008080' }]}>SUPERADMIN</Text>
               </View>
             </View>
             <Text style={styles.portalTitle}>{portalName}</Text>
           </View>
 
-          {/* Verification Link Sent State */}
-          {signupSuccess ? (
-            <View style={styles.verificationNoticeCard}>
-              <View style={styles.verificationIconCircle}>
-                <Text style={styles.verificationIconText}>✉️</Text>
-              </View>
-              <Text style={styles.verificationNoticeTitle}>Verify Your Email</Text>
-              <Text style={styles.verificationNoticeText}>
-                We've sent a verification link to{' '}
-                <Text style={{ fontWeight: '700', color: COLORS.primary }}>{signupSuccessEmail}</Text>.
-              </Text>
-              <Text style={styles.verificationNoticeSubtext}>
-                Your password has been securely stored in Supabase. Please open your inbox and click the verification link to activate your Superadmin account.
-              </Text>
+          {/* Mode Tabs (Sign In vs Register) - Hidden in Forgot mode or Password creation step */}
+          {authMode !== 'forgot' && registerStep !== 'create_password' && !linkSent && (
+            <View style={styles.tabsContainer}>
               <TouchableOpacity
-                style={styles.primaryButton}
+                style={[styles.tabButton, authMode === 'login' && styles.tabButtonActive]}
                 onPress={() => {
-                  setSignupSuccess(false);
-                  setAuthMode('signin');
+                  setAuthMode('login');
+                  setErrorMessage('');
+                  setLinkSent(false);
+                }}
+              >
+                <Text style={[styles.tabText, authMode === 'login' && styles.tabTextActive]}>
+                  Sign In
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.tabButton, authMode === 'register' && styles.tabButtonActive]}
+                onPress={() => {
+                  setAuthMode('register');
+                  setRegisterStep('email_verify');
+                  setErrorMessage('');
+                  setLinkSent(false);
+                }}
+              >
+                <Text style={[styles.tabText, authMode === 'register' && styles.tabTextActive]}>
+                  Register
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Error Banner with Quick Action */}
+          {errorMessage ? (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorText}>{errorMessage}</Text>
+              {errorMessage.includes('already exists') && authMode === 'register' && (
+                <TouchableOpacity
+                  style={{ marginTop: 6 }}
+                  onPress={() => {
+                    setAuthMode('login');
+                    setErrorMessage('');
+                  }}
+                >
+                  <Text style={[styles.errorActionLink, { color: COLORS.primary }]}>👉 Go to Sign In</Text>
+                </TouchableOpacity>
+              )}
+              {errorMessage.includes('no account existed') && (
+                <TouchableOpacity
+                  style={{ marginTop: 6 }}
+                  onPress={() => {
+                    setAuthMode('register');
+                    setRegisterStep('email_verify');
+                    setErrorMessage('');
+                  }}
+                >
+                  <Text style={[styles.errorActionLink, { color: COLORS.primary }]}>👉 Register with {email || 'this email'}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          ) : null}
+
+          {/* =========================================================================
+              VIEW 1: SIGN IN (Email + Password + Forgot Link)
+             ========================================================================= */}
+          {authMode === 'login' && (
+            <View style={styles.formSection}>
+              {/* Email */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>
+                  Email Address <Text style={{ color: COLORS.primary }}>({domainLabel} only)</Text>
+                </Text>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="admin@zudoc.co"
+                  placeholderTextColor={COLORS.textMuted}
+                  value={email}
+                  onChangeText={(val) => {
+                    setEmail(val);
+                    setErrorMessage('');
+                  }}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  autoCorrect={false}
+                />
+              </View>
+
+              {/* Password */}
+              <View style={styles.inputGroup}>
+                <View style={styles.labelRow}>
+                  <Text style={styles.inputLabel}>Password</Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setAuthMode('forgot');
+                      setErrorMessage('');
+                      setLinkSent(false);
+                      setDirectLink('');
+                    }}
+                  >
+                    <Text style={styles.forgotLink}>Forgot password?</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.passwordInputWrapper}>
+                  <TextInput
+                    style={[styles.textInput, { paddingRight: 64 }]}
+                    placeholder="Enter your password"
+                    placeholderTextColor={COLORS.textMuted}
+                    value={password}
+                    onChangeText={(val) => {
+                      setPassword(val);
+                      setErrorMessage('');
+                    }}
+                    secureTextEntry={!showPassword}
+                    autoCapitalize="none"
+                  />
+                  <TouchableOpacity
+                    style={styles.eyeToggleBtn}
+                    onPress={() => setShowPassword(!showPassword)}
+                  >
+                    <Text style={styles.eyeToggleText}>{showPassword ? 'Hide' : 'Show'}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Keep me signed in */}
+              <View style={styles.rememberRow}>
+                <TouchableOpacity
+                  style={styles.checkboxContainer}
+                  onPress={() => setRememberMe(!rememberMe)}
+                >
+                  <View style={[styles.checkboxBox, rememberMe && styles.checkboxChecked]}>
+                    {rememberMe && <Text style={styles.checkMark}>✓</Text>}
+                  </View>
+                  <Text style={styles.rememberText}>Keep me signed in</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Submit Button */}
+              <TouchableOpacity
+                style={[styles.primaryButton, loading && styles.buttonDisabled]}
+                onPress={handleLogin}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={styles.primaryButtonText}>Sign In as Superadmin</Text>
+                )}
+              </TouchableOpacity>
+
+              {/* Bottom switch to register */}
+              <TouchableOpacity
+                style={styles.switchModeRow}
+                onPress={() => {
+                  setAuthMode('register');
+                  setRegisterStep('email_verify');
                   setErrorMessage('');
                 }}
               >
-                <Text style={styles.primaryButtonText}>Proceed to Sign In</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.secondaryLinkBtn}
-                onPress={async () => {
-                  try {
-                    await supabase.auth.resend({
-                      type: 'signup',
-                      email: signupSuccessEmail,
-                    });
-                    triggerToast('Verification link resent!');
-                  } catch (e) {
-                    triggerToast('Please wait a moment before requesting another link.');
-                  }
-                }}
-              >
-                <Text style={styles.secondaryLinkText}>Resend verification email</Text>
+                <Text style={styles.switchModeText}>
+                  Don't have an account yet? <Text style={{ fontWeight: '700' }}>Register here →</Text>
+                </Text>
               </TouchableOpacity>
             </View>
-          ) : (
-            <>
-              {/* Security Gate Notice */}
-              <View style={styles.securityBanner}>
-                <Text style={styles.securityBannerIcon}>🔒</Text>
-                <View style={styles.securityBannerContent}>
-                  <Text style={styles.securityBannerTitle}>Restricted Portal</Text>
-                  <Text style={styles.securityBannerText}>
-                    {domainHint
-                      ? `Access restricted to verified ${domainHint} accounts with Supabase password auth.`
-                      : 'Authenticated Superadmin access backed by Supabase authentication.'}
-                  </Text>
-                </View>
-              </View>
+          )}
 
-              {/* Auth Mode Tabs (Sign In | Create Account | Redeem Key) */}
-              <View style={styles.tabsContainer}>
-                <TouchableOpacity
-                  style={[styles.tabButton, authMode === 'signin' && styles.tabButtonActive]}
-                  onPress={() => {
-                    setAuthMode('signin');
-                    setErrorMessage('');
-                  }}
-                >
-                  <Text style={[styles.tabText, authMode === 'signin' && styles.tabTextActive]}>
-                    Sign In
-                  </Text>
-                </TouchableOpacity>
+          {/* =========================================================================
+              VIEW 2: REGISTER (Step 1: Email Verification | Step 2: Create Password)
+             ========================================================================= */}
+          {authMode === 'register' && (
+            <View style={styles.formSection}>
+              {/* Step 1: Email Verification Link */}
+              {registerStep === 'email_verify' && (
+                <>
+                  {linkSent ? (
+                    <View style={styles.verificationNoticeCard}>
+                      <Text style={styles.verificationTitle}>Verification Link Sent</Text>
+                      <Text style={styles.verificationText}>
+                        We've sent a verification link to{' '}
+                        <Text style={{ fontWeight: '700', color: COLORS.primary }}>{linkSentEmail}</Text>.
+                      </Text>
+                      <Text style={[styles.verificationText, { marginTop: 6, fontSize: 12, color: COLORS.textMuted }]}>
+                        Please open your inbox and click the verification link. Once verified, you will be prompted to set your password.
+                      </Text>
 
-                <TouchableOpacity
-                  style={[styles.tabButton, authMode === 'signup' && styles.tabButtonActive]}
-                  onPress={() => {
-                    setAuthMode('signup');
-                    setErrorMessage('');
-                  }}
-                >
-                  <Text style={[styles.tabText, authMode === 'signup' && styles.tabTextActive]}>
-                    Create Account
-                  </Text>
-                </TouchableOpacity>
-              </View>
+                      {/* Instant Link Helper */}
+                      {directLink ? (
+                        <View style={styles.directLinkCard}>
+                          <View style={styles.rateLimitNotice}>
+                            <Text style={styles.rateLimitTitle}>⚠️ No Email Needed (Rate Limit Active)</Text>
+                            <Text style={styles.rateLimitDesc}>
+                              Supabase email delivery is rate-limited. Click below to verify your email directly and set your password:
+                            </Text>
+                          </View>
+                          <TouchableOpacity
+                            style={styles.openDirectBtn}
+                            onPress={() => {
+                              if (typeof window !== 'undefined' && window.location) {
+                                window.location.href = directLink;
+                              }
+                            }}
+                          >
+                            <Text style={styles.openDirectBtnText}>🚀 CLICK HERE TO VERIFY &amp; SET PASSWORD</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : null}
 
-              {/* Error Banner with Quick Action */}
-              {errorMessage ? (
-                <View style={styles.errorBox}>
-                  <Text style={styles.errorText}>{errorMessage}</Text>
-                  {errorMessage.includes("doesn't exist") && authMode === 'signin' && (
-                    <TouchableOpacity
-                      style={styles.errorActionBtn}
-                      onPress={() => {
-                        setAuthMode('signup');
-                        setErrorMessage('');
-                      }}
-                    >
-                      <Text style={styles.errorActionText}>👉 Create New Account with {email || 'this email'}</Text>
-                    </TouchableOpacity>
+                      <View style={{ marginTop: 16, alignItems: 'center', gap: 10, width: '100%' }}>
+                        <TouchableOpacity
+                          style={styles.resendBtn}
+                          onPress={canResend ? handleRegisterSendVerification : undefined}
+                          disabled={!canResend || loading}
+                        >
+                          <Text style={[styles.resendBtnText, !canResend && { color: COLORS.textMuted }]}>
+                            {canResend
+                              ? 'Resend Verification Email ✉️'
+                              : `Resend email in 00:${resendCountdown < 10 ? `0${resendCountdown}` : resendCountdown}`}
+                          </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          onPress={() => {
+                            setLinkSent(false);
+                            setErrorMessage('');
+                            setDirectLink('');
+                          }}
+                        >
+                          <Text style={styles.changeEmailText}>Use a different email address</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ) : (
+                    <>
+                      <View style={styles.infoBox}>
+                        <Text style={styles.infoBoxText}>
+                          Step 1: Enter your corporate mail ID. We'll verify your email before creating your password. Duplicate registrations are prevented.
+                        </Text>
+                      </View>
+
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>
+                          Work Email Address <Text style={{ color: COLORS.primary }}>({domainLabel} only)</Text>
+                        </Text>
+                        <TextInput
+                          style={styles.textInput}
+                          placeholder="yourname@zudoc.co"
+                          placeholderTextColor={COLORS.textMuted}
+                          value={email}
+                          onChangeText={(val) => {
+                            setEmail(val);
+                            setErrorMessage('');
+                          }}
+                          autoCapitalize="none"
+                          keyboardType="email-address"
+                          autoCorrect={false}
+                        />
+                      </View>
+
+                      <TouchableOpacity
+                        style={[styles.primaryButton, loading && styles.buttonDisabled]}
+                        onPress={handleRegisterSendVerification}
+                        disabled={loading}
+                      >
+                        {loading ? (
+                          <ActivityIndicator color="#ffffff" size="small" />
+                        ) : (
+                          <Text style={styles.primaryButtonText}>Verify Email Address ✉️</Text>
+                        )}
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.switchModeRow}
+                        onPress={() => {
+                          setAuthMode('login');
+                          setErrorMessage('');
+                        }}
+                      >
+                        <Text style={styles.switchModeText}>
+                          Already have an account? <Text style={{ fontWeight: '700' }}>Sign In here →</Text>
+                        </Text>
+                      </TouchableOpacity>
+                    </>
                   )}
-                </View>
-              ) : null}
+                </>
+              )}
 
-              {/* MODE 1: Sign In */}
-              {authMode === 'signin' && (
-                <View style={styles.formSection}>
-                  {/* Email */}
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Email Address</Text>
-                    <TextInput
-                      style={styles.textInput}
-                      placeholder={emailPlaceholder}
-                      placeholderTextColor={COLORS.textMuted}
-                      value={email}
-                      onChangeText={(val) => {
-                        setEmail(val);
-                        setErrorMessage('');
-                      }}
-                      autoCapitalize="none"
-                      keyboardType="email-address"
-                      autoCorrect={false}
-                    />
+              {/* Step 2: Create Password & Once Again Password */}
+              {registerStep === 'create_password' && (
+                <>
+                  <View style={[styles.infoBox, { borderLeftColor: COLORS.success }]}>
+                    <Text style={[styles.infoBoxText, { color: '#065f46', fontWeight: '700' }]}>
+                      ✓ Email Verified! Now create your password to complete registration.
+                    </Text>
                   </View>
 
                   {/* Password */}
-                  <View style={styles.inputGroup}>
-                    <View style={styles.labelRow}>
-                      <Text style={styles.inputLabel}>Password</Text>
-                      <TouchableOpacity
-                        onPress={() => {
-                          setFpEmail(email);
-                          setForgotStep('request');
-                          setFpError('');
-                          setFpCode('');
-                          setFpNewPassword('');
-                          setFpConfirmPassword('');
-                          setForgotModalVisible(true);
-                        }}
-                      >
-                        <Text style={styles.forgotLink}>Forgot?</Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    <View style={styles.passwordInputWrapper}>
-                      <TextInput
-                        style={[styles.textInput, { paddingRight: 64 }]}
-                        placeholder="Enter your password"
-                        placeholderTextColor={COLORS.textMuted}
-                        value={password}
-                        onChangeText={(val) => {
-                          setPassword(val);
-                          setErrorMessage('');
-                        }}
-                        secureTextEntry={!showPassword}
-                        autoCapitalize="none"
-                      />
-                      <TouchableOpacity
-                        style={styles.eyeToggleBtn}
-                        onPress={() => setShowPassword(!showPassword)}
-                      >
-                        <Text style={styles.eyeToggleText}>{showPassword ? 'Hide' : 'Show'}</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  {/* Keep signed in */}
-                  <View style={styles.rememberRow}>
-                    <TouchableOpacity
-                      style={styles.checkboxContainer}
-                      onPress={() => setRememberMe(!rememberMe)}
-                    >
-                      <View style={[styles.checkboxBox, rememberMe && styles.checkboxChecked]}>
-                        {rememberMe && <Text style={styles.checkMark}>✓</Text>}
-                      </View>
-                      <Text style={styles.rememberText}>Keep me signed in</Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Submit Button */}
-                  <TouchableOpacity
-                    style={[styles.primaryButton, loading && styles.buttonDisabled]}
-                    onPress={handlePasswordSignIn}
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <ActivityIndicator color="#ffffff" size="small" />
-                    ) : (
-                      <Text style={styles.primaryButtonText}>Sign In as Superadmin</Text>
-                    )}
-                  </TouchableOpacity>
-
-                  {/* Switch to Create Account */}
-                  <TouchableOpacity
-                    style={styles.switchModeRow}
-                    onPress={() => {
-                      setAuthMode('signup');
-                      setErrorMessage('');
-                    }}
-                  >
-                    <Text style={styles.switchModeText}>
-                      Don't have an account yet? <Text style={{ fontWeight: '700' }}>Create an Account →</Text>
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {/* MODE 2: Create Account (Sign Up with Password) */}
-              {authMode === 'signup' && (
-                <View style={styles.formSection}>
-                  <View style={styles.infoBox}>
-                    <Text style={styles.infoBoxText}>
-                      Create your Superadmin account. Your password will be securely encrypted and saved in Supabase.
-                    </Text>
-                  </View>
-
-                  {/* Email */}
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Email Address</Text>
-                    <TextInput
-                      style={styles.textInput}
-                      placeholder={emailPlaceholder}
-                      placeholderTextColor={COLORS.textMuted}
-                      value={email}
-                      onChangeText={(val) => {
-                        setEmail(val);
-                        setErrorMessage('');
-                      }}
-                      autoCapitalize="none"
-                      keyboardType="email-address"
-                      autoCorrect={false}
-                    />
-                  </View>
-
-                  {/* Create Password */}
                   <View style={styles.inputGroup}>
                     <Text style={styles.inputLabel}>Create Password (min 6 characters)</Text>
                     <View style={styles.passwordInputWrapper}>
@@ -606,30 +744,30 @@ export default function SignInScreen({
                         style={[styles.textInput, { paddingRight: 64 }]}
                         placeholder="Create a strong password"
                         placeholderTextColor={COLORS.textMuted}
-                        value={password}
+                        value={newPassword}
                         onChangeText={(val) => {
-                          setPassword(val);
+                          setNewPassword(val);
                           setErrorMessage('');
                         }}
-                        secureTextEntry={!showPassword}
+                        secureTextEntry={!showNewPassword}
                         autoCapitalize="none"
                       />
                       <TouchableOpacity
                         style={styles.eyeToggleBtn}
-                        onPress={() => setShowPassword(!showPassword)}
+                        onPress={() => setShowNewPassword(!showNewPassword)}
                       >
-                        <Text style={styles.eyeToggleText}>{showPassword ? 'Hide' : 'Show'}</Text>
+                        <Text style={styles.eyeToggleText}>{showNewPassword ? 'Hide' : 'Show'}</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
 
-                  {/* Confirm Password */}
+                  {/* Confirm Password (Once Again Password) */}
                   <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Confirm Password</Text>
+                    <Text style={styles.inputLabel}>Confirm Password (once again)</Text>
                     <View style={styles.passwordInputWrapper}>
                       <TextInput
                         style={[styles.textInput, { paddingRight: 64 }]}
-                        placeholder="Re-enter password"
+                        placeholder="Re-enter your password"
                         placeholderTextColor={COLORS.textMuted}
                         value={confirmPassword}
                         onChangeText={(val) => {
@@ -648,284 +786,157 @@ export default function SignInScreen({
                     </View>
                   </View>
 
-                  {/* Submit Button */}
                   <TouchableOpacity
                     style={[styles.primaryButton, loading && styles.buttonDisabled]}
-                    onPress={handleSignUp}
+                    onPress={handleCreatePasswordSubmit}
                     disabled={loading}
                   >
                     {loading ? (
                       <ActivityIndicator color="#ffffff" size="small" />
                     ) : (
-                      <Text style={styles.primaryButtonText}>Create Superadmin Account</Text>
+                      <Text style={styles.primaryButtonText}>Save Password &amp; Enter Superadmin 🚀</Text>
+                    )}
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          )}
+
+          {/* =========================================================================
+              VIEW 3: FORGOT PASSWORD (Enter Mail ID -> Send Verification Link -> Let Them In)
+             ========================================================================= */}
+          {authMode === 'forgot' && (
+            <View style={styles.formSection}>
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ fontFamily: FONT_FAMILY, fontSize: 18, fontWeight: '800', color: COLORS.textMain, marginBottom: 4 }}>
+                  Reset Password / Account Recovery
+                </Text>
+                <Text style={{ fontFamily: FONT_FAMILY, fontSize: 13, color: COLORS.textMuted, lineHeight: 18 }}>
+                  Enter your registered mail ID to receive a verification link and sign in directly.
+                </Text>
+              </View>
+
+              {linkSent ? (
+                <View style={styles.verificationNoticeCard}>
+                  <Text style={styles.verificationTitle}>Verification Link Sent</Text>
+                  <Text style={styles.verificationText}>
+                    We've sent a login verification link to{' '}
+                    <Text style={{ fontWeight: '700', color: COLORS.primary }}>{linkSentEmail}</Text>.
+                  </Text>
+                  <Text style={[styles.verificationText, { marginTop: 6, fontSize: 12, color: COLORS.textMuted }]}>
+                    Open the link in your email to authenticate and enter the Superadmin portal immediately.
+                  </Text>
+
+                  {/* Instant Link Helper */}
+                  {directLink ? (
+                    <View style={styles.directLinkCard}>
+                      <View style={styles.rateLimitNotice}>
+                        <Text style={styles.rateLimitTitle}>⚠️ No Email Needed (Rate Limit Active)</Text>
+                        <Text style={styles.rateLimitDesc}>
+                          Supabase email service is currently rate-limited, so no email will arrive in your real inbox. Click the button below to log in immediately:
+                        </Text>
+                      </View>
+
+                      <TouchableOpacity
+                        style={styles.openDirectBtn}
+                        onPress={() => {
+                          if (typeof window !== 'undefined' && window.location) {
+                            window.location.href = directLink;
+                          }
+                        }}
+                      >
+                        <Text style={styles.openDirectBtnText}>🚀 CLICK HERE TO LOG IN DIRECTLY</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={{ marginTop: 8 }}
+                        onPress={async () => {
+                          try {
+                            if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                              await navigator.clipboard.writeText(directLink);
+                              triggerToast('Verification link copied to clipboard!');
+                            }
+                          } catch (e) {}
+                        }}
+                      >
+                        <Text style={styles.copyLinkText}>📋 Copy Direct Login URL</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
+
+                  <View style={{ marginTop: 16, alignItems: 'center', gap: 10, width: '100%' }}>
+                    <TouchableOpacity
+                      style={styles.resendBtn}
+                      onPress={canResend ? handleForgotPassword : undefined}
+                      disabled={!canResend || loading}
+                    >
+                      <Text style={[styles.resendBtnText, !canResend && { color: COLORS.textMuted }]}>
+                        {canResend
+                          ? 'Resend Verification Email ✉️'
+                          : `Resend email in 00:${resendCountdown < 10 ? `0${resendCountdown}` : resendCountdown}`}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => {
+                        setAuthMode('login');
+                        setLinkSent(false);
+                        setErrorMessage('');
+                        setDirectLink('');
+                      }}
+                    >
+                      <Text style={styles.changeEmailText}>← Back to Sign In</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                <>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>
+                      Registered Email Address <Text style={{ color: COLORS.primary }}>({domainLabel} only)</Text>
+                    </Text>
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="admin@zudoc.co"
+                      placeholderTextColor={COLORS.textMuted}
+                      value={email}
+                      onChangeText={(val) => {
+                        setEmail(val);
+                        setErrorMessage('');
+                      }}
+                      autoCapitalize="none"
+                      keyboardType="email-address"
+                      autoCorrect={false}
+                    />
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.primaryButton, loading && styles.buttonDisabled]}
+                    onPress={handleForgotPassword}
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#ffffff" size="small" />
+                    ) : (
+                      <Text style={styles.primaryButtonText}>Send Verification Link ✉️</Text>
                     )}
                   </TouchableOpacity>
 
-                  {/* Switch to Sign In */}
                   <TouchableOpacity
                     style={styles.switchModeRow}
                     onPress={() => {
-                      setAuthMode('signin');
+                      setAuthMode('login');
                       setErrorMessage('');
                     }}
                   >
-                    <Text style={styles.switchModeText}>
-                      Already have an account? <Text style={{ fontWeight: '700' }}>Sign In with Password →</Text>
-                    </Text>
+                    <Text style={styles.switchModeText}>← Back to Sign In</Text>
                   </TouchableOpacity>
-                </View>
+                </>
               )}
-            </>
+            </View>
           )}
         </View>
       </ScrollView>
-
-      {/* Comprehensive Forgot Password Pipeline Modal */}
-      <Modal visible={forgotModalVisible} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            {/* Step 1: Request Reset Code / Link */}
-            {forgotStep === 'request' && (
-              <>
-                <Text style={styles.modalTitle}>Reset Password</Text>
-                <Text style={styles.modalSubtitle}>
-                  Enter your email address to receive a recovery code and verification link.
-                </Text>
-
-                {fpError ? (
-                  <View style={styles.modalErrorBox}>
-                    <Text style={styles.modalErrorText}>{fpError}</Text>
-                  </View>
-                ) : null}
-
-                <TextInput
-                  style={[styles.textInput, { marginBottom: 16 }]}
-                  placeholder={emailPlaceholder}
-                  placeholderTextColor={COLORS.textMuted}
-                  value={fpEmail}
-                  onChangeText={(val) => {
-                    setFpEmail(val);
-                    setFpError('');
-                  }}
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                />
-
-                <TouchableOpacity
-                  style={[styles.primaryButton, fpLoading && styles.buttonDisabled]}
-                  onPress={handleSendResetCode}
-                  disabled={fpLoading}
-                >
-                  {fpLoading ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <Text style={styles.primaryButtonText}>Send Reset Code / Link</Text>
-                  )}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.modalCloseBtn}
-                  onPress={() => {
-                    setForgotModalVisible(false);
-                    setFpError('');
-                  }}
-                >
-                  <Text style={styles.modalCloseBtnText}>Cancel</Text>
-                </TouchableOpacity>
-              </>
-            )}
-
-            {/* Step 2: Enter Code & New Password */}
-            {forgotStep === 'enter_code' && (
-              <>
-                <Text style={styles.modalTitle}>Set New Password</Text>
-                <Text style={styles.modalSubtitle}>
-                  We've sent a recovery code / link to{' '}
-                  <Text style={{ fontWeight: '700', color: COLORS.primary }}>{fpEmail}</Text>.
-                  Enter the code from your email and set your new password below.
-                </Text>
-
-                {fpError ? (
-                  <View style={styles.modalErrorBox}>
-                    <Text style={styles.modalErrorText}>{fpError}</Text>
-                  </View>
-                ) : null}
-
-                {/* OTP Code */}
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Recovery Code / OTP (from email)</Text>
-                  <TextInput
-                    style={[styles.textInput, styles.monospaceInput]}
-                    placeholder="Enter 6-digit code or token"
-                    placeholderTextColor={COLORS.textMuted}
-                    value={fpCode}
-                    onChangeText={(val) => {
-                      setFpCode(val.trim());
-                      setFpError('');
-                    }}
-                    autoCapitalize="none"
-                  />
-                </View>
-
-                {/* New Password */}
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>New Password (min 6 characters)</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="Enter new password"
-                    placeholderTextColor={COLORS.textMuted}
-                    value={fpNewPassword}
-                    onChangeText={(val) => {
-                      setFpNewPassword(val);
-                      setFpError('');
-                    }}
-                    secureTextEntry={!fpShowPassword}
-                    autoCapitalize="none"
-                  />
-                </View>
-
-                {/* Confirm New Password */}
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Confirm New Password</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="Re-enter new password"
-                    placeholderTextColor={COLORS.textMuted}
-                    value={fpConfirmPassword}
-                    onChangeText={(val) => {
-                      setFpConfirmPassword(val);
-                      setFpError('');
-                    }}
-                    secureTextEntry={!fpShowPassword}
-                    autoCapitalize="none"
-                  />
-                </View>
-
-                <TouchableOpacity
-                  style={[styles.primaryButton, fpLoading && styles.buttonDisabled]}
-                  onPress={handleVerifyCodeAndReset}
-                  disabled={fpLoading}
-                >
-                  {fpLoading ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <Text style={styles.primaryButtonText}>Update Password &amp; Continue</Text>
-                  )}
-                </TouchableOpacity>
-
-                <View style={{ marginTop: 12, alignItems: 'center' }}>
-                  <Text style={{ fontSize: 11, color: COLORS.textMuted, textAlign: 'center', lineHeight: 15 }}>
-                    💡 Received a link instead? You can also click the link directly in your email to open the password reset screen.
-                  </Text>
-                </View>
-
-                <TouchableOpacity
-                  style={[styles.modalCloseBtn, { marginTop: 8 }]}
-                  onPress={() => setForgotStep('request')}
-                >
-                  <Text style={styles.modalCloseBtnText}>← Back to change email</Text>
-                </TouchableOpacity>
-              </>
-            )}
-
-            {/* Step 2b: Direct Password Reset from Email Link Click */}
-            {forgotStep === 'set_password' && (
-              <>
-                <Text style={styles.modalTitle}>Set New Password</Text>
-                <Text style={styles.modalSubtitle}>
-                  Recovery link verified! Please choose your new Superadmin password below.
-                </Text>
-
-                {fpError ? (
-                  <View style={styles.modalErrorBox}>
-                    <Text style={styles.modalErrorText}>{fpError}</Text>
-                  </View>
-                ) : null}
-
-                {/* New Password */}
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>New Password (min 6 characters)</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="Enter new password"
-                    placeholderTextColor={COLORS.textMuted}
-                    value={fpNewPassword}
-                    onChangeText={(val) => {
-                      setFpNewPassword(val);
-                      setFpError('');
-                    }}
-                    secureTextEntry={!fpShowPassword}
-                    autoCapitalize="none"
-                  />
-                </View>
-
-                {/* Confirm New Password */}
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Confirm New Password</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="Re-enter new password"
-                    placeholderTextColor={COLORS.textMuted}
-                    value={fpConfirmPassword}
-                    onChangeText={(val) => {
-                      setFpConfirmPassword(val);
-                      setFpError('');
-                    }}
-                    secureTextEntry={!fpShowPassword}
-                    autoCapitalize="none"
-                  />
-                </View>
-
-                <TouchableOpacity
-                  style={[styles.primaryButton, fpLoading && styles.buttonDisabled]}
-                  onPress={handleSetPasswordFromLink}
-                  disabled={fpLoading}
-                >
-                  {fpLoading ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <Text style={styles.primaryButtonText}>Save New Password &amp; Sign In</Text>
-                  )}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.modalCloseBtn}
-                  onPress={() => setForgotModalVisible(false)}
-                >
-                  <Text style={styles.modalCloseBtnText}>Close</Text>
-                </TouchableOpacity>
-              </>
-            )}
-
-            {/* Step 3: Success Confirmation */}
-            {forgotStep === 'success' && (
-              <View style={styles.fpSuccessBox}>
-                <View style={styles.verificationIconCircle}>
-                  <Text style={styles.verificationIconText}>✓</Text>
-                </View>
-                <Text style={styles.fpSuccessTitle}>Password Updated!</Text>
-                <Text style={styles.fpSuccessMsg}>
-                  Your new password has been securely updated in Supabase. You can now sign in using your updated password.
-                </Text>
-
-                <TouchableOpacity
-                  style={[styles.primaryButton, { width: '100%', marginTop: 16 }]}
-                  onPress={() => {
-                    setForgotModalVisible(false);
-                    setForgotStep('request');
-                    setAuthMode('signin');
-                    if (fpEmail) setEmail(fpEmail);
-                    setPassword('');
-                    setConfirmPassword('');
-                  }}
-                >
-                  <Text style={styles.primaryButtonText}>Sign In with New Password</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -933,25 +944,46 @@ export default function SignInScreen({
 const styles = StyleSheet.create({
   screenContainer: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.background, // #F7F9FB
+  },
+  toastBanner: {
+    position: 'absolute',
+    top: 20,
+    alignSelf: 'center',
+    backgroundColor: '#065f46',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 24,
+    zIndex: 999,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+  },
+  toastText: {
+    fontFamily: FONT_FAMILY,
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '700',
   },
   scrollWrapper: {
-    flexGrow: 1,
+    minHeight: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: 24,
   },
   authCard: {
     width: '100%',
     backgroundColor: COLORS.card,
-    borderRadius: 14,
+    borderRadius: 16,
+    padding: 32,
     borderWidth: 1,
     borderColor: COLORS.border,
-    padding: 28,
     shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    elevation: 2,
   },
   brandHeader: {
     alignItems: 'center',
@@ -961,11 +993,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   brandName: {
     fontFamily: FONT_FAMILY,
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: '800',
     color: COLORS.primary,
     letterSpacing: -0.5,
@@ -976,76 +1008,46 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: 'rgba(15, 118, 110, 0.2)',
+    borderColor: 'rgba(0, 128, 128, 0.2)',
   },
   portalBadgeText: {
     fontFamily: FONT_FAMILY,
+    fontSize: 11,
+    fontWeight: '800',
     color: COLORS.primary,
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.5,
   },
   portalTitle: {
     fontFamily: FONT_FAMILY,
-    fontSize: 14,
-    color: COLORS.textMuted,
-    fontWeight: '500',
-  },
-  securityBanner: {
-    flexDirection: 'row',
-    backgroundColor: '#f1f5f9',
-    borderColor: '#e2e8f0',
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 16,
-    alignItems: 'center',
-    gap: 10,
-  },
-  securityBannerIcon: {
     fontSize: 16,
-  },
-  securityBannerContent: {
-    flex: 1,
-  },
-  securityBannerTitle: {
-    fontFamily: FONT_FAMILY,
-    fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '600',
     color: COLORS.textMain,
-    marginBottom: 1,
-  },
-  securityBannerText: {
-    fontFamily: FONT_FAMILY,
-    fontSize: 11,
-    color: COLORS.textMuted,
-    lineHeight: 15,
+    marginTop: 2,
   },
   tabsContainer: {
     flexDirection: 'row',
     backgroundColor: '#f1f5f9',
-    borderRadius: 8,
+    borderRadius: 10,
     padding: 4,
-    marginBottom: 18,
-    gap: 4,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   tabButton: {
     flex: 1,
-    paddingVertical: 8,
+    paddingVertical: 9,
     alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 6,
+    borderRadius: 7,
   },
   tabButtonActive: {
     backgroundColor: '#ffffff',
     shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
     elevation: 1,
   },
   tabText: {
     fontFamily: FONT_FAMILY,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
     color: COLORS.textMuted,
   },
@@ -1057,127 +1059,159 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.dangerBg,
     borderColor: COLORS.dangerBorder,
     borderWidth: 1,
+    padding: 12,
     borderRadius: 8,
-    padding: 10,
     marginBottom: 16,
   },
   errorText: {
     fontFamily: FONT_FAMILY,
     color: COLORS.danger,
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 12,
+    fontWeight: '600',
     textAlign: 'center',
+    lineHeight: 17,
   },
-  errorActionBtn: {
-    marginTop: 8,
-    alignSelf: 'center',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    backgroundColor: '#ffffff',
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: COLORS.dangerBorder,
-  },
-  errorActionText: {
+  errorActionLink: {
     fontFamily: FONT_FAMILY,
-    color: COLORS.primary,
     fontSize: 12,
     fontWeight: '700',
+    textAlign: 'center',
   },
   infoBox: {
-    backgroundColor: '#f0fdfa',
-    borderColor: '#ccfbf1',
-    borderWidth: 1,
-    borderRadius: 8,
+    backgroundColor: 'rgba(0, 128, 128, 0.06)',
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.primary,
     padding: 10,
-    marginBottom: 14,
+    borderRadius: 6,
+    marginBottom: 16,
   },
   infoBoxText: {
     fontFamily: FONT_FAMILY,
     fontSize: 12,
-    color: '#0f766e',
-    lineHeight: 16,
+    color: COLORS.textMain,
+    lineHeight: 17,
   },
   verificationNoticeCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
+    backgroundColor: COLORS.primaryLight,
+    borderColor: 'rgba(0, 128, 128, 0.25)',
     borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 24,
+    borderRadius: 12,
+    padding: 20,
     alignItems: 'center',
+    marginVertical: 4,
+    width: '100%',
   },
-  verificationIconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(15, 118, 110, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  verificationIconText: {
-    fontSize: 28,
-  },
-  verificationNoticeTitle: {
+  verificationTitle: {
     fontFamily: FONT_FAMILY,
-    fontSize: 20,
+    fontSize: 17,
+    fontWeight: '700',
+    color: COLORS.primary,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  verificationText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 13,
+    color: COLORS.textMain,
+    textAlign: 'center',
+    lineHeight: 19,
+  },
+  directLinkCard: {
+    backgroundColor: '#ffffff',
+    borderColor: 'rgba(0, 128, 128, 0.3)',
+    borderWidth: 1.5,
+    borderRadius: 10,
+    padding: 12,
+    marginVertical: 12,
+    width: '100%',
+    alignItems: 'center',
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+  },
+  directLinkHeader: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 13,
     fontWeight: '700',
     color: COLORS.textMain,
-    marginBottom: 8,
+    marginBottom: 2,
   },
-  verificationNoticeText: {
+  rateLimitNotice: {
+    backgroundColor: '#fffbeb',
+    borderColor: '#fde68a',
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 10,
+    width: '100%',
+  },
+  rateLimitTitle: {
     fontFamily: FONT_FAMILY,
-    fontSize: 14,
-    color: COLORS.textMain,
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#92400e',
+    marginBottom: 2,
     textAlign: 'center',
-    marginBottom: 8,
-    lineHeight: 20,
   },
-  verificationNoticeSubtext: {
+  rateLimitDesc: {
     fontFamily: FONT_FAMILY,
-    fontSize: 13,
+    fontSize: 11,
+    color: '#b45309',
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+  copyLinkText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 12,
+    color: COLORS.primary,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  directLinkDesc: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 11,
     color: COLORS.textMuted,
     textAlign: 'center',
-    marginBottom: 20,
-    lineHeight: 18,
+    marginBottom: 8,
   },
-  secondaryLinkBtn: {
-    marginTop: 12,
-    paddingVertical: 8,
+  openDirectBtn: {
+    width: '100%',
+    backgroundColor: COLORS.primary,
+    borderRadius: 8,
+    paddingVertical: 9,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  secondaryLinkText: {
+  openDirectBtnText: {
+    fontFamily: FONT_FAMILY,
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  resendBtn: {
+    alignSelf: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  resendBtnText: {
     fontFamily: FONT_FAMILY,
     fontSize: 13,
+    fontWeight: '700',
     color: COLORS.primary,
-    fontWeight: '600',
+    textDecorationLine: 'underline',
+  },
+  changeEmailText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 12,
+    color: COLORS.primary,
+    fontWeight: '700',
   },
   formSection: {
     width: '100%',
   },
-  redeemNoticeBox: {
-    backgroundColor: '#f0fdf4',
-    borderColor: '#bbf7d0',
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 14,
-  },
-  redeemNoticeTitle: {
-    fontFamily: FONT_FAMILY,
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#166534',
-    marginBottom: 2,
-  },
-  redeemNoticeText: {
-    fontFamily: FONT_FAMILY,
-    fontSize: 11,
-    color: '#15803d',
-    lineHeight: 16,
-  },
   inputGroup: {
-    marginBottom: 14,
+    marginBottom: 16,
   },
   labelRow: {
     flexDirection: 'row',
@@ -1196,7 +1230,7 @@ const styles = StyleSheet.create({
     fontFamily: FONT_FAMILY,
     fontSize: 12,
     color: COLORS.primary,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   textInput: {
     fontFamily: FONT_FAMILY,
@@ -1205,17 +1239,9 @@ const styles = StyleSheet.create({
     borderColor: COLORS.inputBorder,
     borderRadius: 8,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 11,
     fontSize: 14,
     color: COLORS.textMain,
-  },
-  monospaceInput: {
-    fontFamily: Platform.select({
-      web: 'monospace, "Courier New", Courier',
-      default: undefined,
-    }),
-    fontWeight: '700',
-    letterSpacing: 1,
   },
   passwordInputWrapper: {
     position: 'relative',
@@ -1234,24 +1260,24 @@ const styles = StyleSheet.create({
   },
   rememberRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 18,
   },
   checkboxContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
   checkboxBox: {
-    width: 18,
-    height: 18,
+    width: 17,
+    height: 17,
     borderRadius: 4,
     borderWidth: 1,
     borderColor: COLORS.inputBorder,
-    marginRight: 8,
+    backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#ffffff',
   },
   checkboxChecked: {
     backgroundColor: COLORS.primary,
@@ -1259,29 +1285,23 @@ const styles = StyleSheet.create({
   },
   checkMark: {
     color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '700',
-    lineHeight: 14,
+    fontSize: 10,
+    fontWeight: '800',
   },
   rememberText: {
     fontFamily: FONT_FAMILY,
     fontSize: 13,
-    color: COLORS.textMain,
+    color: COLORS.textMuted,
   },
   primaryButton: {
     backgroundColor: COLORS.primary,
     borderRadius: 8,
-    paddingVertical: 12,
+    paddingVertical: 13,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 2,
   },
   buttonDisabled: {
-    opacity: 0.65,
+    opacity: 0.6,
   },
   primaryButtonText: {
     fontFamily: FONT_FAMILY,
@@ -1293,116 +1313,10 @@ const styles = StyleSheet.create({
     marginTop: 16,
     alignItems: 'center',
   },
-  switchModeRowSecondary: {
-    marginTop: 10,
-    alignItems: 'center',
-  },
   switchModeText: {
     fontFamily: FONT_FAMILY,
-    fontSize: 13,
     color: COLORS.primary,
-  },
-  toastBanner: {
-    position: 'absolute',
-    top: 20,
-    left: '50%',
-    transform: [{ translateX: -160 }],
-    width: 320,
-    backgroundColor: '#10b981',
-    borderRadius: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    zIndex: 999,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 5,
-  },
-  toastText: {
-    fontFamily: FONT_FAMILY,
-    color: '#ffffff',
     fontSize: 13,
     fontWeight: '600',
-    textAlign: 'center',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  modalCard: {
-    width: '100%',
-    maxWidth: 420,
-    backgroundColor: '#ffffff',
-    borderRadius: 14,
-    padding: 28,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  modalTitle: {
-    fontFamily: FONT_FAMILY,
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.textMain,
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  modalSubtitle: {
-    fontFamily: FONT_FAMILY,
-    fontSize: 13,
-    color: COLORS.textMuted,
-    textAlign: 'center',
-    marginBottom: 16,
-    lineHeight: 18,
-  },
-  modalErrorBox: {
-    backgroundColor: COLORS.dangerBg,
-    borderColor: COLORS.dangerBorder,
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 8,
-    marginBottom: 12,
-  },
-  modalErrorText: {
-    fontFamily: FONT_FAMILY,
-    color: COLORS.danger,
-    fontSize: 12,
-    lineHeight: 16,
-    textAlign: 'center',
-  },
-  modalCloseBtn: {
-    marginTop: 12,
-    paddingVertical: 8,
-    alignItems: 'center',
-  },
-  modalCloseBtnText: {
-    fontFamily: FONT_FAMILY,
-    color: COLORS.textMuted,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  fpSuccessBox: {
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  fpSuccessTitle: {
-    fontFamily: FONT_FAMILY,
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.textMain,
-    marginBottom: 6,
-  },
-  fpSuccessMsg: {
-    fontFamily: FONT_FAMILY,
-    fontSize: 13,
-    color: COLORS.textMuted,
-    textAlign: 'center',
-    lineHeight: 18,
   },
 });

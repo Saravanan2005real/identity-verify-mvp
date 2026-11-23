@@ -15,14 +15,14 @@ import { acceptAccessKey } from './src/services/accessControl';
 const { width } = Dimensions.get('window');
 
 const COLORS = {
-  primary: '#0f766e', // teal-700
-  primaryHover: '#0d5f58',
-  primaryLight: 'rgba(15, 118, 110, 0.1)',
-  background: '#f8fafc', // slate-50
+  primary: '#008080', // Zudoc Official Teal
+  primaryHover: '#006565',
+  primaryLight: 'rgba(0, 128, 128, 0.08)',
+  background: '#F7F9FB', // Zudoc Clean Slate White
   card: '#ffffff',
   textMain: '#0f172a', // slate-900
   textMuted: '#64748b', // slate-500
-  border: '#e2e8f0', // slate-200
+  border: 'rgba(203, 213, 225, 0.7)',
   danger: '#ef4444',
   dangerBg: '#fef2f2',
   dangerBorder: '#fecaca',
@@ -35,7 +35,7 @@ const COLORS = {
 };
 
 const FONT_FAMILY = Platform.select({
-  web: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+  web: '"Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
   default: undefined,
 });
 
@@ -46,6 +46,7 @@ export default function AccessRestrictedScreen({
 }) {
   const isWeb = width > 768;
   const userEmail = user?.email || 'Unknown User';
+  const isNonCorporateDomain = !userEmail.toLowerCase().endsWith('@zudoc.co');
 
   const [accessKey, setAccessKey] = useState('');
   const [loading, setLoading] = useState(false);
@@ -103,10 +104,13 @@ export default function AccessRestrictedScreen({
             </View>
           </View>
 
-          <Text style={styles.title}>Superadmin Access Required</Text>
+          <Text style={styles.title}>
+            {isNonCorporateDomain ? 'Corporate Domain Restricted' : 'Superadmin Access Required'}
+          </Text>
           <Text style={styles.description}>
-            This portal is strictly restricted to verified Superadmins. Your account has not yet
-            been granted access permissions.
+            {isNonCorporateDomain
+              ? 'This portal is strictly restricted to verified @zudoc.co email addresses. Your account does not have access.'
+              : 'This portal is strictly restricted to verified Superadmins. Your account has not yet been granted access clearance.'}
           </Text>
 
           {/* Logged in Identity Card */}

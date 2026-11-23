@@ -1,6 +1,7 @@
 import os
+from datetime import datetime
 from dotenv import load_dotenv, find_dotenv
-from sqlalchemy import create_engine, Column, Integer, String, Float
+from sqlalchemy import create_engine, Column, Integer, String, Float, Text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 _this_dir = os.path.dirname(os.path.abspath(__file__))
@@ -34,8 +35,12 @@ class Company(Base):
     __tablename__ = "companies"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
-    usage = Column(Integer, default=0)
+    admin_email = Column(String, index=True, default="")
+    slug = Column(String, index=True, default="")
+    plan = Column(String, default="Enterprise")
     status = Column(String, default="Active")
+    portal_url = Column(String, default="")
+    created_at = Column(String, default="")
 
 class Product(Base):
     __tablename__ = "products"
@@ -74,8 +79,67 @@ class AuthorizedSuperadmin(Base):
     access_key_used = Column(String, nullable=True)
     user_id = Column(String, nullable=True)
 
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    timestamp = Column(String, index=True)
+    action = Column(String, index=True)
+    actor = Column(String, index=True)
+    target = Column(String, default="")
+    status = Column(String, default="SUCCESS")  # SUCCESS, DENIED, FAILED
+    details = Column(Text, default="")
+
 def init_db():
     Base.metadata.create_all(bind=engine)
+    # Seed initial system configuration if empty
+    db = SessionLocal()
+    try:
+        # 1. Seed initial primary company if none exist
+        existing_companies = db.query(Company).count()
+        if existing_companies == 0:
+            primary_org = Company(
+                name="Zudoc Technologies (eKYC Studio)",
+                admin_email="admin@zudoc.co",
+                slug="zudoc-studio",
+                plan="Enterprise Dedicated",
+                status="Active",
+                portal_url=os.getenv("EXPO_PUBLIC_ADMIN_PORTAL_URL", "http://localhost:8082"),
+                created_at=datetime.utcnow().isoformat() + "Z",
+            )
+            db.add(primary_org)
+
+        # 2. Seed primary superadmins if empty
+        existing_admins = db.query(AuthorizedSuperadmin).count()
+        if existing_admins == 0:
+            for email in ["saravanan.sk@zudoc.co", "admin@zudoc.co"]:
+                admin_entry = AuthorizedSuperadmin(
+                    email=email,
+                    role="superadmin",
+                    status="ACTIVE",
+                    added_by="System Provisioning",
+                    added_at=datetime.utcnow().isoformat() + "Z",
+                )
+                db.add(admin_entry)
+
+        # 3. Seed initial audit log if empty
+        existing_logs = db.query(AuditLog).count()
+        if existing_logs == 0:
+            init_log = AuditLog(
+                timestamp=datetime.utcnow().isoformat() + "Z",
+                action="PORTAL_SYSTEM_INITIALIZATION",
+                actor="System Provisioning",
+                target="Zero-Trust Policy Enforced",
+                status="SUCCESS",
+                details="Primary Superadmin authorized and security boundary active.",
+            )
+            db.add(init_log)
+
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"[database] init_db seed warning: {e}")
+    finally:
+        db.close()
 
 def get_db():
     db = SessionLocal()

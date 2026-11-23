@@ -9,19 +9,19 @@ const STORAGE_KEYS = {
 
 /**
  * Retrieve configured allowed corporate domains for Superadmin access.
- * e.g., EXPO_PUBLIC_SUPERADMIN_ALLOWED_DOMAINS="zudoc.com" (comma-separated if multiple)
- * When empty or not set: any valid email authenticated via Supabase Email OTP (e.g. Gmail) is accepted.
- * When set: ONLY emails ending with that domain (e.g. @zudoc.com) are permitted.
+ * e.g., EXPO_PUBLIC_SUPERADMIN_ALLOWED_DOMAINS="zudoc.co" (comma-separated if multiple)
+ * Superadmin portal strictly enforces authorized email domains (default: zudoc.co).
  */
 export function getAllowedSuperadminDomains() {
   try {
-    const raw = process.env.EXPO_PUBLIC_SUPERADMIN_ALLOWED_DOMAINS || '';
-    return raw
+    const raw = process.env.EXPO_PUBLIC_SUPERADMIN_ALLOWED_DOMAINS || 'zudoc.co';
+    const domains = raw
       .split(',')
       .map((d) => d.trim().toLowerCase().replace(/^@/, ''))
       .filter(Boolean);
+    return domains.length > 0 ? domains : ['zudoc.co'];
   } catch (e) {
-    return [];
+    return ['zudoc.co'];
   }
 }
 
@@ -38,10 +38,10 @@ export function validateEmailDomainPolicy(email) {
   const domain = cleanEmail.split('@')[1];
   const allowedDomains = getAllowedSuperadminDomains();
 
-  if (allowedDomains.length > 0 && !allowedDomains.includes(domain)) {
+  if (!allowedDomains.includes(domain)) {
     return {
       allowed: false,
-      reason: `Access restricted: Superadmin accounts must belong to @${allowedDomains.join(' or @')}.`,
+      reason: `Access restricted: Superadmin login is strictly permitted only for @${allowedDomains.join(' or @')} email addresses.`,
     };
   }
 

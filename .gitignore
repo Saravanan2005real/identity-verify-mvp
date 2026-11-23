@@ -24,4 +24,9 @@ products/ocr_uploads/*
 ngrok.yml
 
 
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
 superadmin.db
+superadmin/backend/superadmin.db

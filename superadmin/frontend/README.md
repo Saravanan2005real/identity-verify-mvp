@@ -1,27 +1,44 @@
 # Superadmin Portal Frontend (`superadmin/frontend`)
 
-The **Superadmin Portal Frontend** is a centralized administrative platform built with React Native for Web and Expo. Designed for system administrators, it provides platform-wide governance, client organization provisioning, B2B verification service catalog management, and high-level verification telemetry.
+The **Superadmin Portal Frontend** is an enterprise-grade administrative control center built with React Native for Web and Expo SDK 52, designed with the official [Zudoc](https://www.zudoc.co/) enterprise design system (`#008080` teal, Manrope & Rival Sans typography). It provides master platform governance, multi-tenant B2B client workspace provisioning, live Supabase cloud telemetry, modular verification engine benchmarking, and zero-trust operator access control.
 
 ---
 
 ## Key Features
 
-- **Master Authentication with Role Verification**:
-  - Direct Email/Password login and 6-digit OTP authentication via Supabase Auth.
-  - Google OAuth 2.0 Single Sign-On (SSO).
-  - Role-Based Access Control (RBAC): Caller claims are validated against the `user_tenant_membership` table; non-superadmins are rejected.
-- **Client Organization & Tenant Governance**:
-  - View, onboard, and manage registered client companies (tenants).
-  - Monitor tenant verification pipelines, subscription tiers, and API key states.
-- **B2B Verification Service Catalog**:
-  - Real-time catalog of available modular verification engines:
-    - Universal Document OCR (Aadhaar & PAN)
-    - Face Match & Biometric Anti-Spoofing (SFace ONNX & ArcFace)
-    - Eye Tracking & Gaze Attention Analysis (WebGazer / FGI-Net)
-    - Voice Liveness & Speech Challenge
-- **System Telemetry & Health Monitoring**:
-  - Live session statistics: Total Verifications, Approved Sessions, and Pending Reviews.
-  - Health checks across microservice endpoints.
+- **🎨 Zudoc Enterprise Theme & UI Architecture**:
+  - Matches the visual identity and layout of the Client Admin Studio with signature teal branding, dark slate neutrals, crisp white cards, and segmented capsule navigation.
+  - Live status pills (`Zero-Trust Active`), operator profile avatars, and single-click sign out.
+
+- **🔒 Zero-Trust Corporate Identity Enforcement**:
+  - Strictly restricts Superadmin access to corporate `@zudoc.co` personnel. Non-corporate email domains are barred from registration, magic link recovery, and portal access.
+  - Two-step cryptographic onboarding: email link verification followed by secure password creation.
+  - Duplicate registration prevention and account recovery magic links.
+
+- **🔑 Cryptographic Access Key Engine (`SA-KEY-XXXX-XXXX-XXXX-XXXX`)**:
+  - Generate single-use authorization keys bound cryptographically to corporate email addresses.
+  - Personnel redeem keys to claim Superadmin privileges.
+  - Real-time personnel registry with one-click revocation controls.
+
+- **⚡ Live Supabase Production Telemetry**:
+  - **Live Pipeline Counts**: Actual count of configured eKYC journeys stored in cloud Supabase.
+  - **Live Verification Throughput**: Actual count of candidate identity checks processed across the platform.
+  - **Live Document Distribution**: Document breakdown (Aadhaar vs PAN).
+  - **Live Verification Stream**: Real-time table displaying candidate verification sessions from Supabase with extracted names, ID numbers, OCR confidence scores, and status badges.
+
+- **🏢 Multi-Tenant Client Organization Directory**:
+  - Provision and manage real enterprise client workspaces backed by database persistence.
+  - Custom tier assignment (`Growth Trial`, `Scale Tier`, `Enterprise Dedicated`).
+  - Direct launcher links to client admin portals (Port 8082).
+
+- **📦 Verification Engines Catalog**:
+  - Benchmark and test modular identity engines:
+    - Document OCR & Face Match (Aadhaar & PAN)
+    - WebGazer Eye Tracking Liveness (WebGL pupil tracking)
+    - Audio Voice Challenge (Acoustic FFT & anti-deepfake)
+
+- **🛡️ Compliance & Security Audit Trail**:
+  - Immutable audit trail recording administrative actions, key generations, redemptions, and tenant onboardings with ISO timestamps.
 
 ---
 

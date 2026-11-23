@@ -251,10 +251,20 @@ flowchart LR
 - **Email Verification Confirmation:** Automatic redirect handling (`emailRedirectTo: window.location.origin`) and built-in resend countdown timer to handle mail delivery delays or rate limits gracefully.
 - **Audit Center & Side-by-Side Review:** Live verification audit table with side-by-side modal displaying the reference document face crop and the live camera selfie with calculated similarity scores and one-click manual approval/rejection.
 
-### 👑 Centralized Superadmin Governance
-- **Multi-Tenant Administration:** Create, configure, suspend, or terminate client tenant organizations.
-- **B2B Verification Services Catalog:** Enable, disable, or rate-limit individual capabilities (Aadhaar OCR, PAN OCR, Biometric Face Match, Eye Tracking) per client.
-- **Security & Revocation Controls:** Monitor active sessions, inspect audit trails, and instantly revoke compromised applicant tokens across all nodes.
+### 👑 Centralized Superadmin Governance & Zero-Trust Portal
+- **Zudoc Enterprise Design Architecture:** Built on the official [Zudoc](https://www.zudoc.co/) enterprise design system, matching the Client Admin Studio with deep teal branding (`#008080`), dark slate neutrals (`#0F172A`), Manrope & Rival Sans typography, and segmented capsule navigation.
+- **Zero-Trust Corporate Personnel Policy:** Strict domain verification limits access exclusively to `@zudoc.co` corporate personnel. Non-corporate email addresses are automatically rejected at both frontend and backend boundaries.
+- **Dual-Mode Cryptographic Authentication:** Streamlined onboarding allowing employees to register via email verification links, set secure passwords, sign in directly, and recover credentials with rate-limit resilient magic link generators powered by `SUPABASE_SERVICE_ROLE_KEY`.
+- **Cryptographic Access Key Engine (`SA-KEY-XXXX-XXXX-XXXX-XXXX`):** Single-use authorization keys generated with cryptographic randomness and bound to recipient corporate email IDs. Personnel redeem keys on login to receive authorized Superadmin clearance.
+- **Live Supabase Production Telemetry:** Real-time platform metrics queried directly from the cloud Supabase PostgreSQL database (`public.verifications`):
+  - **Live Pipeline Counts:** Real-time counter of tenant-configured eKYC journeys stored in cloud Supabase.
+  - **Live Verification Throughput:** Real-time counter of candidate identity checks processed across the platform.
+  - **Live Document Distribution:** Real-time breakdown of extracted document types (Aadhaar vs PAN).
+  - **Live Verification Feed:** Stream of actual applicant sessions with candidate names, document types, OCR confidence scores, and verification status badges.
+- **Persistent Multi-Tenant Organization Directory:** Real database-backed organization onboarding with tier selection (`Growth Trial`, `Scale Tier`, `Enterprise Dedicated`) and direct launcher links to client workspaces.
+- **Modular Verification Engines Catalog:** Interactive catalog to benchmark and launch live sandboxes for Aadhaar/PAN OCR, WebGazer Eye Tracking, and Audio Voice Liveness.
+- **Immutable Security Audit Trail:** Cryptographic logging of all operator actions, access key generation, clearance redemption, and tenant onboarding with ISO timestamps.
+- **Real-Time Health & Microservice Probing:** Live telemetry endpoint measuring true roundtrip network latency to Supabase and health status across all computer vision and auth microservices.
 
 ### 🌐 Cloud Persistence & Dual-Mode Token Revocation
 - **Supabase PostgreSQL Cloud DB:** Multi-tenant database schema equipped with Row-Level Security (RLS) policies, foreign key tenant boundaries, and composite unique constraints (`(tenant_id, session_id)`).
@@ -736,8 +746,9 @@ identity-verify-mvp/
 - **Implementation:** `admin/frontend/App.js` & `SignInScreen.js` (React Native Web / Expo 52).
 
 ### 5. Superadmin Management Platform (Ports 8081 & 8000)
-- **Primary Roles:** Multi-tenant platform governance. Allows platform operators to provision new client tenants, configure API keys, toggle B2B verification services (OCR, Biometrics, Eye Tracking), inspect system telemetry, and revoke compromised tokens.
-- **Implementations:** `superadmin/frontend/App.js` (React Native Web UI on port 8081) and `superadmin/backend/main.py` (FastAPI server on port 8000).
+- **Primary Roles:** Multi-tenant platform governance and zero-trust identity control. Allows platform operators to provision persistent client organizations, issue cryptographically signed invitation keys bound to `@zudoc.co` personnel, inspect live Supabase production telemetry, monitor candidate verification streams, and verify microservice health.
+- **Implementations:** `superadmin/frontend/App.js` (React Native Web UI on port 8081 with Zudoc Enterprise Theme) and `superadmin/backend/main.py` (FastAPI production server on port 8000).
+- **Security Policy:** Strictly restricted to `@zudoc.co` corporate accounts; non-corporate emails are blocked from registration, magic link recovery, and portal access. Includes cryptographic access key generation (`SA-KEY-XXXX-...`) with zero-trust clearance gates.
 
 ### 6. Eye Tracking & Attention Analysis Module (Port 5002)
 - **Primary Roles:** Advanced anti-spoofing engine utilizing WebGazer 9-point in-browser gaze calibration and FGI-Net deep gaze estimation to verify applicant focus on randomized screen quadrants.
